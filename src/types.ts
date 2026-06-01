@@ -4,6 +4,7 @@ export interface UserProfile {
   dislikes: string[];
   spiceTolerance: 'none' | 'mild' | 'medium' | 'hot';
   cuisinesLiked: string[];
+  pastOrders: string[]; // dishes the guest decided on before — feeds recommendations
   hidePrices: boolean;
   ttsVoice: string;
   onboarded: boolean;
@@ -44,6 +45,7 @@ export const EMPTY_PROFILE: UserProfile = {
   dislikes: [],
   spiceTolerance: 'medium',
   cuisinesLiked: [],
+  pastOrders: [],
   hidePrices: false,
   ttsVoice: 'shimmer',
   onboarded: false,

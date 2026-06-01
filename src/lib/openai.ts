@@ -88,6 +88,7 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
   const allergies = profile.allergies.length ? profile.allergies.join(', ') : 'none on file';
   const dislikes = profile.dislikes.length ? profile.dislikes.join(', ') : 'none on file';
   const cuisines = profile.cuisinesLiked.length ? profile.cuisinesLiked.join(', ') : 'no strong preferences on file';
+  const orders = profile.pastOrders.length ? profile.pastOrders.join(', ') : 'none yet';
 
   return [
     `You are MenuVoice, a warm, calm voice assistant helping ${profile.name || 'a guest'} who is blind or low-vision navigate a restaurant menu by voice.`,
@@ -95,12 +96,17 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
     'HARD RULES:',
     `- The guest has these ALLERGIES: ${allergies}. Before describing, recommending, or discussing ANY item that contains (or likely contains) one of these allergens, you MUST flag it first, e.g. "Heads up — this contains shellfish, which is one of your allergies. Want me to continue?"`,
     `- The guest dislikes: ${dislikes}. Spice tolerance: ${profile.spiceTolerance}. Cuisines they like: ${cuisines}.`,
+    `- Dishes ${profile.name || 'the guest'} has chosen/enjoyed before: ${orders}. When it fits naturally, use these to make recommendations (e.g. "last time you went for the ${profile.pastOrders[0] ?? 'salmon'}, so you might like…"). Don't force it.`,
     profile.hidePrices
       ? '- The guest has hidden prices. Do NOT say prices unless they explicitly ask.'
       : '- Say prices when relevant.',
     '- Keep answers short and conversational — this is spoken aloud. 1–3 sentences unless they ask for detail. No markdown, no bullet symbols, no emoji.',
     '- Never invent items that are not on the menu. If unsure, say so.',
     '- End most turns with a brief, natural question that keeps the conversation moving.',
+    '',
+    'REMEMBERING THEIR CHOICE:',
+    '- Near the END of the conversation, once the guest seems to be settling on what to get, ask ONCE what they have decided to order. When they tell you, acknowledge it warmly and let them know you will remember it for next time so you can suggest things they like.',
+    '- Ask this only once, and only when they seem ready to decide. Never nag, never interrupt the middle of the conversation to ask, and never repeat the question if they already told you.',
     '',
     'THE MENU (structured JSON):',
     JSON.stringify(menu),
@@ -134,6 +140,59 @@ export async function chatReply(
   if (!res.ok) throw new Error(`Reply failed (${res.status}): ${await safeText(res)}`);
   const json = await res.json();
   return (json.choices?.[0]?.message?.content ?? 'Sorry, I missed that. Could you say it again?').trim();
+}
+
+export interface SessionLearnings {
+  orders: string[]; // dishes the guest decided to get
+  likes: string[]; // foods/cuisines/ingredients they reacted well to
+  dislikes: string[]; // things they reacted against
+}
+
+/**
+ * After a conversation, pull out what the guest decided and what they revealed
+ * about their taste, so the profile can recommend better next time. Cheap, runs
+ * once on the way out. Returns empty arrays if nothing clear.
+ */
+export async function extractSessionLearnings(turns: ChatTurn[]): Promise<SessionLearnings> {
+  const empty: SessionLearnings = { orders: [], likes: [], dislikes: [] };
+  const transcript = turns
+    .map((t) => `${t.role === 'assistant' ? 'MenuVoice' : 'Guest'}: ${t.text}`)
+    .join('\n');
+  if (!transcript.trim()) return empty;
+
+  const res = await fetch(`${API}/chat/completions`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            'From this restaurant menu conversation, extract what the GUEST decided. ' +
+            'Respond ONLY with JSON: {"orders":string[],"likes":string[],"dislikes":string[]}. ' +
+            'orders = specific dishes the guest said they will order or have decided on (exact dish names). ' +
+            'likes = foods, cuisines, or ingredients the guest reacted positively to. ' +
+            'dislikes = ones they reacted against. Use empty arrays if unclear. Never invent.',
+        },
+        { role: 'user', content: transcript },
+      ],
+    }),
+  });
+  if (!res.ok) return empty;
+  try {
+    const json = await res.json();
+    const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? '{}');
+    return {
+      orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+      likes: Array.isArray(parsed.likes) ? parsed.likes : [],
+      dislikes: Array.isArray(parsed.dislikes) ? parsed.dislikes : [],
+    };
+  } catch {
+    return empty;
+  }
 }
 
 /** Text -> mp3 Blob (OpenAI TTS). */

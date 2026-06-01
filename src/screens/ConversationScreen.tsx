@@ -16,7 +16,8 @@ import { ChatTurn } from '../types';
 import { useProfile } from '../state/ProfileContext';
 import { speak, stopSpeaking } from '../lib/speech';
 import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
-import { buildOpeningLine, transcribeAudio, chatReply } from '../lib/openai';
+import { buildOpeningLine, transcribeAudio, chatReply, extractSessionLearnings, hasApiKey } from '../lib/openai';
+import { mergeUnique } from '../util';
 
 type Phase = 'speaking' | 'idle' | 'recording' | 'transcribing' | 'thinking' | 'error';
 
@@ -24,12 +25,13 @@ export default function ConversationScreen({
   navigate,
   route,
 }: ScreenProps & { route: Extract<Route, { name: 'conversation' }> }) {
-  const { profile } = useProfile();
+  const { profile, update } = useProfile();
   const { menu, restaurantName } = route;
 
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [phase, setPhase] = useState<Phase>('speaking');
   const [errorMsg, setErrorMsg] = useState('');
+  const [saving, setSaving] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const started = useRef(false);
 
@@ -109,6 +111,26 @@ export default function ConversationScreen({
     setTurns([...base, { role: 'assistant', text }]);
     setPhase('speaking');
     await speak(text, profile.ttsVoice);
+  };
+
+  // Leaving the conversation: capture what they decided + their taste, then go home.
+  const finish = async () => {
+    await stopSpeaking();
+    const hasUser = turns.some((t) => t.role === 'user');
+    if (hasUser && hasApiKey()) {
+      setSaving(true);
+      try {
+        const learn = await extractSessionLearnings(turns);
+        await update({
+          pastOrders: mergeUnique(profile.pastOrders, learn.orders),
+          cuisinesLiked: mergeUnique(profile.cuisinesLiked, learn.likes),
+          dislikes: mergeUnique(profile.dislikes, learn.dislikes),
+        });
+      } catch {
+        // best-effort; never block the exit
+      }
+    }
+    navigate({ name: 'home' });
   };
 
   const indicator = indicatorFor(phase);
@@ -201,7 +223,12 @@ export default function ConversationScreen({
         />
       )}
 
-      <SecondaryButton label="Start over" hint="Return to the home screen" onClick={() => navigate({ name: 'home' })} />
+      <SecondaryButton
+        label={saving ? 'Saving your preferences…' : 'Done'}
+        hint="Save what you decided and return home"
+        onClick={finish}
+        disabled={saving}
+      />
     </Screen>
   );
 }
