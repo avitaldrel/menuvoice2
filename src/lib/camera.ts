@@ -1,0 +1,50 @@
+// Camera access via getUserMedia + frame capture to a base64 JPEG.
+//
+// LIVE / AUTO-CAPTURE NOTE: real document-scanner auto-shutter (edge detection,
+// auto-trigger when a flat page is held steady) is possible on web with an
+// edge-detection lib (OpenCV.js / jscanify) running per video frame, but it is
+// finicky in dim restaurant lighting. For the prototype we use a manual shutter
+// with spoken feedback. captureFrame() is the seam where auto-capture would call
+// in once a "steady flat page" heuristic fires.
+
+export async function startCamera(video: HTMLVideoElement): Promise<MediaStream> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  return stream;
+}
+
+export function stopCamera(stream: MediaStream | null) {
+  stream?.getTracks().forEach((t) => t.stop());
+}
+
+/** Grab the current video frame as a base64 JPEG (no data: prefix). */
+export function captureFrame(video: HTMLVideoElement, quality = 0.6): string | null {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+  return dataUrl.split(',')[1] ?? null;
+}
+
+/** Read a user-selected image File as a base64 JPEG (no data: prefix). */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1] ?? '');
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
