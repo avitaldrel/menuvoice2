@@ -27,6 +27,8 @@ const EXIT_PHRASES = [
   'end conversation', 'stop', 'goodbye', 'bye', 'that is all', "that's all",
 ];
 
+const REPEAT_PHRASES = ['repeat that', 'say that again', 'what did you say', 'say it again', 'pardon', 'come again'];
+
 export default function ConversationScreen({
   navigate,
   route,
@@ -110,6 +112,17 @@ export default function ConversationScreen({
         await say("Of course. I'll save what we talked about. Goodbye!");
         finish();
         return;
+      }
+
+      // "Repeat that" — replay last assistant message without hitting the LLM.
+      const isRepeat = REPEAT_PHRASES.some((p) => t.includes(p));
+      if (isRepeat) {
+        const lastAssistant = [...turns].reverse().find((x) => x.role === 'assistant');
+        if (lastAssistant) {
+          await say(lastAssistant.text);
+          setPhase('idle');
+          return;
+        }
       }
 
       const history = turns;

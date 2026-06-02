@@ -17,6 +17,8 @@ import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { AutoCaptureController } from '../lib/autocapture';
 import { useVoiceNav } from '../hooks/useVoiceNav';
+import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
+import { transcribeAudio } from '../lib/openai';
 
 export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -27,6 +29,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
 
   const [photos, setPhotos] = useState<string[]>([]);
   const [name, setName] = useState('');
+  const [nameRecState, setNameRecState] = useState<'idle' | 'recording' | 'working'>('idle');
   const [status, setStatus] = useState('Starting camera…');
   const [camError, setCamError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
@@ -165,13 +168,38 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     e.target.value = '';
   };
 
+  const speakName = async () => {
+    if (nameRecState !== 'idle') return;
+    const ok = await requestMicPermission();
+    if (!ok) { announce('Microphone access needed. Allow it and try again.'); return; }
+    try {
+      await startRecording();
+      setNameRecState('recording');
+    } catch {
+      announce('Could not start microphone. Try typing the name instead.');
+    }
+  };
+
+  const stopSpeakName = async () => {
+    if (nameRecState !== 'recording') return;
+    setNameRecState('working');
+    let blob: Blob | null = null;
+    try { blob = await stopRecording(); } catch {}
+    if (!blob) { setNameRecState('idle'); return; }
+    try {
+      const text = await transcribeAudio(blob);
+      if (text) setName(text.replace(/^(it'?s?|this is|the restaurant is|called?)\s+/i, '').replace(/[.!?]+$/, '').trim());
+    } catch {}
+    setNameRecState('idle');
+  };
+
   const analyze = async () => {
     if (photos.length === 0) {
       announce('Capture at least one photo of the menu first.');
       return;
     }
     if (!hasApiKey()) {
-      announce('No OpenAI key is set. Add VITE_OPENAI_API_KEY to your .env and restart the dev server.');
+      announce('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
       return;
     }
     analyzingRef.current = true;
@@ -181,7 +209,9 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     announce('Reading the menu. This takes a few seconds.');
     try {
       const menu = await parseMenuFromImages(photos);
-      const restaurantName = name.trim() || 'This restaurant';
+      // Use typed/spoken name, fall back to what the AI extracted, then generic.
+      const restaurantName = name.trim() || menu.restaurantName?.trim() || 'This restaurant';
+      if (!name.trim() && menu.restaurantName) setName(menu.restaurantName);
       await saveRestaurant(restaurantName, menu).catch(() => {});
       stopCamera(streamRef.current);
       navigate({ name: 'conversation', menu, restaurantName });
@@ -205,14 +235,34 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         </div>
       </div>
 
-      <input
-        className="input"
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Restaurant name (optional)"
-        aria-label="Restaurant name, optional"
-      />
+      <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
+        <input
+          className="input"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Restaurant name (auto-detected or type)"
+          aria-label="Restaurant name, optional — tap mic to speak it"
+          style={{ flex: 1, margin: 0 }}
+        />
+        <button
+          onClick={nameRecState === 'recording' ? stopSpeakName : speakName}
+          disabled={nameRecState === 'working' || analyzing}
+          aria-label={nameRecState === 'recording' ? 'Done speaking name' : 'Speak the restaurant name'}
+          style={{
+            minHeight: 56,
+            minWidth: 56,
+            borderRadius: 'var(--r-md)',
+            border: `2px solid ${nameRecState === 'recording' ? 'var(--success)' : 'var(--border)'}`,
+            background: nameRecState === 'recording' ? 'var(--success)' : 'var(--surface-high)',
+            color: 'var(--text-primary)',
+            fontSize: 22,
+            cursor: 'pointer',
+          }}
+        >
+          {nameRecState === 'recording' ? '■' : nameRecState === 'working' ? '…' : '🎤'}
+        </button>
+      </div>
 
       <button
         onClick={() => setAutoMode((v) => !v)}

@@ -25,6 +25,7 @@ export interface MenuCategory {
 export interface ParsedMenu {
   categories: MenuCategory[];
   notes?: string;
+  restaurantName?: string; // extracted from the menu photos if visible
 }
 
 export interface SavedRestaurant {

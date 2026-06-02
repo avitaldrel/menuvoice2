@@ -91,8 +91,9 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
         '(appetizers, mains, desserts, drinks, specials, etc.). ' +
         'For each item include: name, description (if shown), price (as written, with currency symbol), ' +
         'and a best-effort ingredients list inferred from the name and description. ' +
+        'Also extract the restaurant name if it is visible on the menu (e.g. on the header or cover). ' +
         'If a photo is unreadable, note it. Respond ONLY with JSON matching this shape: ' +
-        '{"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string}',
+        '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string}',
     },
   ];
   for (const b64 of imagesBase64) {
