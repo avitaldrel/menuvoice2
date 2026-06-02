@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Heading, Body, PrimaryButton, SecondaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
 import { speak, stopSpeaking } from '../lib/speech';
+import { earconStart, earconStop } from '../lib/earcon';
 import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { cleanName, parseList } from '../util';
@@ -132,6 +133,7 @@ function VoiceStep({
       }
       try {
         await startRecording();
+        earconStart();
         setRec('recording');
       } catch {
         speak('I could not start the microphone. Please type your answer.');
@@ -140,6 +142,7 @@ function VoiceStep({
     }
     if (rec === 'recording') {
       setRec('working');
+      earconStop();
       let blob: Blob | null = null;
       try {
         blob = await stopRecording();

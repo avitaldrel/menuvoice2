@@ -162,11 +162,12 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
 
 export function buildOpeningLine(menu: ParsedMenu): string {
   const names = menu.categories.map((c) => c.name);
+  const totalItems = menu.categories.reduce((sum, c) => sum + c.items.length, 0);
   if (names.length === 0) return 'I have your menu, but I could not find any sections. Want to retake the photos?';
-  const list =
-    names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
-  const word = names.length === 1 ? 'section' : 'sections';
-  return `I found ${names.length} ${word} on this menu: ${list}. Where would you like to start?`;
+  const list = names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
+  const sectionWord = names.length === 1 ? 'section' : 'sections';
+  const itemPart = totalItems > 0 ? ` and ${totalItems} item${totalItems === 1 ? '' : 's'}` : '';
+  return `I found ${names.length} ${sectionWord}${itemPart} on this menu: ${list}. Where would you like to start?`;
 }
 
 // Keep the first 2 turns (establishes what was ordered/discussed early on) plus
