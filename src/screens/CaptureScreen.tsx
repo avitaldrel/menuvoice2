@@ -4,6 +4,9 @@
 // Auto mode (default): src/lib/autocapture.ts watches the video for
 // brightness + content + steadiness and fires on its own while coaching by
 // voice. Manual mode: tap Capture. Both add to the same photo list.
+//
+// Voice commands (after ≥1 photo captured): "analyze" / "done" → analyze,
+// "another" / "more" → capture another, "cancel" / "back" → cancel.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
@@ -13,6 +16,7 @@ import { startCamera, stopCamera, captureFrame, fileToBase64 } from '../lib/came
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { AutoCaptureController } from '../lib/autocapture';
+import { useVoiceNav } from '../hooks/useVoiceNav';
 
 export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -28,6 +32,25 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const [cameraReady, setCameraReady] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [autoMode, setAutoMode] = useState(true);
+
+  // Voice commands available once at least one photo has been captured.
+  const photosRef = useRef<string[]>([]);
+  const { phase: voicePhase, listen: voiceListen, finish: voiceDone } = useVoiceNav({
+    commands: [
+      { id: 'analyze', keywords: ['analyze', 'analyse', 'done', 'finish', 'go', 'read', 'process'] },
+      { id: 'another', keywords: ['another', 'more', 'next', 'page', 'additional'] },
+      { id: 'cancel',  keywords: ['cancel', 'back', 'stop', 'exit', 'never mind', 'nevermind'] },
+      { id: 'manual',  keywords: ['capture', 'take', 'photo', 'shoot', 'snap'] },
+    ],
+    onCommand: async (id) => {
+      if (id === 'analyze') { analyze(); }
+      else if (id === 'another') { addPhoto(captureFrame(videoRef.current!), false); }
+      else if (id === 'manual') { manualCapture(); }
+      else if (id === 'cancel') { goBack(); }
+    },
+    onNoMatch: () =>
+      `Say "analyze" to read the menu, "another" for another photo, or "cancel" to go back.`,
+  });
 
   // Start / stop camera.
   useEffect(() => {
@@ -82,7 +105,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         // Auto-capture couldn't get a clean, steady shot — fall back to manual.
         setAutoMode(false);
         const msg = 'Auto capture is having trouble. Switching to manual — tap the Capture button when you are ready.';
-        setStatus('Switched to manual. Tap “Capture photo” to take the shot.');
+        setStatus('Switched to manual. Tap "Capture photo" to take the shot.');
         speak(msg);
       },
     });
@@ -100,12 +123,14 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     }
     setPhotos((prev) => {
       const next = [...prev, b64];
+      photosRef.current = next;
       const msg = `Got it. Photo ${next.length} captured. ${
-        viaAuto ? 'Move to the next page, or tap Done.' : 'Take another, or tap Done to analyze.'
+        viaAuto
+          ? 'Move to the next page, or tap Done. You can also say "analyze" or "another".'
+          : 'Take another, or tap Done to analyze. You can also say "analyze" or "another".'
       }`;
       setStatus(msg);
-      // Use the conversational voice for the confirmation so it stands out from coaching.
-      if (viaAuto) coach(`Photo ${next.length} captured.`);
+      if (viaAuto) coach(`Photo ${next.length} captured. Say analyze or another.`);
       else speak(msg);
       return next;
     });
@@ -257,6 +282,29 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           <SecondaryButton label="Upload from Library" onClick={() => fileRef.current?.click()} disabled={analyzing} />
           <PrimaryButton label={`Done — Analyze (${photos.length})`} onClick={analyze} disabled={analyzing || photos.length === 0} />
         </div>
+
+        {/* Voice commands: only shown once at least one photo is captured */}
+        {photos.length > 0 && !analyzing && (
+          <PrimaryButton
+            label={
+              voicePhase === 'recording'    ? '■  Done speaking' :
+              voicePhase === 'transcribing' ? 'Hearing you…'     :
+              voicePhase === 'announcing'   ? 'Please wait…'     :
+                                              '🎤  Say "analyze", "another", or "cancel"'
+            }
+            hint="Voice command: analyze, another photo, or cancel"
+            onClick={voicePhase === 'recording' ? voiceDone : voiceListen}
+            disabled={voicePhase === 'transcribing' || voicePhase === 'announcing'}
+            style={{
+              minHeight: 70,
+              background: voicePhase === 'recording' ? 'var(--success)' : 'var(--surface-high)',
+              color: 'var(--text-primary)',
+              border: '2px solid var(--border)',
+              fontSize: 16,
+            }}
+          />
+        )}
+
         <SecondaryButton label="Cancel" onClick={goBack} disabled={analyzing} />
       </div>
 

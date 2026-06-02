@@ -21,6 +21,12 @@ import { mergeUnique } from '../util';
 
 type Phase = 'speaking' | 'idle' | 'recording' | 'transcribing' | 'thinking' | 'error';
 
+// Short, unambiguous exit phrases. Kept tight so "I'm done with the pasta" doesn't trigger.
+const EXIT_PHRASES = [
+  'go home', 'go back', 'exit', 'quit', 'i am done', "i'm done", 'all done', 'finished',
+  'end conversation', 'stop', 'goodbye', 'bye', 'that is all', "that's all",
+];
+
 export default function ConversationScreen({
   navigate,
   route,
@@ -89,10 +95,23 @@ export default function ConversationScreen({
     try {
       const userText = await transcribeAudio(blob);
       if (!userText) {
-        await say('I didn’t catch that. Could you say it again?');
+        await say("I didn't catch that. Could you say it again?");
         setPhase('idle');
         return;
       }
+
+      // Intercept clear navigation/exit commands so they don't go to the menu LLM.
+      const t = userText.toLowerCase().trim();
+      const hadExchange = turns.some((x) => x.role === 'user');
+      const isExit =
+        hadExchange &&
+        EXIT_PHRASES.some((p) => t === p || t.startsWith(p + ' ') || t.endsWith(' ' + p));
+      if (isExit) {
+        await say("Of course. I'll save what we talked about. Goodbye!");
+        finish();
+        return;
+      }
+
       const history = turns;
       const withUser: ChatTurn[] = [...history, { role: 'user', text: userText }];
       setTurns(withUser);
@@ -101,10 +120,11 @@ export default function ConversationScreen({
       await say(reply, withUser);
       setPhase('idle');
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Something went wrong. Let’s try that again.');
+      setErrorMsg(e?.message ?? "Something went wrong. Let's try that again.");
       setPhase('error');
     }
   };
+
 
   const say = async (text: string, baseHistory?: ChatTurn[]) => {
     const base = baseHistory ?? turns;
