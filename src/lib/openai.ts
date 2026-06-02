@@ -1,24 +1,83 @@
-// All OpenAI calls. Plain fetch from the browser.
+// All OpenAI calls.
 //
-// SECURITY: ships the key to the client. Fine for a private demo. For a pilot,
-// move these functions behind a serverless proxy and call that. See README.
+// Routing strategy:
+//   - In production (Vercel), calls go to /api/* serverless functions that
+//     hold the key server-side. The client never sees OPENAI_API_KEY.
+//   - In local dev, if VITE_OPENAI_API_KEY is set in .env the calls go
+//     directly to OpenAI (so you don't need a local server).
 
 import { ParsedMenu, UserProfile, ChatTurn } from '../types';
 
-const API = 'https://api.openai.com/v1';
-
-const KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
+const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
 const VISION_MODEL = import.meta.env.VITE_VISION_MODEL ?? 'gpt-4o-mini';
 const CHAT_MODEL = import.meta.env.VITE_CHAT_MODEL ?? 'gpt-4o-mini';
 const TTS_MODEL = import.meta.env.VITE_TTS_MODEL ?? 'tts-1-hd';
 const TTS_VOICE_DEFAULT = import.meta.env.VITE_TTS_VOICE ?? 'shimmer';
 
+// True when the direct browser→OpenAI path is available (local dev only).
+const DIRECT = DIRECT_KEY.startsWith('sk-') && DIRECT_KEY.length > 20;
+
 export function hasApiKey(): boolean {
-  return KEY.startsWith('sk-') && KEY.length > 20;
+  // Always true in production because the proxy holds the key.
+  // In local dev, true if VITE_OPENAI_API_KEY is set.
+  return DIRECT || window.location.hostname !== 'localhost';
 }
 
-function authHeaders(extra?: Record<string, string>) {
-  return { Authorization: `Bearer ${KEY}`, ...extra };
+function directHeaders(extra?: Record<string, string>) {
+  return { Authorization: `Bearer ${DIRECT_KEY}`, ...extra };
+}
+
+async function chatCompletions(body: object): Promise<any> {
+  if (DIRECT) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: directHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`OpenAI error (${res.status}): ${await safeText(res)}`);
+    return res.json();
+  }
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Server error (${res.status}): ${await safeText(res)}`);
+  return res.json();
+}
+
+async function audioTranscriptions(form: FormData): Promise<any> {
+  if (DIRECT) {
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: directHeaders(),
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Transcription error (${res.status}): ${await safeText(res)}`);
+    return res.json();
+  }
+  const res = await fetch('/api/transcribe', { method: 'POST', body: form });
+  if (!res.ok) throw new Error(`Transcription error (${res.status}): ${await safeText(res)}`);
+  return res.json();
+}
+
+async function audioSpeech(body: object): Promise<Blob> {
+  if (DIRECT) {
+    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: directHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`TTS error (${res.status}): ${await safeText(res)}`);
+    return res.blob();
+  }
+  const res = await fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`TTS error (${res.status}): ${await safeText(res)}`);
+  return res.blob();
 }
 
 /** Menu photos (base64 JPEG, no data: prefix) -> structured menu. */
@@ -28,7 +87,7 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
       type: 'text',
       text:
         'You are reading photos of one restaurant menu (possibly multiple pages/photos of the SAME menu). ' +
-        'Extract EVERY item you can see. Group items into the menu’s natural sections ' +
+        'Extract EVERY item you can see. Group items into the menu\'s natural sections ' +
         '(appetizers, mains, desserts, drinks, specials, etc.). ' +
         'For each item include: name, description (if shown), price (as written, with currency symbol), ' +
         'and a best-effort ingredients list inferred from the name and description. ' +
@@ -40,19 +99,13 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
     content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' } });
   }
 
-  const res = await fetch(`${API}/chat/completions`, {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      model: VISION_MODEL,
-      messages: [{ role: 'user', content }],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-    }),
+  const json = await chatCompletions({
+    model: VISION_MODEL,
+    messages: [{ role: 'user', content }],
+    response_format: { type: 'json_object' },
+    temperature: 0.1,
   });
-  if (!res.ok) throw new Error(`Menu analysis failed (${res.status}): ${await safeText(res)}`);
 
-  const json = await res.json();
   const raw = json.choices?.[0]?.message?.content ?? '{}';
   let parsed: ParsedMenu;
   try {
@@ -73,14 +126,7 @@ export async function transcribeAudio(blob: Blob): Promise<string> {
   form.append('file', blob, `speech.${ext}`);
   form.append('model', 'whisper-1');
   form.append('language', 'en');
-
-  const res = await fetch(`${API}/audio/transcriptions`, {
-    method: 'POST',
-    headers: authHeaders(), // let the browser set multipart boundary
-    body: form,
-  });
-  if (!res.ok) throw new Error(`Transcription failed (${res.status}): ${await safeText(res)}`);
-  const json = await res.json();
+  const json = await audioTranscriptions(form);
   return (json.text ?? '').trim();
 }
 
@@ -96,11 +142,11 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
     'HARD RULES:',
     `- The guest has these ALLERGIES: ${allergies}. Before describing, recommending, or discussing ANY item that contains (or likely contains) one of these allergens, you MUST flag it first, e.g. "Heads up — this contains shellfish, which is one of your allergies. Want me to continue?"`,
     `- The guest dislikes: ${dislikes}. Spice tolerance: ${profile.spiceTolerance}. Cuisines they like: ${cuisines}.`,
-    `- Dishes ${profile.name || 'the guest'} has chosen/enjoyed before: ${orders}. When it fits naturally, use these to make recommendations (e.g. "last time you went for the ${profile.pastOrders[0] ?? 'salmon'}, so you might like…"). Don't force it.`,
+    `- Dishes ${profile.name || 'the guest'} has chosen/enjoyed before: ${orders}. When it fits naturally, use these to make recommendations (e.g. "last time you went for the ${profile.pastOrders[0] ?? 'salmon'}, so you might like..."). Don't force it.`,
     profile.hidePrices
       ? '- The guest has hidden prices. Do NOT say prices unless they explicitly ask.'
       : '- Say prices when relevant.',
-    '- Keep answers short and conversational — this is spoken aloud. 1–3 sentences unless they ask for detail. No markdown, no bullet symbols, no emoji.',
+    '- Keep answers short and conversational — this is spoken aloud. 1-3 sentences unless they ask for detail. No markdown, no bullet symbols, no emoji.',
     '- Never invent items that are not on the menu. If unsure, say so.',
     '- End most turns with a brief, natural question that keeps the conversation moving.',
     '',
@@ -132,27 +178,16 @@ export async function chatReply(
   for (const t of history) messages.push({ role: t.role, content: t.text });
   messages.push({ role: 'user', content: userText });
 
-  const res = await fetch(`${API}/chat/completions`, {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ model: CHAT_MODEL, messages, temperature: 0.5, max_tokens: 220 }),
-  });
-  if (!res.ok) throw new Error(`Reply failed (${res.status}): ${await safeText(res)}`);
-  const json = await res.json();
-  return (json.choices?.[0]?.message?.content ?? 'Sorry, I missed that. Could you say it again?').trim();
+  const json = await chatCompletions({ model: CHAT_MODEL, messages, temperature: 0.5, max_tokens: 220 });
+  return (json.choices?.[0]?.message?.content ?? "Sorry, I missed that. Could you say it again?").trim();
 }
 
 export interface SessionLearnings {
-  orders: string[]; // dishes the guest decided to get
-  likes: string[]; // foods/cuisines/ingredients they reacted well to
-  dislikes: string[]; // things they reacted against
+  orders: string[];
+  likes: string[];
+  dislikes: string[];
 }
 
-/**
- * After a conversation, pull out what the guest decided and what they revealed
- * about their taste, so the profile can recommend better next time. Cheap, runs
- * once on the way out. Returns empty arrays if nothing clear.
- */
 export async function extractSessionLearnings(turns: ChatTurn[]): Promise<SessionLearnings> {
   const empty: SessionLearnings = { orders: [], likes: [], dislikes: [] };
   const transcript = turns
@@ -160,10 +195,8 @@ export async function extractSessionLearnings(turns: ChatTurn[]): Promise<Sessio
     .join('\n');
   if (!transcript.trim()) return empty;
 
-  const res = await fetch(`${API}/chat/completions`, {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
+  try {
+    const json = await chatCompletions({
       model: CHAT_MODEL,
       temperature: 0,
       response_format: { type: 'json_object' },
@@ -179,11 +212,7 @@ export async function extractSessionLearnings(turns: ChatTurn[]): Promise<Sessio
         },
         { role: 'user', content: transcript },
       ],
-    }),
-  });
-  if (!res.ok) return empty;
-  try {
-    const json = await res.json();
+    });
     const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? '{}');
     return {
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
@@ -197,18 +226,12 @@ export async function extractSessionLearnings(turns: ChatTurn[]): Promise<Sessio
 
 /** Text -> mp3 Blob (OpenAI TTS). */
 export async function synthesizeSpeech(text: string, voice?: string): Promise<Blob> {
-  const res = await fetch(`${API}/audio/speech`, {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      model: TTS_MODEL,
-      voice: voice || TTS_VOICE_DEFAULT,
-      input: text,
-      response_format: 'mp3',
-    }),
+  return audioSpeech({
+    model: TTS_MODEL,
+    voice: voice || TTS_VOICE_DEFAULT,
+    input: text,
+    response_format: 'mp3',
   });
-  if (!res.ok) throw new Error(`Speech failed (${res.status}): ${await safeText(res)}`);
-  return await res.blob();
 }
 
 async function safeText(res: Response): Promise<string> {

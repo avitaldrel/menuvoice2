@@ -1,0 +1,24 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+// Vercel's default body parser can't handle multipart. We stream the raw body
+// straight through to OpenAI, preserving the Content-Type (with boundary).
+export const config = { api: { bodyParser: false } };
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).end();
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return res.status(500).json({ error: 'No API key configured on server.' });
+
+  const contentType = req.headers['content-type'] ?? '';
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const body = Buffer.concat(chunks);
+
+  const upstream = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': contentType },
+    body,
+  });
+  const data = await upstream.json();
+  res.status(upstream.status).json(data);
+}
