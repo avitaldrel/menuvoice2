@@ -48,3 +48,40 @@ export function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Resize and re-encode any image File (JPEG, PNG, WebP, HEIC via iOS, etc.)
+ * into a base64 JPEG string (no data: prefix) with a capped long dimension.
+ * This normalises format, shrinks large phone photos, and prevents OpenAI
+ * rejecting payloads that are too large.
+ */
+export function compressImage(file: File, maxDim = 1500, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.size > 60 * 1024 * 1024) {
+      reject(new Error(`"${file.name}" is too large (${Math.round(file.size / 1024 / 1024)} MB max 60 MB).`));
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const { naturalWidth: w, naturalHeight: h } = img;
+      const scale = Math.min(1, maxDim / Math.max(w, h, 1));
+      const cw = Math.max(1, Math.round(w * scale));
+      const ch = Math.max(1, Math.round(h * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas unavailable')); return; }
+      ctx.drawImage(img, 0, 0, cw, ch);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(dataUrl.split(',')[1] ?? '');
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`Could not read "${file.name}". Use JPEG or PNG.`));
+    };
+    img.src = url;
+  });
+}

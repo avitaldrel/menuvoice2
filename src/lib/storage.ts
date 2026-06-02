@@ -31,6 +31,27 @@ export async function loadSavedRestaurants(): Promise<SavedRestaurant[]> {
   }
 }
 
+function trySetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e: any) {
+    const isQuota = e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014;
+    if (!isQuota) throw e;
+    // Storage full — drop oldest saved restaurants one at a time until it fits.
+    try {
+      let trimmed = JSON.parse(value) as SavedRestaurant[];
+      while (trimmed.length > 1) {
+        trimmed = trimmed.slice(0, -1);
+        try {
+          localStorage.setItem(key, JSON.stringify(trimmed));
+          return;
+        } catch {}
+      }
+    } catch {}
+    throw new Error('Storage is full. Delete some saved restaurants to free up space.');
+  }
+}
+
 export async function saveRestaurant(name: string, menu: ParsedMenu): Promise<SavedRestaurant> {
   const list = await loadSavedRestaurants();
   const entry: SavedRestaurant = {
@@ -41,7 +62,7 @@ export async function saveRestaurant(name: string, menu: ParsedMenu): Promise<Sa
   };
   const filtered = list.filter((r) => r.name.toLowerCase() !== entry.name.toLowerCase());
   filtered.unshift(entry);
-  localStorage.setItem(SAVED_KEY, JSON.stringify(filtered));
+  trySetItem(SAVED_KEY, JSON.stringify(filtered));
   return entry;
 }
 

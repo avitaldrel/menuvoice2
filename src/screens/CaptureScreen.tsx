@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { speak, coach, stopCoach } from '../lib/speech';
-import { startCamera, stopCamera, captureFrame, fileToBase64 } from '../lib/camera';
+import { startCamera, stopCamera, captureFrame, compressImage } from '../lib/camera';
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { AutoCaptureController } from '../lib/autocapture';
@@ -152,20 +152,39 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const onPickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (!files.length) return;
+    e.target.value = '';
+
+    announce(`Processing ${files.length} photo${files.length > 1 ? 's' : ''}…`);
+
+    const results = await Promise.allSettled(files.map((f) => compressImage(f)));
     const added: string[] = [];
-    for (const f of files) {
-      try {
-        added.push(await fileToBase64(f));
-      } catch {}
-    }
+    const failedNames: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        added.push(r.value);
+      } else {
+        failedNames.push(files[i].name);
+      }
+    });
+
     if (added.length) {
       setPhotos((prev) => {
         const next = [...prev, ...added];
-        announce(`Added ${added.length} photo${added.length > 1 ? 's' : ''}. ${next.length} total.`);
+        photosRef.current = next;
+        let msg = `Added ${added.length} photo${added.length > 1 ? 's' : ''}. ${next.length} total.`;
+        if (failedNames.length) {
+          msg += ` ${failedNames.length} could not be read — use JPEG or PNG.`;
+        }
+        announce(msg);
         return next;
       });
+    } else {
+      const errMsg =
+        failedNames.length === 1
+          ? `Could not read "${failedNames[0]}". Use a JPEG or PNG photo.`
+          : `Could not read ${failedNames.length} files. Use JPEG or PNG photos.`;
+      announce(errMsg);
     }
-    e.target.value = '';
   };
 
   const speakName = async () => {
@@ -322,10 +341,13 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
 
       <div className="col">
         <PrimaryButton
-          label={autoMode ? 'Capture now (manual)' : 'Capture photo'}
+          label={
+            !cameraReady && !camError ? 'Starting camera…' :
+            autoMode ? 'Capture now (manual)' : 'Capture photo'
+          }
           hint="Takes a photo of the menu immediately"
           onClick={manualCapture}
-          disabled={analyzing || !!camError}
+          disabled={analyzing || !!camError || !cameraReady}
           style={{ minHeight: 80 }}
         />
         <div className="row">

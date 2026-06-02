@@ -169,6 +169,15 @@ export function buildOpeningLine(menu: ParsedMenu): string {
   return `I found ${names.length} ${word} on this menu: ${list}. Where would you like to start?`;
 }
 
+// Keep the first 2 turns (establishes what was ordered/discussed early on) plus
+// the most recent ones so very long sessions don't balloon the payload.
+function pruneHistory(history: ChatTurn[], maxTurns = 20): ChatTurn[] {
+  if (history.length <= maxTurns) return history;
+  const head = history.slice(0, 2);
+  const tail = history.slice(-(maxTurns - 2));
+  return [...head, ...tail];
+}
+
 export async function chatReply(
   menu: ParsedMenu,
   profile: UserProfile,
@@ -176,7 +185,7 @@ export async function chatReply(
   userText: string
 ): Promise<string> {
   const messages: any[] = [{ role: 'system', content: buildSystemPrompt(menu, profile) }];
-  for (const t of history) messages.push({ role: t.role, content: t.text });
+  for (const t of pruneHistory(history)) messages.push({ role: t.role, content: t.text });
   messages.push({ role: 'user', content: userText });
 
   const json = await chatCompletions({ model: CHAT_MODEL, messages, temperature: 0.5, max_tokens: 220 });
