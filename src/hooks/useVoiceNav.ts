@@ -9,6 +9,7 @@ import { useCallback, useRef, useState } from 'react';
 import { speak, stopSpeaking } from '../lib/speech';
 import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
+import { earconStart, earconStop, earconError } from '../lib/earcon';
 
 export type VoiceNavPhase = 'announcing' | 'idle' | 'recording' | 'transcribing';
 
@@ -49,8 +50,10 @@ export function useVoiceNav({ commands, onCommand, onNoMatch, voice }: Opts) {
     }
     try {
       await startRecording();
+      earconStart();
       setPhase('recording');
     } catch {
+      earconError();
       await announce('Could not start the microphone. Tap again to retry.');
     }
   }, [phase, announce]);
@@ -59,6 +62,7 @@ export function useVoiceNav({ commands, onCommand, onNoMatch, voice }: Opts) {
     if (phase !== 'recording') return;
     setPhase('transcribing');
 
+    earconStop();
     let blob: Blob | null = null;
     try {
       blob = await stopRecording();
@@ -74,11 +78,13 @@ export function useVoiceNav({ commands, onCommand, onNoMatch, voice }: Opts) {
     try {
       transcript = await transcribeAudio(blob);
     } catch {
+      earconError();
       await announce("I couldn't hear that clearly. Tap the mic and try again.");
       return;
     }
 
     if (!transcript.trim()) {
+      earconError();
       await announce("I didn't catch anything. Tap the mic and say it again.");
       return;
     }
@@ -90,9 +96,11 @@ export function useVoiceNav({ commands, onCommand, onNoMatch, voice }: Opts) {
       setPhase('idle');
       await onCommand(matched.id, transcript);
     } else if (onNoMatch) {
+      earconError();
       const retry = await onNoMatch(transcript);
       await announce(retry);
     } else {
+      earconError();
       await announce("I didn't understand that. Say one of the options.");
     }
   }, [phase, commands, onCommand, onNoMatch, announce]);

@@ -17,6 +17,7 @@ import { useProfile } from '../state/ProfileContext';
 import { speak, stopSpeaking } from '../lib/speech';
 import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
 import { buildOpeningLine, transcribeAudio, chatReply, extractSessionLearnings, hasApiKey } from '../lib/openai';
+import { earconStart, earconStop, earconError } from '../lib/earcon';
 import { mergeUnique } from '../util';
 
 type Phase = 'speaking' | 'idle' | 'recording' | 'transcribing' | 'thinking' | 'error';
@@ -74,8 +75,10 @@ export default function ConversationScreen({
     }
     try {
       await startRecording();
+      earconStart();
       setPhase('recording');
     } catch {
+      earconError();
       setErrorMsg('I could not start the microphone. Try again.');
       setPhase('error');
     }
@@ -83,6 +86,7 @@ export default function ConversationScreen({
 
   const finishListening = async () => {
     if (phase !== 'recording') return;
+    earconStop();
     setPhase('transcribing');
     let blob: Blob | null = null;
     try {
