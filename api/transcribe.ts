@@ -10,14 +10,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!key) return res.status(500).json({ error: 'No API key configured on server.' });
 
   const contentType = req.headers['content-type'] ?? '';
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
   const body = Buffer.concat(chunks);
 
   const upstream = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': contentType },
-    body,
+    body: body as unknown as BodyInit,
   });
   const data = await upstream.json();
   res.status(upstream.status).json(data);
