@@ -306,8 +306,8 @@ export default function SettingsScreen({ goBack }: ScreenProps) {
           disabled={nameRec === 'working' || busy}
           aria-label={nameRec === 'recording' ? 'Done speaking name' : 'Speak your name'}
           style={{
-            minHeight: 56,
-            minWidth: 56,
+            minHeight: 64,
+            minWidth: 64,
             borderRadius: 'var(--r-md)',
             border: `2px solid ${nameRec === 'recording' ? 'var(--success)' : 'var(--border)'}`,
             background: nameRec === 'recording' ? 'var(--success)' : 'var(--surface-high)',
@@ -332,7 +332,7 @@ export default function SettingsScreen({ goBack }: ScreenProps) {
               aria-pressed={active}
               style={{
                 flex: 1,
-                minHeight: 52,
+                minHeight: 64,
                 padding: '0 12px',
                 borderRadius: 'var(--r-md)',
                 border: `2px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
@@ -363,19 +363,8 @@ export default function SettingsScreen({ goBack }: ScreenProps) {
                   update({ dislikes: next });
                 }}
                 aria-label={`Remove ${item} from dislikes`}
-                style={{
-                  minHeight: 36,
-                  minWidth: 36,
-                  borderRadius: '50%',
-                  border: '2px solid var(--border)',
-                  background: 'var(--surface-high)',
-                  color: 'var(--text-secondary)',
-                  fontSize: 18,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="btn-icon"
+                style={{ color: 'var(--text-secondary)' }}
               >
                 ×
               </button>
@@ -407,8 +396,8 @@ export default function SettingsScreen({ goBack }: ScreenProps) {
           disabled={dislikeRec === 'working' || busy}
           aria-label={dislikeRec === 'recording' ? 'Done speaking' : 'Speak a food to add to dislikes'}
           style={{
-            minHeight: 56,
-            minWidth: 56,
+            minHeight: 64,
+            minWidth: 64,
             borderRadius: 'var(--r-md)',
             border: `2px solid ${dislikeRec === 'recording' ? 'var(--success)' : 'var(--border)'}`,
             background: dislikeRec === 'recording' ? 'var(--success)' : 'var(--surface-high)',
@@ -470,7 +459,8 @@ export default function SettingsScreen({ goBack }: ScreenProps) {
               aria-label={`Voice ${v}${active ? ', selected' : ''}`}
               aria-pressed={active}
               style={{
-                minHeight: 52,
+                minHeight: 64,
+                minWidth: 80,
                 padding: '0 16px',
                 borderRadius: 'var(--r-md)',
                 border: `2px solid ${active ? 'var(--accent)' : 'var(--border)'}`,

@@ -179,7 +179,9 @@ export default function ConversationScreen({
       </h2>
 
       <div
+        role="status"
         aria-live="polite"
+        aria-label={indicator.label}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -198,6 +200,8 @@ export default function ConversationScreen({
 
       <div
         ref={scrollRef}
+        aria-live="polite"
+        aria-relevant="additions"
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -217,7 +221,7 @@ export default function ConversationScreen({
             style={{
               alignSelf: turn.role === 'assistant' ? 'flex-start' : 'flex-end',
               maxWidth: '92%',
-              background: turn.role === 'assistant' ? 'var(--surface-high)' : '#2a2320',
+              background: turn.role === 'assistant' ? 'var(--surface-high)' : 'var(--surface-user)',
               borderRadius: 'var(--r-md)',
               padding: '12px 14px',
             }}
@@ -232,7 +236,7 @@ export default function ConversationScreen({
 
       {phase === 'error' ? (
         <div className="col">
-          <p className="body" style={{ color: 'var(--danger)', textAlign: 'center' }}>
+          <p role="alert" className="body" style={{ color: 'var(--danger)', textAlign: 'center' }}>
             {errorMsg}
           </p>
           <PrimaryButton
@@ -246,6 +250,7 @@ export default function ConversationScreen({
       ) : phase === 'speaking' ? (
         <div className="col" style={{ gap: 8 }}>
           <div
+            aria-hidden="true"
             style={{
               height: 8,
               borderRadius: 4,
@@ -253,15 +258,7 @@ export default function ConversationScreen({
               overflow: 'hidden',
             }}
           >
-            <div
-              style={{
-                height: '100%',
-                width: '100%',
-                background: 'var(--accent)',
-                animation: 'pulse-bar 1.4s ease-in-out infinite',
-                transformOrigin: 'left',
-              }}
-            />
+            <div className="speaking-bar" />
           </div>
           <SecondaryButton
             label="Skip"
@@ -275,7 +272,8 @@ export default function ConversationScreen({
           label="■  Done speaking"
           hint="Stop listening and get a response"
           onClick={finishListening}
-          style={{ minHeight: 110, background: 'var(--success)', animation: 'mic-pulse 1.5s ease-out infinite' }}
+          className="btn-recording"
+          style={{ minHeight: 110, background: 'var(--success)' }}
         />
       ) : (
         <PrimaryButton
@@ -292,6 +290,11 @@ export default function ConversationScreen({
         hint="Save what you decided and return home"
         onClick={finish}
         disabled={saving}
+      />
+      <SecondaryButton
+        label="Browse menu silently"
+        hint="Read the menu without audio — navigable by VoiceOver heading rotor"
+        onClick={() => { stopSpeaking(); navigate({ name: 'browse', menu, restaurantName }); }}
       />
     </Screen>
   );

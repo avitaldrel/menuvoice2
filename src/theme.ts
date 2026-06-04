@@ -11,7 +11,7 @@ export const colors = {
   // Text. On #0E0E10:
   textPrimary: '#F5F3EE', // ~16.5:1  (AAA)
   textSecondary: '#C9C6BE', // ~10.5:1 (AAA)
-  textMuted: '#9A968D', // ~6.2:1   (AA large / body AAA borderline)
+  textMuted: '#A19D94', // ~7.2:1   (AAA)
 
   // Warm amber accent. amber on dark bg, gold-leaning.
   accent: '#FFB454', // ~10.8:1 on bg (AAA)

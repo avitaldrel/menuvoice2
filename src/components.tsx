@@ -4,7 +4,7 @@
 import React from 'react';
 
 export function Screen({ children }: { children: React.ReactNode }) {
-  return <div className="screen">{children}</div>;
+  return <main className="screen">{children}</main>;
 }
 
 export function Title({ children }: { children: React.ReactNode }) {
@@ -33,16 +33,16 @@ interface BtnProps {
   hint?: string;
   disabled?: boolean;
   style?: React.CSSProperties;
+  className?: string;
 }
 
-export function PrimaryButton({ label, onClick, hint, disabled, style }: BtnProps) {
+export function PrimaryButton({ label, onClick, hint, disabled, style, className }: BtnProps) {
   return (
     <button
-      className="btn btn-primary"
+      className={`btn btn-primary${className ? ` ${className}` : ''}`}
       onClick={onClick}
       disabled={disabled}
-      aria-label={label}
-      aria-description={hint}
+      aria-label={hint ? `${label}. ${hint}` : label}
       style={style}
     >
       {label}
@@ -57,14 +57,14 @@ export function SecondaryButton({
   disabled,
   tone,
   style,
+  className,
 }: BtnProps & { tone?: 'default' | 'danger' }) {
   return (
     <button
-      className={`btn ${tone === 'danger' ? 'btn-danger' : 'btn-secondary'}`}
+      className={`btn ${tone === 'danger' ? 'btn-danger' : 'btn-secondary'}${className ? ` ${className}` : ''}`}
       onClick={onClick}
       disabled={disabled}
-      aria-label={label}
-      aria-description={hint}
+      aria-label={hint ? `${label}. ${hint}` : label}
       style={style}
     >
       {label}

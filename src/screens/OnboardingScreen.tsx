@@ -37,8 +37,12 @@ export default function OnboardingScreen() {
     }
   };
 
+  // Only speak interactive steps — intro text is on-screen so VoiceOver reads it.
+  // Speaking starts only after the user taps "Let's begin", which is the natural
+  // handoff point from VoiceOver navigation to app-driven voice.
   const spoken = useRef<Set<Step>>(new Set());
   useEffect(() => {
+    if (step === 'intro') return;
     if (!spoken.current.has(step)) {
       spoken.current.add(step);
       speak(promptFor(step));
@@ -64,7 +68,12 @@ export default function OnboardingScreen() {
       {step === 'intro' && (
         <>
           <Body>{INTRO}</Body>
-          <PrimaryButton label="Let's begin" onClick={() => setStep('name')} hint="Starts setup" />
+          <PrimaryButton
+            label="Let's begin"
+            onClick={() => setStep('name')}
+            hint="Starts setup — app will speak from here"
+            style={{ minHeight: 96, marginTop: 32 }}
+          />
         </>
       )}
 

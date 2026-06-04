@@ -41,3 +41,17 @@ export function earconStop() {
 export function earconError() {
   play([{ freq: 300, dur: 0.12, vol: 0.12 }]);
 }
+
+/** Rising tick: one step closer to auto-capture. n=current count, max=total. */
+export function earconTick(n: number, max: number) {
+  const freq = 380 + (n / max) * 640; // 380 Hz first tick → 1020 Hz last
+  play([{ freq, dur: 0.055, vol: 0.17 }]);
+}
+
+/** Shutter click: auto-capture fired. */
+export function earconCapture() {
+  play([
+    { freq: 1100, dur: 0.03, vol: 0.22 },
+    { freq: 700, dur: 0.07, vol: 0.16 },
+  ]);
+}

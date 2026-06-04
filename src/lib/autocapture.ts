@@ -1,33 +1,46 @@
 // Auto-shutter ("self capture") with real-time audio coaching — no heavy CV dep.
 //
-// Why this approach: a blind/low-vision user cannot aim for a perfect document
-// crop, so per-frame edge detection (OpenCV.js) is both fragile in dim
-// restaurant light and the wrong abstraction. What actually helps is: keep the
-// phone steady over something readable, and the app fires on its own while
-// coaching by voice. We measure three cheap signals on a downscaled frame:
-//   - brightness  (too dark -> coach for light)
-//   - gradient energy (is there detailed content/text in view, and is it sharp)
-//   - motion (frame-to-frame difference -> is the phone being held still)
-// When it's bright enough, has content, and is held still for ~1s -> capture.
-// After a capture it disarms until it sees real movement (a page turn), so it
-// won't fire twice on the same page.
+// Coaching strategy: each blocked state has two messages. The first fires
+// immediately on entering the state. If still stuck after ESCALATE_MS, the
+// second fires (more specific advice + mention of the Override button). After
+// STRUGGLE_MS total without a capture, onStruggle fires and hands off to manual.
+
+/** Visual state reported to the UI every tick so it can draw the guidance overlay. */
+export type AutoCaptureState = 'dark' | 'content' | 'moving' | 'steadying' | 'disarmed';
 
 export interface AutoCaptureCallbacks {
-  onCoach: (msg: string) => void; // coaching text (speak it + show it)
-  onCapture: () => void; // fire the shutter
-  onStruggle?: () => void; // couldn't fire after a while -> fall back to manual
+  onCoach: (msg: string) => void;
+  onCapture: () => void;
+  onStruggle?: () => void;
+  onProgress?: (state: AutoCaptureState, steadyCount: number, steadyMax: number) => void;
 }
 
 const W = 80;
 const H = 60;
 const TICK_MS = 180;
 
-const DARK = 35; // mean luminance (0-255) below this = too dark
-const CONTENT_MIN = 7; // mean gradient below this = nothing readable / blurry
-const MOTION_STEADY = 6; // mean abs frame diff below this = held still
-const REARM_MOTION = 13; // movement above this after a shot = new page
-const STEADY_TICKS = 5; // consecutive steady ticks before firing (~0.9s)
-const STRUGGLE_MS = 11000; // armed this long without firing -> suggest manual
+const DARK = 35;
+const CONTENT_MIN = 7;
+const MOTION_STEADY = 6;
+const REARM_MOTION = 13;
+const STEADY_TICKS = 5;
+const ESCALATE_MS = 5500;  // time before escalating to the follow-up message
+const STRUGGLE_MS = 14000; // total armed time before giving up and going manual
+
+const STAGE_MSGS: Record<string, [string, string]> = {
+  dark: [
+    "It's a bit dark. Try moving to a brighter spot or closer to a light.",
+    "Still too dark. A flashlight or lamp would help. Or tap Override to take the photo now.",
+  ],
+  content: [
+    'Point the camera at the menu text so it fills the screen.',
+    'Still not seeing text. Hold the phone flat, about 30 centimeters above the menu. Or tap Override to take the photo now.',
+  ],
+  moving: [
+    'Good -- now hold still.',
+    'Try resting your elbow on the table to steady your hand. Or tap Override whenever you are ready.',
+  ],
+};
 
 export class AutoCaptureController {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -36,11 +49,14 @@ export class AutoCaptureController {
   private prev: Float32Array | null = null;
   private steady = 0;
   private armed = true;
-  private lastCoach = '';
   private armedAt = 0;
   private struggled = false;
   private video: HTMLVideoElement | null = null;
   private cb: AutoCaptureCallbacks | null = null;
+
+  private coachState = '';   // which state we're currently coaching
+  private coachStage = 0;    // 0 = initial, 1 = escalated
+  private coachAt = 0;       // when we last spoke
 
   constructor() {
     this.canvas.width = W;
@@ -55,7 +71,9 @@ export class AutoCaptureController {
     this.armed = true;
     this.steady = 0;
     this.prev = null;
-    this.lastCoach = '';
+    this.coachState = '';
+    this.coachStage = 0;
+    this.coachAt = 0;
     this.armedAt = Date.now();
     this.struggled = false;
     this.timer = setInterval(() => this.tick(), TICK_MS);
@@ -66,18 +84,31 @@ export class AutoCaptureController {
     this.timer = null;
   }
 
-  /** Call after the screen has handled a capture so the next page can arm. */
   acknowledgeCapture() {
     this.armed = false;
     this.steady = 0;
-    this.lastCoach = '';
+    this.coachState = '';
+    this.coachStage = 0;
+    this.coachAt = 0;
   }
 
-  private coach(msg: string) {
-    if (msg && msg !== this.lastCoach) {
-      this.lastCoach = msg;
-      this.cb?.onCoach(msg);
+  private coach(state: string) {
+    const msgs = STAGE_MSGS[state];
+    if (!msgs) return;
+    const now = Date.now();
+    if (state !== this.coachState) {
+      // New state: speak stage 0 immediately.
+      this.coachState = state;
+      this.coachStage = 0;
+      this.coachAt = now;
+      this.cb?.onCoach(msgs[0]);
+    } else if (this.coachStage === 0 && now - this.coachAt > ESCALATE_MS) {
+      // Still stuck: escalate to stage 1 (different, more helpful message).
+      this.coachStage = 1;
+      this.coachAt = now;
+      this.cb?.onCoach(msgs[1]);
     }
+    // Stage 1 reached: go silent until state changes.
   }
 
   private tick() {
@@ -96,9 +127,7 @@ export class AutoCaptureController {
     }
     bright /= W * H;
 
-    // Horizontal gradient energy ~ amount of detail/text + focus.
-    let grad = 0;
-    let gc = 0;
+    let grad = 0, gc = 0;
     for (let y = 0; y < H; y++) {
       for (let x = 1; x < W; x++) {
         grad += Math.abs(gray[y * W + x] - gray[y * W + x - 1]);
@@ -107,7 +136,6 @@ export class AutoCaptureController {
     }
     grad /= gc;
 
-    // Motion vs previous frame.
     let motion = Infinity;
     if (this.prev) {
       let m = 0;
@@ -117,17 +145,18 @@ export class AutoCaptureController {
     this.prev = gray;
 
     if (!this.armed) {
+      this.cb.onProgress?.('disarmed', 0, STEADY_TICKS);
       if (motion > REARM_MOTION) {
         this.armed = true;
         this.steady = 0;
         this.armedAt = Date.now();
         this.struggled = false;
-        this.coach('Ready for the next page.');
+        this.coachState = '';
+        this.cb?.onCoach('Ready for the next page.');
       }
       return;
     }
 
-    // Took too long to fire this page -> hand off to manual.
     if (!this.struggled && Date.now() - this.armedAt > STRUGGLE_MS) {
       this.struggled = true;
       this.cb.onStruggle?.();
@@ -136,28 +165,35 @@ export class AutoCaptureController {
 
     if (bright < DARK) {
       this.steady = 0;
-      this.coach('It’s a bit dark. Try more light, or move a little closer.');
+      this.coach('dark');
+      this.cb.onProgress?.('dark', 0, STEADY_TICKS);
       return;
     }
     if (grad < CONTENT_MIN) {
       this.steady = 0;
-      this.coach('Point it at the menu so I can see the text.');
+      this.coach('content');
+      this.cb.onProgress?.('content', 0, STEADY_TICKS);
       return;
     }
     if (motion === Infinity || motion > MOTION_STEADY) {
       this.steady = 0;
-      this.coach('Good — now hold still.');
+      this.coach('moving');
+      this.cb.onProgress?.('moving', 0, STEADY_TICKS);
       return;
     }
 
-    // Bright + content + steady.
     this.steady++;
     if (this.steady >= STEADY_TICKS) {
       this.steady = 0;
-      this.coach('Capturing now.');
+      this.cb?.onCoach('Capturing now.');
+      this.cb.onProgress?.('steadying', STEADY_TICKS, STEADY_TICKS);
       this.cb.onCapture();
     } else {
-      this.coach('Hold it… almost there.');
+      if (this.coachState !== 'steadying') {
+        this.coachState = 'steadying';
+        this.cb?.onCoach('Hold it... almost there.');
+      }
+      this.cb.onProgress?.('steadying', this.steady, STEADY_TICKS);
     }
   }
 }

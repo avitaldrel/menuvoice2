@@ -1,4 +1,4 @@
-// Local persistence with localStorage. Same API the rest of the app expects.
+// Local persistence with localStorage + cloud sync via /api/sync.
 // SavedRestaurant carries its own id + capturedAt so a future V2 "shared menus
 // across users" feature needs no migration.
 
@@ -6,6 +6,43 @@ import { UserProfile, EMPTY_PROFILE, SavedRestaurant, ParsedMenu } from '../type
 
 const PROFILE_KEY = 'menuvoice.profile.v1';
 const SAVED_KEY = 'menuvoice.savedRestaurants.v1';
+
+// ── Cloud sync ────────────────────────────────────────────────────────────────
+
+async function pushToCloud(profile: UserProfile, restaurants: SavedRestaurant[]) {
+  if (!profile.email) return;
+  try {
+    await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: profile.email, profile, restaurants }),
+    });
+  } catch {
+    // offline — local save already happened, cloud will be stale until next push
+  }
+}
+
+export async function loadFromCloud(email: string): Promise<{ profile: UserProfile; restaurants: SavedRestaurant[] } | null> {
+  try {
+    const res = await fetch(`/api/sync?email=${encodeURIComponent(email)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data) return null;
+    return { profile: data.profile ?? null, restaurants: data.restaurants ?? [] };
+  } catch {
+    return null;
+  }
+}
+
+// Writes cloud data into localStorage so the rest of the app picks it up normally.
+export async function restoreFromCloud(email: string): Promise<UserProfile | null> {
+  const cloud = await loadFromCloud(email);
+  if (!cloud?.profile) return null;
+  const merged: UserProfile = { ...EMPTY_PROFILE, ...cloud.profile, email };
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(merged));
+  localStorage.setItem(SAVED_KEY, JSON.stringify(cloud.restaurants ?? []));
+  return merged;
+}
 
 export async function loadProfile(): Promise<UserProfile> {
   try {
@@ -19,6 +56,8 @@ export async function loadProfile(): Promise<UserProfile> {
 
 export async function saveProfile(profile: UserProfile): Promise<void> {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  const restaurants = await loadSavedRestaurants();
+  pushToCloud(profile, restaurants);
 }
 
 export async function loadSavedRestaurants(): Promise<SavedRestaurant[]> {
@@ -63,10 +102,15 @@ export async function saveRestaurant(name: string, menu: ParsedMenu): Promise<Sa
   const filtered = list.filter((r) => r.name.toLowerCase() !== entry.name.toLowerCase());
   filtered.unshift(entry);
   trySetItem(SAVED_KEY, JSON.stringify(filtered));
+  const profile = await loadProfile();
+  pushToCloud(profile, filtered);
   return entry;
 }
 
 export async function deleteRestaurant(id: string): Promise<void> {
   const list = await loadSavedRestaurants();
-  localStorage.setItem(SAVED_KEY, JSON.stringify(list.filter((r) => r.id !== id)));
+  const updated = list.filter((r) => r.id !== id);
+  localStorage.setItem(SAVED_KEY, JSON.stringify(updated));
+  const profile = await loadProfile();
+  pushToCloud(profile, updated);
 }

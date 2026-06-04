@@ -1,8 +1,7 @@
-// Home: greeting + two large actions + voice command support.
-// On mount the app speaks a short prompt; the user can then either tap a button
-// or tap the mic and say "new restaurant", "saved", or "settings".
+// Home: greeting + large action buttons + voice command support.
+// No auto-speak on mount — VoiceOver reads the on-screen buttons.
+// App voice activates only when the user taps the mic button.
 
-import { useEffect } from 'react';
 import { Screen, Title, Subtitle, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
@@ -30,12 +29,8 @@ export default function HomeScreen({ navigate }: ScreenProps) {
       'Say "new restaurant" to scan a menu, "website" to use a URL, "saved" for a saved one, or "settings".',
   });
 
-  useEffect(() => {
-    announce(
-      `Hello${name}. Say "new restaurant" to scan a menu, "website" to use a URL, "saved" for a saved one, or "settings".`
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No auto-announce — VoiceOver reads the on-screen buttons when the user arrives.
+  // App voice only starts when the user taps the mic button.
 
   const busy = phase === 'announcing' || phase === 'transcribing';
   const micLabel =

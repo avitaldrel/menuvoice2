@@ -8,6 +8,7 @@ export type Route =
   | { name: 'capture' }
   | { name: 'url' }
   | { name: 'conversation'; menu: ParsedMenu; restaurantName: string }
+  | { name: 'browse'; menu: ParsedMenu; restaurantName: string }
   | { name: 'saved' }
   | { name: 'settings' };
 

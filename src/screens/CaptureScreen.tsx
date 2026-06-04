@@ -12,20 +12,25 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { speak, coach, stopCoach } from '../lib/speech';
-import { startCamera, stopCamera, captureFrame, compressImage } from '../lib/camera';
+import { startCamera, stopCamera, captureFrame, compressImage, enableTorch, disableTorch } from '../lib/camera';
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
-import { AutoCaptureController } from '../lib/autocapture';
+import { AutoCaptureController, AutoCaptureState } from '../lib/autocapture';
 import { useVoiceNav } from '../hooks/useVoiceNav';
 import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
+import { earconTick, earconCapture } from '../lib/earcon';
 
 export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const autoRef = useRef<AutoCaptureController | null>(null);
   const analyzingRef = useRef(false);
+  const captureStateRef = useRef<AutoCaptureState>('content');
+  const prevSteadyRef = useRef(0);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [photos, setPhotos] = useState<string[]>([]);
   const [name, setName] = useState('');
@@ -35,6 +40,8 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const [cameraReady, setCameraReady] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [autoMode, setAutoMode] = useState(true);
+  const [captureStateDraw, setCaptureStateDraw] = useState<AutoCaptureState>('content');
+  const [flash, setFlash] = useState(false);
 
   // Voice commands available once at least one photo has been captured.
   const photosRef = useRef<string[]>([]);
@@ -55,6 +62,62 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       `Say "analyze" to read the menu, "another" for another photo, or "cancel" to go back.`,
   });
 
+  const drawOverlay = (state: AutoCaptureState, steady: number, max: number) => {
+    const canvas = overlayRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (state === 'disarmed') return;
+
+    let r = 255, g = 255, b = 255;
+    if (state === 'dark' || state === 'content') { r = 255; g = 75; b = 75; }
+    else if (state === 'moving') { r = 255; g = 195; b = 40; }
+    else if (state === 'steadying') {
+      const t = steady / max;
+      r = Math.round(80 + (1 - t) * 120);
+      g = 235;
+      b = Math.round(80 + t * 100);
+    }
+
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.85)`;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const len = Math.min(w, h) * 0.14;
+    const m = 18;
+    const brackets: [number, number, number, number, number, number][] = [
+      [m, m, m + len, m, m, m + len],
+      [w - m, m, w - m - len, m, w - m, m + len],
+      [m, h - m, m + len, h - m, m, h - m - len],
+      [w - m, h - m, w - m - len, h - m, w - m, h - m - len],
+    ];
+    for (const [x1, y1, x2, y2, x3, y3] of brackets) {
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x1, y1);
+      ctx.lineTo(x3, y3);
+      ctx.stroke();
+    }
+
+    if (state === 'steadying' && steady > 0) {
+      const cx = w / 2, cy = h / 2, radius = Math.min(w, h) * 0.1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (steady / max) * 2 * Math.PI);
+      ctx.strokeStyle = `rgba(${r},${g},${b},0.92)`;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+    }
+  };
+
   // Start / stop camera.
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +131,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           }
           streamRef.current = s;
           setCameraReady(true);
+          enableTorch(s); // no-op on iOS; improves lighting on Android
         }
       } catch {
         setCamError(
@@ -79,6 +143,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       cancelled = true;
       autoRef.current?.stop();
       stopCoach();
+      if (streamRef.current) disableTorch(streamRef.current);
       stopCamera(streamRef.current);
       streamRef.current = null;
     };
@@ -93,7 +158,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       return;
     }
     if (!autoRef.current) autoRef.current = new AutoCaptureController();
-    speak('Auto capture is on. Hold your phone steady over the menu and I will take the photo for you.');
+    speak('Auto capture is on. Hold the phone over the menu and I will take the photo. If I am taking too long, tap the Override button.');
     setStatus('Auto capture on. Hold your phone over the menu.');
     autoRef.current.start(videoRef.current!, {
       onCoach: (msg) => {
@@ -105,16 +170,28 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         autoRef.current?.acknowledgeCapture();
       },
       onStruggle: () => {
-        // Auto-capture couldn't get a clean, steady shot — fall back to manual.
         setAutoMode(false);
         const msg = 'Auto capture is having trouble. Switching to manual — tap the Capture button when you are ready.';
         setStatus('Switched to manual. Tap "Capture photo" to take the shot.');
         speak(msg);
       },
+      onProgress: (state, steady, max) => {
+        drawOverlay(state, steady, max);
+        if (state !== captureStateRef.current) {
+          captureStateRef.current = state;
+          setCaptureStateDraw(state);
+        }
+        if (state === 'steadying' && steady > prevSteadyRef.current) {
+          earconTick(steady, max);
+        }
+        prevSteadyRef.current = state === 'steadying' ? steady : 0;
+      },
     });
     return () => {
       autoRef.current?.stop();
       stopCoach();
+      const canvas = overlayRef.current;
+      if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoMode, cameraReady, analyzing, camError]);
@@ -123,6 +200,12 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     if (!b64) {
       if (!viaAuto) announce('That photo did not capture. Try again.');
       return;
+    }
+    if (viaAuto) {
+      earconCapture();
+      setFlash(true);
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(() => setFlash(false), 280);
     }
     setPhotos((prev) => {
       const next = [...prev, b64];
@@ -269,8 +352,8 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           disabled={nameRecState === 'working' || analyzing}
           aria-label={nameRecState === 'recording' ? 'Done speaking name' : 'Speak the restaurant name'}
           style={{
-            minHeight: 56,
-            minWidth: 56,
+            minHeight: 64,
+            minWidth: 64,
             borderRadius: 'var(--r-md)',
             border: `2px solid ${nameRecState === 'recording' ? 'var(--success)' : 'var(--border)'}`,
             background: nameRecState === 'recording' ? 'var(--success)' : 'var(--surface-high)',
@@ -306,22 +389,55 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           background: '#000',
           borderRadius: 'var(--r-lg)',
           overflow: 'hidden',
-          border: `2px solid ${autoMode ? 'var(--accent)' : 'var(--border)'}`,
+          border: `3px solid ${
+            !autoMode ? 'var(--border)' :
+            captureStateDraw === 'steadying' ? 'var(--success)' :
+            captureStateDraw === 'moving' ? '#ffc800' :
+            (captureStateDraw === 'dark' || captureStateDraw === 'content') ? 'var(--danger)' :
+            'var(--border)'
+          }`,
+          transition: 'border-color 0.2s',
         }}
       >
         <video
           ref={videoRef}
           playsInline
           muted
-          aria-label="Camera viewfinder. Point the back of your phone at the menu."
+          aria-hidden="true"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+        {autoMode && !analyzing && (
+          <canvas
+            ref={overlayRef}
+            width={300}
+            height={400}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'white',
+            opacity: flash ? 0.88 : 0,
+            transition: flash ? 'none' : 'opacity 0.32s ease-out',
+            pointerEvents: 'none',
+          }}
         />
         {analyzing && (
           <div
             style={{
               position: 'absolute',
               inset: 0,
-              background: 'rgba(0,0,0,0.7)',
+              background: 'var(--overlay)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -334,8 +450,10 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         )}
       </div>
 
-      {camError ? <Body style={{ color: 'var(--danger)' }}>{camError}</Body> : null}
-      <p className="body" aria-live="polite" style={{ textAlign: 'center', minHeight: 28 }}>
+      {camError ? (
+        <p role="alert" className="body" style={{ color: 'var(--danger)' }}>{camError}</p>
+      ) : null}
+      <p role="status" className="body" aria-live="polite" style={{ textAlign: 'center', minHeight: 28 }}>
         {status}
       </p>
 
@@ -343,9 +461,9 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         <PrimaryButton
           label={
             !cameraReady && !camError ? 'Starting camera…' :
-            autoMode ? 'Capture now (manual)' : 'Capture photo'
+            autoMode ? 'Override — take photo now' : 'Capture photo'
           }
-          hint="Takes a photo of the menu immediately"
+          hint={autoMode ? 'Take the photo immediately without waiting for auto-capture' : 'Takes a photo of the menu'}
           onClick={manualCapture}
           disabled={analyzing || !!camError || !cameraReady}
           style={{ minHeight: 80 }}

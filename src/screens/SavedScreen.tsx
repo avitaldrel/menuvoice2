@@ -114,9 +114,15 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
               <div className="row" style={{ marginTop: 12 }}>
                 <PrimaryButton
                   label="Open"
-                  hint={`Open the saved menu for ${r.name}`}
+                  hint={`Talk to MenuVoice about the menu for ${r.name}`}
                   onClick={() => navigate({ name: 'conversation', menu: r.menu, restaurantName: r.name })}
-                  style={{ flex: 2 }}
+                  style={{ flex: 1 }}
+                />
+                <SecondaryButton
+                  label="Browse"
+                  hint={`Browse the menu for ${r.name} silently`}
+                  onClick={() => navigate({ name: 'browse', menu: r.menu, restaurantName: r.name })}
+                  style={{ flex: 1 }}
                 />
                 <SecondaryButton
                   label="Delete"

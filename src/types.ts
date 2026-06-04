@@ -1,4 +1,5 @@
 export interface UserProfile {
+  email: string;
   name: string;
   allergies: string[];
   dislikes: string[];
@@ -41,6 +42,7 @@ export interface ChatTurn {
 }
 
 export const EMPTY_PROFILE: UserProfile = {
+  email: '',
   name: '',
   allergies: [],
   dislikes: [],

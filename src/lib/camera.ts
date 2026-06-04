@@ -7,6 +7,31 @@
 // with spoken feedback. captureFrame() is the seam where auto-capture would call
 // in once a "steady flat page" heuristic fires.
 
+/**
+ * Try to enable the device torch/flashlight on the active camera track.
+ * Returns true if it worked. Silently no-ops on iOS Safari (no torch API).
+ */
+export async function enableTorch(stream: MediaStream): Promise<boolean> {
+  try {
+    const track = stream.getVideoTracks()[0];
+    if (!track) return false;
+    const caps = (track.getCapabilities as any)?.() as any;
+    if (!caps?.torch) return false;
+    await track.applyConstraints({ advanced: [{ torch: true } as any] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Turn the torch off. No-op if not supported or not currently enabled. */
+export function disableTorch(stream: MediaStream): void {
+  try {
+    const track = stream.getVideoTracks()[0];
+    if (track) track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => {});
+  } catch {}
+}
+
 export async function startCamera(video: HTMLVideoElement): Promise<MediaStream> {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
