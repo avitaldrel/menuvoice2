@@ -53,7 +53,8 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 18px;
+  /* rem respects browser font-size preferences, critical for VI users */
+  font-size: 1.125rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -87,7 +88,7 @@ body {
 
 /* ── Typography ──────────────────────────────────── */
 .title {
-  font-size: 36px;
+  font-size: 2.25rem;
   font-weight: 900;
   line-height: 1.08;
   letter-spacing: -0.03em;
@@ -97,7 +98,7 @@ body {
 }
 
 .subtitle {
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 500;
   color: var(--text-secondary);
   margin: 0;
@@ -106,7 +107,7 @@ body {
 }
 
 .heading {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.025em;
@@ -116,7 +117,7 @@ body {
 }
 
 .body {
-  font-size: 17px;
+  font-size: 1.0625rem;
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.58;
@@ -124,7 +125,7 @@ body {
 
 .muted {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   letter-spacing: 0;
 }
@@ -135,7 +136,7 @@ body {
   width: 100%;
   border-radius: var(--r-md);
   padding: 14px 24px;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   font-family: inherit;
   letter-spacing: -0.01em;
@@ -194,7 +195,7 @@ body {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 500;
   font-family: inherit;
   padding: 12px 4px;
@@ -238,7 +239,7 @@ body {
   border: 2px solid var(--border);
   background: var(--surface-high);
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: 1.25rem;
   font-family: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -266,15 +267,22 @@ body {
   border-radius: var(--r-md);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 400;
   padding: 0 16px;
   transition: border-color 120ms ease;
 }
 
 .input:focus {
-  outline: none;
+  /* amber border signals focus for pointer users; keyboard focus ring
+     comes from the global :focus-visible rule below */
   border-color: var(--accent);
+}
+
+/* Remove the browser outline only for pointer (mouse/touch) interactions;
+   keyboard users still get the :focus-visible ring from the global rule. */
+.input:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .input::placeholder {
@@ -305,6 +313,19 @@ body {
   padding: 18px;
 }
 
+/* ── Screen reader only — visually hidden, AT-accessible ── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* ── Phase indicator (ConversationScreen) ─────────── */
 /* Each phase gets a background fill + border + dot animation.
    The dot is aria-hidden; spoken state comes from aria-live. */
@@ -316,7 +337,7 @@ body {
   gap: 10px;
   border-radius: var(--r-md);
   padding: 16px 20px;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   border: 2px solid transparent;
@@ -412,7 +433,7 @@ body {
 
 .turn-speaker {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -420,7 +441,7 @@ body {
 }
 
 .turn-text {
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.5;
   color: var(--text-primary);
 }
@@ -428,7 +449,7 @@ body {
 /* ── Browse mode ─────────────────────────────────── */
 /* h2 = category landmark for VoiceOver heading rotor */
 .browse-category {
-  font-size: 12px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--accent);
   margin: 0;
@@ -454,7 +475,7 @@ body {
 
 /* h3 = item for VoiceOver heading rotor */
 .browse-item-name {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   margin: 0;
   color: var(--text-primary);
@@ -463,7 +484,7 @@ body {
 }
 
 .browse-item-price {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--accent);
   white-space: nowrap;
@@ -472,7 +493,7 @@ body {
 }
 
 .browse-item-desc {
-  font-size: 15px;
+  font-size: 1rem;
   color: var(--text-secondary);
   margin: 6px 0 0;
   line-height: 1.5;
@@ -520,5 +541,71 @@ body {
   .btn-ghost,
   .input {
     transition: none;
+  }
+}
+
+/* ── Forced colors (Windows High Contrast Mode) ──── */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 3px solid ButtonText;
+    outline-offset: 3px;
+  }
+
+  /* Primary button uses system Highlight so it retains emphasis */
+  .btn-primary {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border: 2px solid ButtonText;
+  }
+
+  .btn,
+  .btn-secondary,
+  .btn-danger,
+  .btn-icon {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+  }
+
+  .btn-ghost {
+    color: ButtonText;
+  }
+
+  /* Phase indicator: preserve border so state is still communicated */
+  .phase-indicator {
+    border: 2px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .phase-dot {
+    forced-color-adjust: none;
+    background: ButtonText;
+  }
+
+  /* Recording ring */
+  .btn-recording::after {
+    border-color: Highlight;
+  }
+
+  /* Progress bar */
+  .speaking-bar {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  .input {
+    border-color: ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  /* Disabled state: use GrayText instead of opacity, which forced-colors may ignore */
+  .btn:disabled,
+  .btn-icon:disabled {
+    opacity: 1;
+    color: GrayText;
+    border-color: GrayText;
   }
 }
