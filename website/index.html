@@ -370,12 +370,9 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 
 /* ── DEMO SECTION ── */
 .demo-section {
-  height: 260vh;
   position: relative;
 }
 .demo-sticky {
-  position: sticky;
-  top: 0;
   height: 100vh;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -1075,51 +1072,38 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 
     function scrollBot() { if (cvConv) cvConv.scrollTop = cvConv.scrollHeight; }
 
-    /* ── Mobile fallback: auto-play on intersection ── */
-    if (window.innerWidth < 900) {
+    /* ── Auto-play on intersection (all devices) ── */
+    var loopTimers = [];
+
+    function clearLoopTimers() {
+      loopTimers.forEach(function (t) { clearTimeout(t); });
+      loopTimers = [];
+    }
+
+    function playSequence() {
+      clearLoopTimers();
+      convoStarted = false;
       setPhase('scan');
-      if ('IntersectionObserver' in window) {
-        var mio = new IntersectionObserver(function (entries) {
-          entries.forEach(function (e) {
-            if (e.isIntersecting) {
-              mio.disconnect();
-              setTimeout(function () { setPhase('capture'); }, 2200);
-              setTimeout(function () { setPhase('reading'); }, 3800);
-              setTimeout(function () { setPhase('convo'); }, 5600);
-            }
-          });
-        }, { threshold: 0.18 });
-        mio.observe(section);
-      }
-      return; // Don't attach scroll listener on mobile
-    }
-
-    /* ── Desktop: scroll-driven ── */
-    function getProgress() {
-      var rect = section.getBoundingClientRect();
-      var sH = section.offsetHeight;
-      var vH = window.innerHeight;
-      var scrolled = Math.max(0, -rect.top);
-      var range = Math.max(1, sH - vH);
-      return Math.min(1, scrolled / range);
-    }
-
-    function update() {
-      var p = getProgress();
-      if (progFill) progFill.style.width = (p * 100) + '%';
-      if (scrollCue) scrollCue.style.opacity = p > 0.05 ? '0' : '1';
-
-      // Thresholds: scan 0-22%, capture 22-40%, reading 40-56%, convo 56%+
-      if      (p < 0.22) setPhase('scan');
-      else if (p < 0.40) setPhase('capture');
-      else if (p < 0.48) setPhase('reading');
-      else               setPhase('convo');
+      loopTimers.push(setTimeout(function () { setPhase('capture'); }, 2200));
+      loopTimers.push(setTimeout(function () { setPhase('reading'); }, 3800));
+      loopTimers.push(setTimeout(function () { setPhase('convo'); }, 5600));
+      loopTimers.push(setTimeout(playSequence, 15000));
     }
 
     setPhase('scan');
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    update();
+    if ('IntersectionObserver' in window) {
+      var mio = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            mio.disconnect();
+            playSequence();
+          }
+        });
+      }, { threshold: 0.18 });
+      mio.observe(section);
+    } else {
+      playSequence();
+    }
   }
 
   /* ═══ Reveal on scroll ══════════════════════════════════════════════ */
