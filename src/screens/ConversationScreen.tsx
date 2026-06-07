@@ -15,7 +15,8 @@ import { ScreenProps, Route } from '../nav';
 import { ChatTurn } from '../types';
 import { useProfile } from '../state/ProfileContext';
 import { speak, stopSpeaking } from '../lib/speech';
-import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
+import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
+import { watchForSilence, SilenceWatcher } from '../lib/vad';
 import { buildOpeningLine, transcribeAudio, chatReply, extractSessionLearnings, hasApiKey } from '../lib/openai';
 import { earconStart, earconStop, earconError } from '../lib/earcon';
 import { mergeUnique } from '../util';
@@ -44,6 +45,9 @@ export default function ConversationScreen({
   const [autoListen, setAutoListen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const started = useRef(false);
+  const silenceRef = useRef<SilenceWatcher | null>(null);
+  // Always points to the latest finishListening — avoids stale-closure capture inside the watcher.
+  const finishListeningRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     if (started.current) return;
@@ -58,7 +62,11 @@ export default function ConversationScreen({
       await speak(opening, profile.ttsVoice);
       await startMic();
     })();
-    return () => stopSpeaking();
+    return () => {
+      stopSpeaking();
+      silenceRef.current?.cancel();
+      silenceRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -81,6 +89,14 @@ export default function ConversationScreen({
       await startRecording();
       earconStart();
       setPhase('recording');
+      const s = getActiveStream();
+      if (s) {
+        silenceRef.current?.cancel();
+        silenceRef.current = watchForSilence(s, 8000, 90000, () => {
+          silenceRef.current = null;
+          finishListeningRef.current();
+        });
+      }
     } catch {
       earconError();
       setErrorMsg('I could not start the microphone. Try again.');
@@ -95,6 +111,8 @@ export default function ConversationScreen({
 
   const finishListening = async () => {
     if (phase !== 'recording') return;
+    silenceRef.current?.cancel();
+    silenceRef.current = null;
     earconStop();
     setPhase('transcribing');
     let blob: Blob | null = null;
@@ -148,6 +166,7 @@ export default function ConversationScreen({
     }
   };
 
+  finishListeningRef.current = finishListening;
 
   const say = async (text: string, baseHistory?: ChatTurn[], listen = autoListen) => {
     const base = baseHistory ?? turns;
@@ -260,13 +279,24 @@ export default function ConversationScreen({
           />
         </div>
       ) : phase === 'recording' ? (
-        <PrimaryButton
-          label="Done speaking"
-          hint="Stop listening and get a response"
-          onClick={finishListening}
-          className="btn-recording"
-          style={{ minHeight: 110, background: 'var(--success)' }}
-        />
+        <div
+          aria-hidden="true"
+          style={{
+            minHeight: 110,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 'var(--r-md)',
+            border: '2px solid var(--success)',
+            background: 'rgba(109, 214, 138, 0.12)',
+            color: 'var(--success)',
+            fontWeight: 700,
+            fontSize: 20,
+            letterSpacing: '-0.01em',
+          }}
+        >
+          Listening…
+        </div>
       ) : (
         <PrimaryButton
           label={phase === 'idle' ? 'Tap to talk' : 'Please wait…'}
@@ -311,7 +341,7 @@ function indicatorFor(phase: Phase): { label: string } {
   switch (phase) {
     case 'speaking':     return { label: 'MenuVoice is speaking…' };
     case 'idle':         return { label: 'Your turn — tap to talk' };
-    case 'recording':    return { label: 'Listening… tap Done when finished' };
+    case 'recording':    return { label: "Listening… I'll respond when you stop talking" };
     case 'transcribing': return { label: 'Hearing you…' };
     case 'thinking':     return { label: 'Thinking…' };
     case 'error':        return { label: 'Something needs your attention' };

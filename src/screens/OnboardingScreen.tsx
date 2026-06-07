@@ -9,7 +9,8 @@ import { Screen, Title, Heading, Body, PrimaryButton, SecondaryButton } from '..
 import { useProfile } from '../state/ProfileContext';
 import { speak, stopSpeaking } from '../lib/speech';
 import { earconStart, earconStop } from '../lib/earcon';
-import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
+import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
+import { watchForSilence } from '../lib/vad';
 import { transcribeAudio } from '../lib/openai';
 import { cleanName, parseList } from '../util';
 
@@ -134,47 +135,39 @@ function VoiceStep({
   const [rec, setRec] = useState<RecState>('idle');
 
   const toggleMic = async () => {
-    if (rec === 'idle') {
-      const ok = await requestMicPermission();
-      if (!ok) {
-        speak('I could not access the microphone. You can type your answer instead.');
-        return;
-      }
-      try {
-        await startRecording();
-        earconStart();
-        setRec('recording');
-      } catch {
-        speak('I could not start the microphone. Please type your answer.');
-      }
+    if (rec !== 'idle') return;
+    const ok = await requestMicPermission();
+    if (!ok) {
+      speak('I could not access the microphone. You can type your answer instead.');
       return;
     }
-    if (rec === 'recording') {
-      setRec('working');
-      earconStop();
-      let blob: Blob | null = null;
-      try {
-        blob = await stopRecording();
-      } catch {
-        blob = null;
-      }
-      if (!blob) {
-        setRec('idle');
-        return;
-      }
-      try {
-        const raw = await transcribeAudio(blob);
-        const v = transform ? transform(raw) : raw.trim();
-        onChange(v);
-        speak(v ? `I heard: ${v}. Tap ${nextLabel}, or speak again to redo.` : 'I didn’t catch that. Try again, or type it.');
-      } catch {
-        speak('Sorry, I had trouble hearing that. Try again, or type your answer.');
-      }
-      setRec('idle');
+    try {
+      await startRecording();
+      earconStart();
+      setRec('recording');
+    } catch {
+      speak('I could not start the microphone. Please type your answer.');
+      return;
     }
+    const s = getActiveStream();
+    if (s) await new Promise<void>((resolve) => { watchForSilence(s, 3000, 30000, resolve); });
+    setRec('working');
+    earconStop();
+    let blob: Blob | null = null;
+    try { blob = await stopRecording(); } catch { blob = null; }
+    if (!blob) { setRec('idle'); return; }
+    try {
+      const raw = await transcribeAudio(blob);
+      const v = transform ? transform(raw) : raw.trim();
+      onChange(v);
+      speak(v ? `I heard: ${v}. Tap ${nextLabel}, or speak again to redo.` : 'I didn\'t catch that. Try again, or type it.');
+    } catch {
+      speak('Sorry, I had trouble hearing that. Try again, or type your answer.');
+    }
+    setRec('idle');
   };
 
-  const micLabel = rec === 'recording' ? 'Done speaking' : rec === 'working' ? 'One moment…' : 'Tap and speak';
+  const micLabel = rec === 'recording' ? 'Listening...' : rec === 'working' ? 'One moment...' : 'Tap and speak';
 
   return (
     <div className="col">
@@ -185,7 +178,7 @@ function VoiceStep({
         label={micLabel}
         hint="Records your spoken answer"
         onClick={toggleMic}
-        disabled={rec === 'working'}
+        disabled={rec !== 'idle'}
         style={{ minHeight: 96, background: rec === 'recording' ? 'var(--success)' : undefined }}
       />
 

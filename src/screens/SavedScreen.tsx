@@ -83,9 +83,9 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
     announce(`Deleted ${rName}.`);
   };
 
-  const busy = phase === 'announcing' || phase === 'transcribing';
+  const busy = phase === 'announcing' || phase === 'recording' || phase === 'transcribing';
   const micLabel =
-    phase === 'recording'    ? 'Done speaking' :
+    phase === 'recording'    ? 'Listening…'    :
     phase === 'transcribing' ? 'Hearing you…'  :
     phase === 'announcing'   ? 'Please wait…'  :
                                'Tap to speak';
@@ -141,7 +141,7 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
       <PrimaryButton
         label={micLabel}
         hint="Speak a command — say a restaurant name, a number, or 'back'"
-        onClick={phase === 'recording' ? finish : listen}
+        onClick={listen}
         disabled={busy || list === null}
         style={{
           minHeight: 80,

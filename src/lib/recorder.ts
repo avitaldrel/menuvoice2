@@ -1,6 +1,6 @@
 // Microphone recording via MediaRecorder.
-// Tap-to-start / tap-to-stop, so the GUEST decides when they are done talking.
-// The app can never cut someone off mid-sentence — that's the hard requirement.
+// Most voice flows auto-stop via silence detection (see lib/vad.ts).
+// Email capture on the login screen still uses manual tap-to-stop.
 
 let mediaRecorder: MediaRecorder | null = null;
 let chunks: BlobPart[] = [];
@@ -43,6 +43,10 @@ export function stopRecording(): Promise<Blob | null> {
     };
     mr.stop();
   });
+}
+
+export function getActiveStream(): MediaStream | null {
+  return stream;
 }
 
 export function isRecording(): boolean {

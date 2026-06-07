@@ -32,9 +32,9 @@ export default function HomeScreen({ navigate }: ScreenProps) {
   // No auto-announce — VoiceOver reads the on-screen buttons when the user arrives.
   // App voice only starts when the user taps the mic button.
 
-  const busy = phase === 'announcing' || phase === 'transcribing';
+  const busy = phase === 'announcing' || phase === 'recording' || phase === 'transcribing';
   const micLabel =
-    phase === 'recording'    ? 'Done speaking' :
+    phase === 'recording'    ? 'Listening…'    :
     phase === 'transcribing' ? 'Hearing you…'  :
     phase === 'announcing'   ? 'Please wait…'  :
                                'Tap to speak a command';
@@ -73,7 +73,7 @@ export default function HomeScreen({ navigate }: ScreenProps) {
       <PrimaryButton
         label={micLabel}
         hint="Speak a navigation command"
-        onClick={phase === 'recording' ? finish : listen}
+        onClick={listen}
         disabled={busy}
         style={{
           minHeight: 80,

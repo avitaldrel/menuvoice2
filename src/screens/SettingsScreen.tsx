@@ -8,9 +8,10 @@ import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
 import { splitList } from '../util';
 import { useVoiceNav } from '../hooks/useVoiceNav';
-import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
+import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { speak } from '../lib/speech';
+import { watchForSilence } from '../lib/vad';
 
 const VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'fable', 'onyx'];
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
@@ -61,11 +62,10 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       setNameRec('recording');
     } catch {
       speak('Could not start microphone. Try typing instead.');
+      return;
     }
-  };
-
-  const stopSpeakName = async () => {
-    if (nameRec !== 'recording') return;
+    const s = getActiveStream();
+    if (s) await new Promise<void>((resolve) => { watchForSilence(s, 3000, 30000, resolve); });
     setNameRec('working');
     let blob: Blob | null = null;
     try { blob = await stopRecording(); } catch {}
@@ -94,11 +94,10 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       setDislikeRec('recording');
     } catch {
       speak('Could not start microphone. Try typing instead.');
+      return;
     }
-  };
-
-  const stopSpeakDislike = async () => {
-    if (dislikeRec !== 'recording') return;
+    const s = getActiveStream();
+    if (s) await new Promise<void>((resolve) => { watchForSilence(s, 3000, 30000, resolve); });
     setDislikeRec('working');
     let blob: Blob | null = null;
     try { blob = await stopRecording(); } catch {}
@@ -276,10 +275,10 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const busy = phase === 'announcing' || phase === 'transcribing';
+  const busy = phase === 'announcing' || phase === 'recording' || phase === 'transcribing';
   const anyInlineMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
   const micLabel =
-    phase === 'recording'    ? 'Done speaking' :
+    phase === 'recording'    ? 'Listening…'    :
     phase === 'transcribing' ? 'Hearing you…'  :
     phase === 'announcing'   ? 'Please wait…'  :
                                'Tap to speak a command';
@@ -302,9 +301,9 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
           style={{ flex: 1, margin: 0 }}
         />
         <button
-          onClick={nameRec === 'recording' ? stopSpeakName : speakName}
-          disabled={nameRec === 'working' || busy}
-          aria-label={nameRec === 'recording' ? 'Done speaking name' : 'Speak your name'}
+          onClick={speakName}
+          disabled={nameRec !== 'idle' || busy}
+          aria-label={nameRec === 'recording' ? 'Listening for your name' : 'Speak your name'}
           style={{
             minHeight: 64,
             minWidth: 64,
@@ -316,7 +315,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
             cursor: 'pointer',
           }}
         >
-          {nameRec === 'recording' ? 'Stop' : nameRec === 'working' ? '…' : 'Mic'}
+          {nameRec === 'recording' ? '…' : nameRec === 'working' ? '…' : 'Mic'}
         </button>
       </div>
 
@@ -392,9 +391,9 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
           style={{ flex: 1, margin: 0 }}
         />
         <button
-          onClick={dislikeRec === 'recording' ? stopSpeakDislike : speakDislike}
-          disabled={dislikeRec === 'working' || busy}
-          aria-label={dislikeRec === 'recording' ? 'Done speaking' : 'Speak a food to add to dislikes'}
+          onClick={speakDislike}
+          disabled={dislikeRec !== 'idle' || busy}
+          aria-label={dislikeRec === 'recording' ? 'Listening for a dislike' : 'Speak a food to add to dislikes'}
           style={{
             minHeight: 64,
             minWidth: 64,
@@ -406,7 +405,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
             cursor: 'pointer',
           }}
         >
-          {dislikeRec === 'recording' ? 'Stop' : dislikeRec === 'working' ? '…' : 'Mic'}
+          {dislikeRec === 'recording' ? '…' : dislikeRec === 'working' ? '…' : 'Mic'}
         </button>
       </div>
 
@@ -480,7 +479,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       <PrimaryButton
         label={micLabel}
         hint="Speak a settings command"
-        onClick={phase === 'recording' ? finish : listen}
+        onClick={listen}
         disabled={busy || anyInlineMicBusy}
         style={{
           minHeight: 80,

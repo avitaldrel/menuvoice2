@@ -34,7 +34,7 @@ async function chatCompletions(body: object): Promise<any> {
       headers: directHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`OpenAI error (${res.status}): ${await safeText(res)}`);
+    if (!res.ok) throw new Error(await parseApiError(res));
     return res.json();
   }
   const res = await fetch('/api/chat', {
@@ -42,7 +42,7 @@ async function chatCompletions(body: object): Promise<any> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Server error (${res.status}): ${await safeText(res)}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
   return res.json();
 }
 
@@ -53,11 +53,11 @@ async function audioTranscriptions(form: FormData): Promise<any> {
       headers: directHeaders(),
       body: form,
     });
-    if (!res.ok) throw new Error(`Transcription error (${res.status}): ${await safeText(res)}`);
+    if (!res.ok) throw new Error(await parseApiError(res));
     return res.json();
   }
   const res = await fetch('/api/transcribe', { method: 'POST', body: form });
-  if (!res.ok) throw new Error(`Transcription error (${res.status}): ${await safeText(res)}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
   return res.json();
 }
 
@@ -68,7 +68,7 @@ async function audioSpeech(body: object): Promise<Blob> {
       headers: directHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`TTS error (${res.status}): ${await safeText(res)}`);
+    if (!res.ok) throw new Error(await parseApiError(res));
     return res.blob();
   }
   const res = await fetch('/api/tts', {
@@ -76,7 +76,7 @@ async function audioSpeech(body: object): Promise<Blob> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`TTS error (${res.status}): ${await safeText(res)}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
   return res.blob();
 }
 
@@ -306,10 +306,18 @@ export async function synthesizeSpeech(text: string, voice?: string): Promise<Bl
   });
 }
 
-async function safeText(res: Response): Promise<string> {
+async function parseApiError(res: Response): Promise<string> {
+  let body = '';
+  try { body = await res.text(); } catch {}
   try {
-    return await res.text();
-  } catch {
-    return '<no body>';
-  }
+    const json = JSON.parse(body);
+    const msg = json?.error?.message ?? json?.error;
+    if (typeof msg === 'string' && msg) return msg;
+  } catch {}
+  if (res.status === 401) return 'Invalid API key. Check your OPENAI_API_KEY setting.';
+  if (res.status === 429) return 'Rate limit reached. Wait a moment and try again.';
+  if (res.status === 500 && body.includes('No API key')) return 'No API key configured on the server.';
+  if (res.status === 504 || res.status === 524 || res.status === 408)
+    return 'The request timed out. The menu might be complex — try again.';
+  return `API error (${res.status}). Check your server configuration.`;
 }

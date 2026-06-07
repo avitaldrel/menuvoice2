@@ -3,8 +3,7 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "functions": {
-    "api/scrape.ts": {
-      "maxDuration": 30
-    }
+    "api/chat.ts": { "maxDuration": 60 },
+    "api/scrape.ts": { "maxDuration": 30 }
   }
 }

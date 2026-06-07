@@ -1,15 +1,14 @@
-// Reusable voice-navigation hook used by screens that aren't the main conversation.
-// Pattern: app speaks a prompt → user taps mic → speech is transcribed → matched to
-// one of several commands → handler is called.
-//
-// The hook never auto-starts listening (the user always initiates with a tap).
-// Screens call announce() on mount (or after async data loads) to speak the prompt.
+// Reusable voice-navigation hook. Pattern: app speaks a prompt → user taps mic
+// → they speak → silence auto-stops recording after ~3 s of quiet → transcript
+// matched to one of several commands → handler is called.
+// No manual "done" tap required.
 
 import { useCallback, useRef, useState } from 'react';
 import { speak, stopSpeaking } from '../lib/speech';
-import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
+import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { earconStart, earconStop, earconError } from '../lib/earcon';
+import { watchForSilence, SilenceWatcher } from '../lib/vad';
 
 export type VoiceNavPhase = 'announcing' | 'idle' | 'recording' | 'transcribing';
 
@@ -23,11 +22,21 @@ interface Opts {
   onCommand: (id: string, transcript: string) => void | Promise<void>;
   onNoMatch?: (transcript: string) => string | Promise<string>;
   voice?: string;
+  silenceMs?: number;
+  maxMs?: number;
 }
 
-export function useVoiceNav({ commands, onCommand, onNoMatch, voice }: Opts) {
+export function useVoiceNav({
+  commands,
+  onCommand,
+  onNoMatch,
+  voice,
+  silenceMs = 3000,
+  maxMs = 30000,
+}: Opts) {
   const [phase, setPhase] = useState<VoiceNavPhase>('idle');
   const speakingRef = useRef(false);
+  const watcherRef = useRef<SilenceWatcher | null>(null);
 
   const announce = useCallback(
     async (text: string) => {
@@ -55,24 +64,26 @@ export function useVoiceNav({ commands, onCommand, onNoMatch, voice }: Opts) {
     } catch {
       earconError();
       await announce('Could not start the microphone. Tap again to retry.');
-    }
-  }, [phase, announce]);
-
-  const finish = useCallback(async () => {
-    if (phase !== 'recording') return;
-    setPhase('transcribing');
-
-    earconStop();
-    let blob: Blob | null = null;
-    try {
-      blob = await stopRecording();
-    } catch {
-      blob = null;
-    }
-    if (!blob) {
-      setPhase('idle');
       return;
     }
+
+    // Auto-stop when the guest goes quiet.
+    const s = getActiveStream();
+    if (s) {
+      await new Promise<void>((resolve) => {
+        watcherRef.current = watchForSilence(s, silenceMs, maxMs, () => {
+          watcherRef.current = null;
+          resolve();
+        });
+      });
+    }
+    watcherRef.current = null;
+
+    setPhase('transcribing');
+    earconStop();
+    let blob: Blob | null = null;
+    try { blob = await stopRecording(); } catch { blob = null; }
+    if (!blob) { setPhase('idle'); return; }
 
     let transcript = '';
     try {
@@ -103,13 +114,18 @@ export function useVoiceNav({ commands, onCommand, onNoMatch, voice }: Opts) {
       earconError();
       await announce("I didn't understand that. Say one of the options.");
     }
-  }, [phase, commands, onCommand, onNoMatch, announce]);
+  }, [phase, announce, commands, onCommand, onNoMatch, silenceMs, maxMs]);
 
   const stop = useCallback(() => {
+    watcherRef.current?.cancel();
+    watcherRef.current = null;
     stopSpeaking();
     speakingRef.current = false;
     setPhase('idle');
   }, []);
+
+  // Kept for backward-compat with screens that destructure it, but no longer needed.
+  const finish = useCallback(() => {}, []);
 
   return { phase, announce, listen, finish, stop };
 }
@@ -122,9 +138,7 @@ export function fuzzyPickName(transcript: string, names: string[]): string | nul
 
   for (const name of names) {
     const n = name.toLowerCase();
-    // Exact containment wins immediately.
     if (t.includes(n)) return name;
-    // Word-overlap score.
     const words = n.split(/\s+/).filter(Boolean);
     if (words.length === 0) continue;
     const hits = words.filter((w) => w.length > 2 && t.includes(w)).length;
