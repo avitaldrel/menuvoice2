@@ -74,9 +74,10 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           enableTorch(s); // no-op on iOS; improves lighting on Android
         }
       } catch {
-        setCamError(
-          'Camera unavailable. On iPhone, open this site over HTTPS and allow camera access. You can still upload photos.'
-        );
+        const msg =
+          'Camera unavailable. On iPhone, open this site over HTTPS and allow camera access. You can still upload photos using the Upload from Library button.';
+        setCamError(msg);
+        speak(msg);
       }
     })();
     return () => {
@@ -98,31 +99,47 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       return;
     }
     if (!autoRef.current) autoRef.current = new AutoCaptureController();
-    speak('Auto capture is on. Hold the phone over the menu and I will take the photo. If I am taking too long, tap the Override button.');
-    setStatus('Auto capture on. Hold your phone over the menu.');
-    autoRef.current.start(videoRef.current!, {
-      onCoach: (msg) => {
-        setStatus(msg);
-        coach(msg);
-      },
-      onCapture: () => {
-        addPhoto(captureFrame(videoRef.current!), true);
-        autoRef.current?.acknowledgeCapture();
-      },
-      onStruggle: () => {
-        setAutoMode(false);
-        const msg = 'Auto capture is having trouble. Switching to manual — tap the Capture button when you are ready.';
-        setStatus('Switched to manual. Tap "Capture photo" to take the shot.');
-        speak(msg);
-      },
-      onProgress: (state, steady, max) => {
-        if (state === 'steadying' && steady > prevSteadyRef.current) {
-          earconTick(steady, max);
-        }
-        prevSteadyRef.current = state === 'steadying' ? steady : 0;
-      },
-    });
+
+    let cancelled = false;
+    const intro =
+      'Auto capture is on. Hold your phone flat, about a foot above the menu. ' +
+      'I will guide you and take the photo automatically. If I take too long, ' +
+      'find the Override button below the camera.';
+    setStatus('Auto capture on. Hold your phone flat over the menu.');
+
+    // Speak the intro FIRST and wait for it to finish, THEN start the controller.
+    // Otherwise the intro (OpenAI audio) and the rapid coaching cues
+    // (SpeechSynthesis) play on two channels at once and talk over each other —
+    // which is what made the screen feel silent and confusing.
+    (async () => {
+      await speak(intro);
+      if (cancelled || !videoRef.current) return;
+      autoRef.current!.start(videoRef.current, {
+        onCoach: (msg) => {
+          setStatus(msg);
+          coach(msg);
+        },
+        onCapture: () => {
+          addPhoto(captureFrame(videoRef.current!), true);
+          autoRef.current?.acknowledgeCapture();
+        },
+        onStruggle: () => {
+          setAutoMode(false);
+          const msg = 'Auto capture is having trouble. Switching to manual. Find the Capture photo button and tap it when you are ready.';
+          setStatus('Switched to manual. Tap "Capture photo" to take the shot.');
+          coach(msg);
+        },
+        onProgress: (state, steady, max) => {
+          if (state === 'steadying' && steady > prevSteadyRef.current) {
+            earconTick(steady, max);
+          }
+          prevSteadyRef.current = state === 'steadying' ? steady : 0;
+        },
+      });
+    })();
+
     return () => {
+      cancelled = true;
       autoRef.current?.stop();
       stopCoach();
     };
@@ -321,6 +338,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       >
         <video
           ref={videoRef}
+          autoPlay
           playsInline
           muted
           aria-hidden="true"

@@ -81,13 +81,17 @@ export default function ConversationScreen({
   const startMic = async () => {
     const ok = await requestMicPermission();
     if (!ok) {
-      setErrorMsg('I need microphone access to hear you. Allow it and try again.');
+      const msg = 'I need microphone access to hear you. Please allow microphone access, then tap Try again.';
+      setErrorMsg(msg);
       setPhase('error');
+      await speak(msg, profile.ttsVoice); // blind users can't see the error text
       return;
     }
     try {
-      await startRecording();
+      // Earcon BEFORE recording starts so the beep isn't captured into the clip,
+      // and so the guest hears "your turn" the instant the mic opens.
       earconStart();
+      await startRecording();
       setPhase('recording');
       const s = getActiveStream();
       if (s) {
@@ -99,8 +103,10 @@ export default function ConversationScreen({
       }
     } catch {
       earconError();
-      setErrorMsg('I could not start the microphone. Try again.');
+      const msg = 'I could not start the microphone. Tap Try again.';
+      setErrorMsg(msg);
       setPhase('error');
+      await speak(msg, profile.ttsVoice);
     }
   };
 
@@ -161,8 +167,10 @@ export default function ConversationScreen({
       const reply = await chatReply(menu, profile, history, userText);
       await say(reply, withUser);
     } catch (e: any) {
-      setErrorMsg(e?.message ?? "Something went wrong. Let's try that again.");
+      const msg = e?.message ?? "Something went wrong. Let's try that again.";
+      setErrorMsg(msg);
       setPhase('error');
+      await speak(msg, profile.ttsVoice);
     }
   };
 
@@ -254,7 +262,7 @@ export default function ConversationScreen({
             label="Try again"
             onClick={() => {
               setErrorMsg('');
-              setPhase('idle');
+              startMic();
             }}
           />
         </div>

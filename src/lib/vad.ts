@@ -5,6 +5,8 @@
 // `maxMs` is an absolute ceiling: if silence never settles (loud environment),
 // the callback fires anyway so the app never hangs indefinitely.
 
+import { getAudioContext } from './audioUnlock';
+
 const SPEECH_RMS = 0.015; // volume floor that counts as "talking"
 const POLL_MS = 80;
 
@@ -18,10 +20,13 @@ export function watchForSilence(
   maxMs: number,
   onSilence: () => void
 ): SilenceWatcher {
-  let ctx: AudioContext | null = null;
-  try {
-    ctx = new AudioContext();
-  } catch {
+  // Use the shared, already-unlocked AudioContext. Creating a fresh one here
+  // (this runs after speak() resolves, NOT inside a user gesture) starts
+  // suspended on iOS, so the analyser would read pure silence — speech is never
+  // detected and the mic only ever stops at the maxMs ceiling. That made the
+  // app feel like it wasn't listening.
+  const ctx = getAudioContext();
+  if (!ctx) {
     // No Web Audio support — fall back to maxMs timer.
     const t = setTimeout(onSilence, maxMs);
     return { cancel: () => clearTimeout(t) };
@@ -41,7 +46,8 @@ export function watchForSilence(
 
   const cleanup = () => {
     try { source.disconnect(); } catch {}
-    try { ctx?.close(); } catch {}
+    // NOTE: do NOT close ctx — it's the shared AudioContext reused by earcons
+    // and later VAD watchers. Closing it would silence the rest of the app.
   };
 
   const finish = () => {

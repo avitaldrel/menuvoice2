@@ -7,6 +7,9 @@ import { synthesizeSpeech, hasApiKey } from './openai';
 
 let currentAudio: HTMLAudioElement | null = null;
 let currentUrl: string | null = null;
+// Resolves the in-flight playback promise when speech is interrupted, so an
+// awaited speak() never hangs (which would block the mic from ever starting).
+let settleCurrent: (() => void) | null = null;
 
 export function stopSpeaking() {
   if (currentAudio) {
@@ -16,6 +19,11 @@ export function stopSpeaking() {
   if (currentUrl) {
     URL.revokeObjectURL(currentUrl);
     currentUrl = null;
+  }
+  if (settleCurrent) {
+    const s = settleCurrent;
+    settleCurrent = null;
+    s();
   }
   try {
     window.speechSynthesis?.cancel();
@@ -44,17 +52,27 @@ async function speakWithOpenAI(text: string, voice?: string): Promise<void> {
   const audio = new Audio(url);
   currentAudio = audio;
 
-  await new Promise<void>((resolve) => {
-    audio.onended = () => resolve();
-    audio.onerror = () => resolve();
-    audio.play().catch(() => resolve());
-  });
-
-  if (currentUrl === url) {
-    URL.revokeObjectURL(url);
-    currentUrl = null;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      // stopSpeaking() pauses the audio but fires neither onended nor onerror;
+      // it calls settleCurrent() to resolve us so an interrupt doesn't hang.
+      settleCurrent = resolve;
+      audio.onended = () => resolve();
+      // CRITICAL: a play() rejection (iOS autoplay block) or media error must
+      // REJECT, not resolve. Otherwise speak() returns having played nothing,
+      // the browser-TTS fallback never runs, and the user hears silence with no
+      // cue that it's their turn to talk.
+      audio.onerror = () => reject(new Error('audio element error'));
+      audio.play().catch(reject);
+    });
+  } finally {
+    if (settleCurrent) settleCurrent = null;
+    if (currentUrl === url) {
+      URL.revokeObjectURL(url);
+      currentUrl = null;
+    }
+    if (currentAudio === audio) currentAudio = null;
   }
-  if (currentAudio === audio) currentAudio = null;
 }
 
 // Instant, free, local speech for real-time coaching (uses the browser voice,

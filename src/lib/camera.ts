@@ -38,6 +38,27 @@ export async function startCamera(video: HTMLVideoElement): Promise<MediaStream>
     audio: false,
   });
   video.srcObject = stream;
+  video.muted = true;
+  video.setAttribute('playsinline', 'true');
+
+  // Wait until the video actually has dimensions before reporting ready, so
+  // callers don't start coaching/auto-capture against a 0x0 black frame.
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    if (video.readyState >= 2 && video.videoWidth > 0) return done();
+    video.onloadedmetadata = () => { video.play().catch(() => {}); };
+    video.oncanplay = () => done();
+    // Safety net: don't hang forever if events never fire.
+    setTimeout(done, 4000);
+  });
+
+  // Belt-and-suspenders: autoPlay attribute usually covers this, but retry in
+  // case the first play() was blocked.
   await video.play().catch(() => {});
   return stream;
 }

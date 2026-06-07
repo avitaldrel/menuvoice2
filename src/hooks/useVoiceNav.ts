@@ -58,8 +58,8 @@ export function useVoiceNav({
       return;
     }
     try {
-      await startRecording();
       earconStart();
+      await startRecording();
       setPhase('recording');
     } catch {
       earconError();

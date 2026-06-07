@@ -1,11 +1,16 @@
 // Short audio cues (earcons) for mic start/stop. Generated with the Web Audio
 // API — no audio files needed. Low volume so they don't startle.
+//
+// Reuses the shared AudioContext from audioUnlock so cues actually play on iOS
+// (a freshly-created AudioContext is blocked unless made inside a gesture, and
+// most earcons fire from timers/callbacks, not taps).
+
+import { getAudioContext } from './audioUnlock';
 
 function play(tones: { freq: number; dur: number; vol?: number }[], delayMs = 0) {
   try {
-    const Ctx = window.AudioContext ?? (window as any).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx() as AudioContext;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     let t = ctx.currentTime + delayMs / 1000;
     for (const tone of tones) {
       const osc = ctx.createOscillator();
@@ -21,9 +26,7 @@ function play(tones: { freq: number; dur: number; vol?: number }[], delayMs = 0)
       osc.stop(t + tone.dur + 0.01);
       t += tone.dur + 0.02;
     }
-    // Close after all tones finish.
-    const total = tones.reduce((s, n) => s + n.dur + 0.02, delayMs / 1000) + 0.1;
-    setTimeout(() => ctx.close().catch(() => {}), total * 1000);
+    // Shared context is long-lived — do NOT close it here.
   } catch {}
 }
 
