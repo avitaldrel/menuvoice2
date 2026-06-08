@@ -10,8 +10,16 @@ let currentUrl: string | null = null;
 // Resolves the in-flight playback promise when speech is interrupted, so an
 // awaited speak() never hangs (which would block the mic from ever starting).
 let settleCurrent: (() => void) | null = null;
+// True while any TTS (OpenAI or browser) is actively playing.
+let _speaking = false;
+
+/** Returns true while the app is currently speaking. Use to gate coach() cues. */
+export function isSpeaking(): boolean {
+  return _speaking;
+}
 
 export function stopSpeaking() {
+  _speaking = false;
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
@@ -51,6 +59,7 @@ async function speakWithOpenAI(text: string, voice?: string): Promise<void> {
   currentUrl = url;
   const audio = new Audio(url);
   currentAudio = audio;
+  _speaking = true;
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -66,6 +75,7 @@ async function speakWithOpenAI(text: string, voice?: string): Promise<void> {
       audio.play().catch(reject);
     });
   } finally {
+    _speaking = false;
     if (settleCurrent) settleCurrent = null;
     if (currentUrl === url) {
       URL.revokeObjectURL(url);
@@ -78,7 +88,9 @@ async function speakWithOpenAI(text: string, voice?: string): Promise<void> {
 // Instant, free, local speech for real-time coaching (uses the browser voice,
 // not the OpenAI network voice). Used by auto-capture so guidance has no latency
 // and costs nothing. Separate from speak() so it never blocks turn-taking.
+// Silenced if the main TTS (speak()) is active — never overlaps the primary voice.
 export function coach(text: string) {
+  if (_speaking) return;
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -104,8 +116,9 @@ function speakWithBrowser(text: string): Promise<void> {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.0;
     _win._mvUtterance = u; // prevent iOS GC
-    u.onend = () => { _win._mvUtterance = undefined; resolve(); };
-    u.onerror = () => { _win._mvUtterance = undefined; resolve(); };
+    _speaking = true;
+    u.onend = () => { _speaking = false; _win._mvUtterance = undefined; resolve(); };
+    u.onerror = () => { _speaking = false; _win._mvUtterance = undefined; resolve(); };
     window.speechSynthesis.speak(u);
   });
 }
