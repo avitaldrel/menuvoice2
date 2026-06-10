@@ -192,6 +192,72 @@ export async function chatReply(
   return (json.choices?.[0]?.message?.content ?? "Sorry, I missed that. Could you say it again?").trim();
 }
 
+// A1 — sentence-by-sentence streaming reply.
+// Calls onDelta with each text chunk as it arrives; returns the full assembled text.
+export async function chatReplyStream(
+  menu: ParsedMenu,
+  profile: UserProfile,
+  history: ChatTurn[],
+  userText: string,
+  onDelta: (delta: string) => void,
+): Promise<string> {
+  const messages: any[] = [{ role: 'system', content: buildSystemPrompt(menu, profile) }];
+  for (const t of pruneHistory(history)) messages.push({ role: t.role, content: t.text });
+  messages.push({ role: 'user', content: userText });
+
+  const body = { model: CHAT_MODEL, messages, max_completion_tokens: 220, stream: true };
+
+  let res: Response;
+  if (DIRECT) {
+    res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: directHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+  } else {
+    res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  if (!res.ok) throw new Error(await parseApiError(res));
+  if (!res.body) return chatReply(menu, profile, history, userText);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let buf = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const json = JSON.parse(data);
+          const delta = json.choices?.[0]?.delta?.content;
+          if (typeof delta === 'string' && delta) {
+            fullText += delta;
+            onDelta(delta);
+          }
+        } catch {}
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return fullText.trim() || "Sorry, I missed that. Could you say it again?";
+}
+
 export interface SessionLearnings {
   orders: string[];
   likes: string[];

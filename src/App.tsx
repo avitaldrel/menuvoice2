@@ -1,13 +1,12 @@
 import { useState, useCallback } from 'react';
 import { ProfileProvider, useProfile } from './state/ProfileContext';
-import { Route, Navigate } from './nav'; // v2
+import { Route, Navigate } from './nav';
 
 import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import HomeScreen from './screens/HomeScreen';
 import CaptureScreen from './screens/CaptureScreen';
 import ConversationScreen from './screens/ConversationScreen';
-import BrowseScreen from './screens/BrowseScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import UrlScreen from './screens/UrlScreen';
@@ -46,8 +45,6 @@ function Root() {
       return <UrlScreen navigate={navigate} goBack={goBack} />;
     case 'conversation':
       return <ConversationScreen navigate={navigate} goBack={goBack} route={current} />;
-    case 'browse':
-      return <BrowseScreen navigate={navigate} goBack={goBack} route={current} />;
     case 'saved':
       return <SavedScreen navigate={navigate} goBack={goBack} />;
     case 'settings':

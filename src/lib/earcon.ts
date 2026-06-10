@@ -26,7 +26,6 @@ function play(tones: { freq: number; dur: number; vol?: number }[], delayMs = 0)
       osc.stop(t + tone.dur + 0.01);
       t += tone.dur + 0.02;
     }
-    // Shared context is long-lived — do NOT close it here.
   } catch {}
 }
 
@@ -47,7 +46,7 @@ export function earconError() {
 
 /** Rising tick: one step closer to auto-capture. n=current count, max=total. */
 export function earconTick(n: number, max: number) {
-  const freq = 380 + (n / max) * 640; // 380 Hz first tick → 1020 Hz last
+  const freq = 380 + (n / max) * 640;
   play([{ freq, dur: 0.055, vol: 0.17 }]);
 }
 
@@ -55,6 +54,32 @@ export function earconTick(n: number, max: number) {
 export function earconCapture() {
   play([
     { freq: 1100, dur: 0.03, vol: 0.22 },
-    { freq: 700, dur: 0.07, vol: 0.16 },
+    { freq: 700,  dur: 0.07, vol: 0.16 },
   ]);
+}
+
+// A3 — new turn cues
+
+/** Warm two-tone: app is about to speak. */
+export function earconSpeak() {
+  play([{ freq: 500, dur: 0.08, vol: 0.14 }, { freq: 660, dur: 0.10, vol: 0.16 }]);
+}
+
+let _thinkingTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Start soft repeating pulse (~420 Hz) to signal the app is thinking. */
+export function earconThinkingStart() {
+  if (_thinkingTimer) return;
+  play([{ freq: 420, dur: 0.12, vol: 0.07 }]);
+  _thinkingTimer = setInterval(() => {
+    play([{ freq: 420, dur: 0.12, vol: 0.07 }]);
+  }, 1400);
+}
+
+/** Stop the thinking pulse. */
+export function earconThinkingStop() {
+  if (_thinkingTimer) {
+    clearInterval(_thinkingTimer);
+    _thinkingTimer = null;
+  }
 }

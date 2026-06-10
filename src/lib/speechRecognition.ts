@@ -5,10 +5,6 @@
 // - Built-in silence detection (2s timer submits the transcript automatically)
 // - Reliable on iOS Safari (webkitSpeechRecognition works; Web Audio VAD does not)
 // - Auto-restart when iOS cuts the session short mid-session
-//
-// The old MediaRecorder + VAD approach failed on iOS because the AudioContext analyser
-// reads near-zero RMS when the phone's echo cancellation is active, so silence is never
-// detected and the recording never submits.
 
 // Minimal types for Web Speech API — not in all TypeScript DOM lib versions.
 interface SR {
@@ -73,7 +69,6 @@ export class SpeechManager {
     this.recognition.onresult = (event: SREvent) => {
       const result = event.results[event.results.length - 1];
       const t = result[0].transcript;
-      // iOS sometimes never sends isFinal=true — accept any non-empty transcript
       if (result.isFinal || t.length > 0) {
         this.lastTranscript = t;
         this.clearSilenceTimer();
@@ -96,12 +91,9 @@ export class SpeechManager {
           'I need microphone access to hear you. Please allow microphone access, then tap Try again.',
         );
       }
-      // Non-fatal errors (no-speech, network, aborted): let onend handle restart.
     };
 
     this.recognition.onend = () => {
-      // iOS sometimes ends the session while the silence timer is still pending.
-      // Treat that as the user finishing — fire immediately with whatever was captured.
       if (this.silenceTimer) {
         this.clearSilenceTimer();
         const t = this.lastTranscript;
@@ -114,7 +106,6 @@ export class SpeechManager {
       }
 
       if (this.shouldRestart) {
-        // 300ms delay avoids iOS rate limiting
         this.restartTimeout = setTimeout(() => {
           try { this.recognition?.start(); } catch {}
         }, 300);
@@ -122,14 +113,12 @@ export class SpeechManager {
     };
   }
 
-  /** Start listening. The silence timer will call onTranscript automatically. */
   start() {
     this.shouldRestart = true;
     this.lastTranscript = '';
     try { this.recognition?.start(); } catch {}
   }
 
-  /** Stop listening without submitting (used when app needs to speak). */
   stop() {
     this.shouldRestart = false;
     this.clearSilenceTimer();
@@ -140,7 +129,6 @@ export class SpeechManager {
     this.recognition?.stop();
   }
 
-  /** Force-submit whatever was captured so far. Called when user taps "Done talking". */
   submitNow() {
     this.clearSilenceTimer();
     const t = this.lastTranscript;
@@ -160,4 +148,60 @@ export class SpeechManager {
     this.recognition?.abort();
     this.recognition = null;
   }
+}
+
+// A4 — barge-in listener
+
+const BARGE_IN_HOTWORDS = ['stop', 'wait', 'hold on', 'pause', 'stop talking', 'quiet', 'shh', 'enough'];
+
+export interface BargeInListener {
+  stop(): void;
+}
+
+// Continuous, always-on recognition that fires only on a short hotword (≤3 words).
+// Ignores the first 600ms after creation to guard against self-trigger on app TTS.
+export function createBargeInListener(onHotword: () => void): BargeInListener {
+  const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  if (!Ctor) return { stop: () => {} };
+
+  const rec: SR = new Ctor();
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = 'en-US';
+  rec.maxAlternatives = 1;
+
+  let active = true;
+  let startTime = Date.now();
+
+  rec.onresult = (event: SREvent) => {
+    if (Date.now() - startTime < 600) return;
+    const result = event.results[event.results.length - 1];
+    const transcript = result[0].transcript.trim().toLowerCase();
+    const words = transcript.split(/\s+/).filter(Boolean);
+    if (words.length > 3) return;
+    const hit = BARGE_IN_HOTWORDS.some(
+      (hw) => transcript === hw || transcript.startsWith(hw + ' ') || transcript.endsWith(' ' + hw),
+    );
+    if (hit) onHotword();
+  };
+
+  rec.onerror = () => {};
+
+  rec.onend = () => {
+    if (active) {
+      startTime = Date.now();
+      setTimeout(() => {
+        if (active) try { rec.start(); } catch {}
+      }, 300);
+    }
+  };
+
+  try { rec.start(); } catch {}
+
+  return {
+    stop() {
+      active = false;
+      try { rec.abort(); } catch {}
+    },
+  };
 }

@@ -1,34 +1,85 @@
-// THE CORE SCREEN. Strict turn-taking voice conversation about the menu.
+// Unified menu + voice conversation screen.
 //
-// State machine (the app never listens while it is speaking):
-//   speaking  -> app is talking; mic disabled
-//   idle      -> waiting for the guest; mic enabled ("Tap to talk")
-//   recording -> guest is talking; they tap "Done" when finished (never cut off)
-//   transcribing / thinking -> processing; mic disabled
+// Layout: phase indicator → latest exchange → controls → semantic MenuDocument.
 //
-// Turn-taking guarantee: recording stops only on the guest's tap, so the app
-// can never cut someone off mid-sentence.
+// Voice mode ON (default):
+//   App streams TTS sentence-by-sentence; mic auto-opens after each reply.
+//   Barge-in ("stop", "wait", etc.) cuts the app off and opens the mic.
+//   Turn cues: earconSpeak (app speaking), earconThinking (thinking),
+//              earconStart+vibrate (user turn), earconStop+vibrate (heard you).
+//
+// Voice mode OFF:
+//   App is silent; user browses the semantic MenuDocument with VoiceOver.
+//   Conversation text is still updated in an aria-live region.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps, Route } from '../nav';
-import { ChatTurn } from '../types';
+import { ChatTurn, ParsedMenu } from '../types';
 import { useProfile } from '../state/ProfileContext';
-import { speak, stopSpeaking } from '../lib/speech';
-import { SpeechManager, isSpeechRecognitionSupported } from '../lib/speechRecognition';
-import { buildOpeningLine, chatReply, extractSessionLearnings, hasApiKey } from '../lib/openai';
-import { earconStart, earconStop, earconError } from '../lib/earcon';
+import { speak, stopSpeaking, createStreamingSpeech } from '../lib/speech';
+import {
+  SpeechManager,
+  isSpeechRecognitionSupported,
+  createBargeInListener,
+  BargeInListener,
+} from '../lib/speechRecognition';
+import { buildOpeningLine, chatReplyStream, extractSessionLearnings, hasApiKey } from '../lib/openai';
+import {
+  earconStart,
+  earconStop,
+  earconError,
+  earconSpeak,
+  earconThinkingStart,
+  earconThinkingStop,
+} from '../lib/earcon';
 import { mergeUnique } from '../util';
 
 type Phase = 'speaking' | 'idle' | 'recording' | 'transcribing' | 'thinking' | 'error';
 
-// Short, unambiguous exit phrases. Kept tight so "I'm done with the pasta" doesn't trigger.
 const EXIT_PHRASES = [
   'go home', 'go back', 'exit', 'quit', 'i am done', "i'm done", 'all done', 'finished',
-  'end conversation', 'stop', 'goodbye', 'bye', 'that is all', "that's all",
+  'end conversation', 'goodbye', 'bye', 'that is all', "that's all",
 ];
 
-const REPEAT_PHRASES = ['repeat that', 'say that again', 'what did you say', 'say it again', 'pardon', 'come again'];
+const REPEAT_PHRASES = [
+  'repeat that', 'say that again', 'what did you say', 'say it again', 'pardon', 'come again',
+];
+
+// Semantic menu document — VoiceOver heading rotor navigates section → item.
+function MenuDocument({ menu, restaurantName }: { menu: ParsedMenu; restaurantName: string }) {
+  return (
+    <section aria-label="Full menu — browse with VoiceOver heading rotor" style={{ marginTop: 24 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{restaurantName}</h1>
+      {menu.categories.map((cat) => (
+        <section key={cat.name}>
+          <h2 className="browse-category">{cat.name}</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10, marginBottom: 24 }}>
+            {cat.items.map((item) => (
+              <article key={item.name} className="browse-item">
+                <div className="browse-item-header">
+                  <h3 className="browse-item-name">{item.name}</h3>
+                  {item.price && (
+                    <span className="browse-item-price" aria-label={`Price: ${item.price}`}>
+                      {item.price}
+                    </span>
+                  )}
+                </div>
+                {item.description && <p className="browse-item-desc">{item.description}</p>}
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+      {menu.notes && (
+        <section>
+          <h2 className="browse-category">Notes</h2>
+          <p className="body" style={{ marginTop: 8 }}>{menu.notes}</p>
+        </section>
+      )}
+    </section>
+  );
+}
 
 export default function ConversationScreen({
   navigate,
@@ -38,30 +89,50 @@ export default function ConversationScreen({
   const { menu, restaurantName } = route;
 
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [latestUser, setLatestUser] = useState('');
+  const [latestAssistant, setLatestAssistant] = useState('');
+  const [liveText, setLiveText] = useState('');
   const [phase, setPhase] = useState<Phase>('speaking');
+  const [speakMode, setSpeakMode] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
-  const [autoListen, setAutoListen] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
+
   const started = useRef(false);
   const speechManagerRef = useRef<SpeechManager | null>(null);
-  // Always points to the latest processUtterance so the SpeechManager callback never goes stale.
   const processUtteranceRef = useRef<(text: string) => Promise<void>>(async () => {});
+  const startMicRef = useRef<() => Promise<void>>(async () => {});
+  const speakModeRef = useRef(true);
+  speakModeRef.current = speakMode;
 
+  // Barge-in: only while speaking in voice mode.
+  useEffect(() => {
+    if (phase !== 'speaking' || !speakMode) return;
+    const listener: BargeInListener = createBargeInListener(() => {
+      stopSpeaking();
+      startMicRef.current();
+    });
+    return () => listener.stop();
+  }, [phase, speakMode]);
+
+  // Opening: speak menu overview on first mount.
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     (async () => {
       const base = buildOpeningLine(menu);
-      const opening = route.source === 'url'
-        ? `${base} Just a heads up — this menu is pulled from the website you shared, so it should be their most current version, but we can't guarantee every detail is accurate.`
-        : base;
+      const opening =
+        route.source === 'url'
+          ? `${base} Just a heads up — this menu is from the website you shared, so it should be their current version, but details may vary.`
+          : base;
       setTurns([{ role: 'assistant', text: opening }]);
+      setLatestAssistant(opening);
       setPhase('speaking');
+      earconSpeak();
       await speak(opening, profile.ttsVoice);
-      await startMic();
+      await startMicRef.current();
     })();
     return () => {
+      earconThinkingStop();
       stopSpeaking();
       speechManagerRef.current?.destroy();
       speechManagerRef.current = null;
@@ -69,16 +140,6 @@ export default function ConversationScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const id = setTimeout(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-    }, 50);
-    return () => clearTimeout(id);
-  }, [turns]);
-
-  // Start listening — called both manually and automatically after speaking.
-  // Uses Web Speech API (webkitSpeechRecognition) instead of MediaRecorder + VAD.
-  // The browser's native silence detection submits the transcript after 2s of quiet.
   const startMic = async () => {
     if (!isSpeechRecognitionSupported()) {
       const msg = 'Voice input is not supported in this browser. Try Chrome or Safari.';
@@ -88,19 +149,16 @@ export default function ConversationScreen({
       return;
     }
 
-    // Fresh SpeechManager each turn — iOS accumulates transcripts across sessions
-    // if you reuse the same recognition instance, causing doubled/garbled results.
     speechManagerRef.current?.destroy();
     speechManagerRef.current = new SpeechManager(
-      // onTranscript: browser silence detection fired — user finished speaking
       (userText: string) => {
         earconStop();
-        try { navigator.vibrate?.([80]); } catch {} // single pulse = mic closed
+        try { navigator.vibrate?.([80]); } catch {}
         processUtteranceRef.current(userText);
       },
-      // onError: permission denied or capture failure
       async (msg: string) => {
         earconError();
+        try { navigator.vibrate?.([200, 50, 200]); } catch {}
         setErrorMsg(msg);
         setPhase('error');
         await speak(msg, profile.ttsVoice);
@@ -108,84 +166,129 @@ export default function ConversationScreen({
     );
 
     earconStart();
-    // Vibrate to signal mic is open — essential for blind users who can't see the indicator.
     try { navigator.vibrate?.([30, 40, 30]); } catch {}
-    // 150ms gap: lets iOS audio system settle after TTS so recognition doesn't
-    // capture the tail of the app's own speech as the user's first words.
     await new Promise<void>((r) => setTimeout(r, 150));
     speechManagerRef.current.start();
     setPhase('recording');
   };
+  startMicRef.current = startMic;
 
-  const beginListening = async () => {
-    if (phase !== 'idle') return;
-    await startMic();
-  };
-
-  // Called by SpeechManager once the user has finished speaking (2s silence).
-  // Also called directly when user taps "Done talking" (via submitNow).
   const processUtterance = async (userText: string) => {
     setPhase('transcribing');
 
     if (!userText.trim()) {
-      await say("I didn't catch that. Could you say it again?");
+      await sayReply("I didn't catch that. Could you say it again?");
       return;
     }
 
     const t = userText.toLowerCase().trim();
     const hadExchange = turns.some((x) => x.role === 'user');
 
-    // Intercept clear exit phrases so they don't go to the menu LLM.
     const isExit =
       hadExchange &&
       EXIT_PHRASES.some((p) => t === p || t.startsWith(p + ' ') || t.endsWith(' ' + p));
     if (isExit) {
-      await say("Of course. I'll save what we talked about. Goodbye!", undefined, false);
+      await sayReply("Of course. I'll save what we talked about. Goodbye!", undefined, false);
       finish();
       return;
     }
 
-    // "Repeat that" — replay last assistant message without hitting the LLM.
     const isRepeat = REPEAT_PHRASES.some((p) => t.includes(p));
     if (isRepeat) {
-      const lastAssistant = [...turns].reverse().find((x) => x.role === 'assistant');
-      if (lastAssistant) {
-        await say(lastAssistant.text);
-        return;
-      }
+      const last = [...turns].reverse().find((x) => x.role === 'assistant');
+      if (last) { await sayReply(last.text); return; }
     }
 
     const history = turns;
-    const withUser: ChatTurn[] = [...history, { role: 'user', text: userText }];
+    const withUser: ChatTurn[] = [...history, { role: 'user' as const, text: userText }];
     setTurns(withUser);
+    setLatestUser(userText);
+    setLiveText('');
     setPhase('thinking');
+    earconThinkingStart();
 
-    try {
-      const reply = await chatReply(menu, profile, history, userText);
-      await say(reply, withUser);
-    } catch (e: any) {
-      const msg = e?.message ?? "Something went wrong. Let's try that again.";
-      setErrorMsg(msg);
-      setPhase('error');
-      await speak(msg, profile.ttsVoice);
+    if (speakModeRef.current) {
+      const streamer = createStreamingSpeech(profile.ttsVoice, {
+        onSpeakingStart: () => {
+          earconThinkingStop();
+          earconSpeak();
+          try { navigator.vibrate?.([50]); } catch {}
+          setPhase('speaking');
+        },
+      });
+
+      let fullReply = '';
+      try {
+        fullReply = await chatReplyStream(menu, profile, history, userText, (delta) => {
+          streamer.push(delta);
+          setLiveText((prev) => prev + delta);
+        });
+        await streamer.finish();
+      } catch (e: any) {
+        earconThinkingStop();
+        earconError();
+        try { navigator.vibrate?.([200, 50, 200]); } catch {}
+        const msg = e?.message ?? "Something went wrong. Let's try that again.";
+        setErrorMsg(msg);
+        setPhase('error');
+        await speak(msg, profile.ttsVoice);
+        return;
+      }
+
+      const withReply: ChatTurn[] = [...withUser, { role: 'assistant', text: fullReply }];
+      setTurns(withReply);
+      setLatestAssistant(fullReply);
+      setLiveText('');
+      await startMic();
+    } else {
+      // Silent mode: get reply as text only, no audio.
+      let fullReply = '';
+      try {
+        fullReply = await chatReplyStream(menu, profile, history, userText, (delta) => {
+          setLiveText((prev) => prev + delta);
+        });
+      } catch (e: any) {
+        earconThinkingStop();
+        earconError();
+        const msg = e?.message ?? "Something went wrong. Let's try that again.";
+        setErrorMsg(msg);
+        setPhase('error');
+        return;
+      }
+      earconThinkingStop();
+      const withReply: ChatTurn[] = [...withUser, { role: 'assistant', text: fullReply }];
+      setTurns(withReply);
+      setLatestAssistant(fullReply);
+      setLiveText('');
+      setPhase('idle');
     }
   };
 
-  // Keep the ref in sync every render so the SpeechManager callback never closes over stale state.
   processUtteranceRef.current = processUtterance;
 
-  const say = async (text: string, baseHistory?: ChatTurn[], listen = autoListen) => {
-    const base = baseHistory ?? turns;
-    setTurns([...base, { role: 'assistant', text }]);
+  // Non-streaming reply for errors, repeat, exit phrases.
+  const sayReply = async (
+    text: string,
+    baseTurns?: ChatTurn[],
+    listen = speakModeRef.current,
+  ) => {
+    const base = baseTurns ?? turns;
+    const withReply: ChatTurn[] = [...base, { role: 'assistant' as const, text }];
+    setTurns(withReply);
+    setLatestAssistant(text);
     setPhase('speaking');
-    await speak(text, profile.ttsVoice);
-    if (listen) await startMic();
+    if (speakModeRef.current) {
+      earconSpeak();
+      try { navigator.vibrate?.([50]); } catch {}
+      await speak(text, profile.ttsVoice);
+    }
+    if (listen && speakModeRef.current) await startMic();
     else setPhase('idle');
   };
 
-  // Leaving the conversation: capture what they decided + their taste, then go home.
   const finish = async () => {
-    await stopSpeaking();
+    earconThinkingStop();
+    stopSpeaking();
     const hasUser = turns.some((t) => t.role === 'user');
     if (hasUser && hasApiKey()) {
       setSaving(true);
@@ -196,20 +299,23 @@ export default function ConversationScreen({
           cuisinesLiked: mergeUnique(profile.cuisinesLiked, learn.likes),
           dislikes: mergeUnique(profile.dislikes, learn.dislikes),
         });
-      } catch {
-        // best-effort; never block the exit
-      }
+      } catch {}
     }
     navigate({ name: 'home' });
   };
 
+  const toggleSpeakMode = () => {
+    const next = !speakMode;
+    setSpeakMode(next);
+    if (!next) stopSpeaking();
+  };
+
+  const displayText = liveText || latestAssistant;
   const indicator = indicatorFor(phase);
 
   return (
     <Screen>
-      <h2 className="heading" style={{ marginTop: 4 }}>
-        {restaurantName}
-      </h2>
+      <h2 className="heading" style={{ marginTop: 4 }}>{restaurantName}</h2>
 
       <div
         role="status"
@@ -221,13 +327,11 @@ export default function ConversationScreen({
         {indicator.label}
       </div>
 
+      {/* Latest exchange — minimal aria-live region */}
       <div
-        ref={scrollRef}
         aria-live="polite"
-        aria-relevant="additions"
+        aria-relevant="text"
         style={{
-          flex: 1,
-          overflowY: 'auto',
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--r-md)',
@@ -235,22 +339,30 @@ export default function ConversationScreen({
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
+          minHeight: 80,
         }}
       >
-        {turns.map((turn, i) => (
+        {latestUser && (
           <div
-            key={i}
-            aria-label={`${turn.role === 'assistant' ? 'MenuVoice' : 'You'} said: ${turn.text}`}
-            className={`turn turn-${turn.role}`}
+            aria-label={`You said: ${latestUser}`}
+            className="turn turn-user"
           >
-            <div className="turn-speaker">
-              {turn.role === 'assistant' ? 'MenuVoice' : 'You'}
-            </div>
-            <div className="turn-text">{turn.text}</div>
+            <div className="turn-speaker">You</div>
+            <div className="turn-text">{latestUser}</div>
           </div>
-        ))}
+        )}
+        {displayText && (
+          <div
+            aria-label={`MenuVoice said: ${displayText}`}
+            className="turn turn-assistant"
+          >
+            <div className="turn-speaker">MenuVoice</div>
+            <div className="turn-text">{displayText}</div>
+          </div>
+        )}
       </div>
 
+      {/* Action controls */}
       {phase === 'error' ? (
         <div className="col">
           <p role="alert" className="body" style={{ color: 'var(--danger)', textAlign: 'center' }}>
@@ -258,29 +370,21 @@ export default function ConversationScreen({
           </p>
           <PrimaryButton
             label="Try again"
-            onClick={() => {
-              setErrorMsg('');
-              startMic();
-            }}
+            onClick={() => { setErrorMsg(''); startMic(); }}
           />
         </div>
       ) : phase === 'speaking' ? (
         <div className="col" style={{ gap: 8 }}>
           <div
             aria-hidden="true"
-            style={{
-              height: 8,
-              borderRadius: 4,
-              background: 'var(--surface-high)',
-              overflow: 'hidden',
-            }}
+            style={{ height: 8, borderRadius: 4, background: 'var(--surface-high)', overflow: 'hidden' }}
           >
             <div className="speaking-bar" />
           </div>
           <SecondaryButton
-            label="Skip"
-            hint="Stop speaking and go to your turn"
-            onClick={() => { stopSpeaking(); if (autoListen) startMic(); else setPhase('idle'); }}
+            label="Stop speaking"
+            hint="Interrupt and speak now"
+            onClick={() => { stopSpeaking(); startMicRef.current(); }}
             style={{ minHeight: 70 }}
           />
         </div>
@@ -300,7 +404,6 @@ export default function ConversationScreen({
               color: 'var(--success)',
               fontWeight: 700,
               fontSize: 20,
-              letterSpacing: '-0.01em',
             }}
           >
             Listening… speak now
@@ -316,38 +419,36 @@ export default function ConversationScreen({
         <PrimaryButton
           label={phase === 'idle' ? 'Tap to talk' : 'Please wait…'}
           hint="Start speaking to MenuVoice"
-          onClick={beginListening}
+          onClick={() => { if (phase === 'idle') startMic(); }}
           disabled={phase !== 'idle'}
           style={{ minHeight: 110 }}
         />
       )}
 
       <button
-        onClick={() => setAutoListen((v) => !v)}
-        aria-pressed={autoListen}
-        aria-label={`Conversational mode ${autoListen ? 'on' : 'off'}. Tap to turn ${autoListen ? 'off' : 'on'}.`}
+        onClick={toggleSpeakMode}
+        aria-pressed={speakMode}
+        aria-label={`Voice mode ${speakMode ? 'on' : 'off'}. Tap to turn ${speakMode ? 'off' : 'on'}.`}
         className="btn"
         style={{
           minHeight: 64,
-          border: `2px solid ${autoListen ? 'var(--accent)' : 'var(--border)'}`,
-          background: autoListen ? 'var(--surface-high)' : 'var(--surface)',
-          color: autoListen ? 'var(--accent)' : 'var(--text-secondary)',
+          border: `2px solid ${speakMode ? 'var(--accent)' : 'var(--border)'}`,
+          background: speakMode ? 'var(--surface-high)' : 'var(--surface)',
+          color: speakMode ? 'var(--accent)' : 'var(--text-secondary)',
         }}
       >
-        {autoListen ? '⦿ Conversational: ON' : '○ Conversational: OFF'}
+        {speakMode ? 'Voice: ON' : 'Voice: OFF — Browse mode'}
       </button>
 
       <SecondaryButton
-        label={saving ? 'Saving your preferences…' : 'Done'}
+        label={saving ? 'Saving preferences…' : 'Done'}
         hint="Save what you decided and return home"
         onClick={finish}
         disabled={saving}
       />
-      <SecondaryButton
-        label="Browse menu silently"
-        hint="Read the menu without audio — navigable by VoiceOver heading rotor"
-        onClick={() => { stopSpeaking(); navigate({ name: 'browse', menu, restaurantName }); }}
-      />
+
+      {/* Semantic menu — VoiceOver heading rotor: h1 restaurant → h2 category → h3 item */}
+      <MenuDocument menu={menu} restaurantName={restaurantName} />
     </Screen>
   );
 }

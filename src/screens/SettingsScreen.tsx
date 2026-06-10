@@ -1,13 +1,12 @@
 // Settings: hide prices, edit allergies/preferences, choose TTS voice.
-// Voice: on mount, speaks current settings summary. Supports voice commands to
-// toggle prices, change voice, update name/spice/dislikes, clear allergies, save, and go back.
+// Voice nav removed — VoiceOver reads all controls.
+// Inline mics (name, dislike) still use MediaRecorder for field-level input.
 
 import { useEffect, useState } from 'react';
 import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
 import { splitList } from '../util';
-import { useVoiceNav } from '../hooks/useVoiceNav';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { speak } from '../lib/speech';
@@ -17,17 +16,6 @@ const VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'fable', 'onyx'];
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
 type SpiceLevel = typeof SPICE_LEVELS[number];
 type RecState = 'idle' | 'recording' | 'working';
-
-function extractAfterKeyword(transcript: string, keywords: string[]): string {
-  const t = transcript.toLowerCase();
-  for (const kw of keywords.sort((a, b) => b.length - a.length)) {
-    const idx = t.indexOf(kw.toLowerCase());
-    if (idx !== -1) {
-      return transcript.slice(idx + kw.length).replace(/^[\s,]+/, '').replace(/[.!?]+$/, '').trim();
-    }
-  }
-  return '';
-}
 
 export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const { profile, update, reset } = useProfile();
@@ -119,169 +107,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
     setDislikeRec('idle');
   };
 
-  const { phase, announce, listen, finish } = useVoiceNav({
-    voice: profile.ttsVoice,
-    commands: [
-      { id: 'prices_on',      keywords: ['hide prices', 'hide the price', 'turn on hide', 'prices off', 'price off'] },
-      { id: 'prices_off',     keywords: ['show prices', 'show the price', 'turn off hide', 'prices on', 'price on', 'display price'] },
-      { id: 'voice',          keywords: ['change voice', 'switch voice', 'voice to', 'use voice', 'shimmer', 'nova', 'alloy', 'echo', 'fable', 'onyx'] },
-      { id: 'name',           keywords: ['name', 'call me', 'my name'] },
-      { id: 'dislike',        keywords: ['dislike', "don't like", 'add dislike', 'hate'] },
-      { id: 'spice',          keywords: ['spice', 'mild', 'medium', 'hot', 'none', 'tolerance'] },
-      { id: 'add_allergy',    keywords: ["i'm allergic to", 'i am allergic', 'add allergy', 'add allergen', 'allergic to'] },
-      { id: 'remove_allergy', keywords: ['remove allergy', 'delete allergy', 'no longer allergic', 'remove allergen', 'not allergic'] },
-      { id: 'clear_allergies',keywords: ['clear allergies', 'remove all allergies', 'no allergies', 'delete all allergies'] },
-      { id: 'remove',         keywords: ['remove', 'delete dislike'] },
-      { id: 'help',           keywords: ['what can i say', 'help', 'options', 'commands', 'what do i say'] },
-      { id: 'save',           keywords: ['save', 'done', 'confirm', 'apply'] },
-      { id: 'back',           keywords: ['back', 'go back', 'close', 'cancel', 'home', 'exit'] },
-    ],
-    onCommand: async (id, transcript) => {
-      if (id === 'prices_on') {
-        await update({ hidePrices: true });
-        await announce('Prices are now hidden. Say "show prices" to undo, or "save" to save.');
-        return;
-      }
-      if (id === 'prices_off') {
-        await update({ hidePrices: false });
-        await announce('Prices will be shown. Say "save" to save, or "back" to go back.');
-        return;
-      }
-      if (id === 'voice') {
-        const t = transcript.toLowerCase();
-        const picked = VOICES.find((v) => t.includes(v));
-        if (picked) {
-          await update({ ttsVoice: picked });
-          await announce(`Voice changed to ${picked}. How does this sound? Say "save" to keep it.`);
-        } else {
-          await announce(`Available voices are: ${VOICES.join(', ')}. Say "change voice to" and the name.`);
-        }
-        return;
-      }
-      if (id === 'name') {
-        await announce('Tap the mic button next to your name to speak your new name.');
-        return;
-      }
-      if (id === 'dislike') {
-        const item = extractAfterKeyword(transcript, ["don't like", 'add dislike', 'dislike', 'hate']);
-        if (item) {
-          const next = [...dislikes.filter((d) => d.toLowerCase() !== item.toLowerCase()), item];
-          setDislikes(next);
-          await update({ dislikes: next });
-          await announce(`Added ${item} to your dislikes.`);
-        } else {
-          await announce("Tap the mic in the Dislikes section to speak what you'd like to add.");
-        }
-        return;
-      }
-      if (id === 'spice') {
-        const t = transcript.toLowerCase();
-        const level = SPICE_LEVELS.find((l) => t.includes(l));
-        if (level) {
-          await update({ spiceTolerance: level });
-          await announce(`Spice tolerance set to ${level}.`);
-        } else {
-          await announce('Spice levels are none, mild, medium, or hot. Say which one you prefer.');
-        }
-        return;
-      }
-      if (id === 'add_allergy') {
-        const allergen = extractAfterKeyword(transcript, ["i'm allergic to", 'i am allergic to', 'add allergy', 'allergic to', 'add allergen']);
-        if (allergen) {
-          const next = [...profile.allergies.filter((a) => a.toLowerCase() !== allergen.toLowerCase()), allergen];
-          await update({ allergies: next });
-          setAllergies(next.join(', '));
-          await announce(`Added ${allergen} to your allergies. I'll always warn you before any dish that contains it.`);
-        } else {
-          await announce('Say "add allergy" followed by what you\'re allergic to. For example: "add allergy shellfish".');
-        }
-        return;
-      }
-      if (id === 'remove_allergy') {
-        const allergen = extractAfterKeyword(transcript, ['remove allergy', 'delete allergy', 'no longer allergic to', 'not allergic to', 'remove allergen']);
-        if (allergen && profile.allergies.length) {
-          const next = profile.allergies.filter((a) => !a.toLowerCase().includes(allergen.toLowerCase()));
-          if (next.length < profile.allergies.length) {
-            await update({ allergies: next });
-            setAllergies(next.join(', '));
-            await announce(`Removed ${allergen} from your allergies.`);
-          } else {
-            await announce(`I didn't find ${allergen} in your allergy list. Current allergies: ${profile.allergies.join(', ') || 'none'}.`);
-          }
-        } else {
-          await announce(profile.allergies.length ? `Your allergies are: ${profile.allergies.join(', ')}. Say "remove allergy" followed by the one to remove.` : 'You have no allergies on file.');
-        }
-        return;
-      }
-      if (id === 'clear_allergies') {
-        await update({ allergies: [] });
-        setAllergies('');
-        await announce('All allergies cleared.');
-        return;
-      }
-      if (id === 'remove') {
-        const item = extractAfterKeyword(transcript, ['delete dislike', 'remove']);
-        if (item && dislikes.length) {
-          const match = dislikes.find((d) => d.toLowerCase().includes(item.toLowerCase()));
-          if (match) {
-            const next = dislikes.filter((d) => d !== match);
-            setDislikes(next);
-            await update({ dislikes: next });
-            await announce(`Removed ${match} from your dislikes.`);
-          } else {
-            await announce(`I didn't find "${item}" in your dislikes. Current dislikes: ${dislikes.join(', ') || 'none'}.`);
-          }
-        } else {
-          await announce(dislikes.length ? `Your dislikes are: ${dislikes.join(', ')}. Say "remove" followed by the item.` : 'You have no dislikes on file.');
-        }
-        return;
-      }
-      if (id === 'help') {
-        await announce(
-          `Voice commands: "hide prices" or "show prices". ` +
-          `"Change voice to" followed by ${VOICES.join(', ')}. ` +
-          `"My name" to update your name. ` +
-          `"Spice" followed by none, mild, medium, or hot. ` +
-          `"Dislike" followed by a food to add it. ` +
-          `"Remove" followed by a dislike to remove it. ` +
-          `"Add allergy" followed by what you're allergic to. ` +
-          `"Remove allergy" followed by which one. ` +
-          `"Save" to save changes. "Back" to return.`
-        );
-        return;
-      }
-      if (id === 'save') {
-        await persist();
-        await announce('Changes saved. Say "back" to return, or keep making changes.');
-        return;
-      }
-      if (id === 'back') {
-        goBack();
-        return;
-      }
-    },
-    onNoMatch: async (transcript) => {
-      return `I didn't understand "${transcript.slice(0, 40)}". Say "help" for a list of commands.`;
-    },
-  });
-
-  useEffect(() => {
-    const priceState = profile.hidePrices ? 'hidden' : 'shown';
-    announce(
-      `Settings. Prices are currently ${priceState}. ` +
-        `Voice is ${profile.ttsVoice}. Spice tolerance is ${profile.spiceTolerance}. ` +
-        `Say "help" for all commands, or "back" to return.`
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const busy = phase === 'announcing' || phase === 'recording' || phase === 'transcribing';
-  const anyInlineMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
-  const micLabel =
-    phase === 'recording'    ? 'Listening…'    :
-    phase === 'transcribing' ? 'Hearing you…'  :
-    phase === 'announcing'   ? 'Please wait…'  :
-                               'Tap to speak a command';
+  const anyMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
 
   return (
     <Screen>
@@ -302,7 +128,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
         />
         <button
           onClick={speakName}
-          disabled={nameRec !== 'idle' || busy}
+          disabled={anyMicBusy}
           aria-label={nameRec === 'recording' ? 'Listening for your name' : 'Speak your name'}
           style={{
             minHeight: 64,
@@ -315,7 +141,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
             cursor: 'pointer',
           }}
         >
-          {nameRec === 'recording' ? '…' : nameRec === 'working' ? '…' : 'Mic'}
+          {nameRec !== 'idle' ? '…' : 'Mic'}
         </button>
       </div>
 
@@ -326,7 +152,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
           return (
             <button
               key={level}
-              onClick={() => update({ spiceTolerance: level })}
+              onClick={() => update({ spiceTolerance: level as SpiceLevel })}
               aria-label={`Spice ${level}${active ? ', selected' : ''}`}
               aria-pressed={active}
               style={{
@@ -392,7 +218,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
         />
         <button
           onClick={speakDislike}
-          disabled={dislikeRec !== 'idle' || busy}
+          disabled={anyMicBusy}
           aria-label={dislikeRec === 'recording' ? 'Listening for a dislike' : 'Speak a food to add to dislikes'}
           style={{
             minHeight: 64,
@@ -405,7 +231,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
             cursor: 'pointer',
           }}
         >
-          {dislikeRec === 'recording' ? '…' : dislikeRec === 'working' ? '…' : 'Mic'}
+          {dislikeRec !== 'idle' ? '…' : 'Mic'}
         </button>
       </div>
 
@@ -445,9 +271,6 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       />
 
       <Heading>Voice</Heading>
-      <Body style={{ fontSize: 15, marginTop: -4 }}>
-        Say "change voice to [name]" or tap one below.
-      </Body>
       <div className="row" style={{ flexWrap: 'wrap' }}>
         {VOICES.map((v) => {
           const active = profile.ttsVoice === v;
@@ -475,17 +298,6 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
           );
         })}
       </div>
-
-      <PrimaryButton
-        label={micLabel}
-        hint="Speak a settings command"
-        onClick={listen}
-        disabled={busy || anyInlineMicBusy}
-        style={{
-          minHeight: 80,
-          background: phase === 'recording' ? 'var(--success)' : undefined,
-        }}
-      />
 
       <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} />
       <SecondaryButton label="Back" onClick={goBack} />

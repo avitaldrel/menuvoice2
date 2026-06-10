@@ -1,11 +1,13 @@
-// Auto-shutter ("self capture") with real-time audio coaching — no heavy CV dep.
+// Auto-shutter with continuous audio coaching for blind users.
 //
-// Coaching strategy: each blocked state has two messages. The first fires
-// immediately on entering the state. If still stuck after ESCALATE_MS, the
-// second fires (more specific advice + mention of the Override button). After
-// STRUGGLE_MS total without a capture, onStruggle fires and hands off to manual.
+// Coaching strategy:
+// - Each blocked state has two messages; the second fires after ESCALATE_MS.
+// - A heartbeat fires "still looking" if no coaching in HEARTBEAT_MS.
+// - In 'content' state, a directional hint is added when content centroid is
+//   significantly off-center (guides the user toward the menu text).
+// - In 'steadying' state, a spoken countdown fires on specific ticks.
+// - After STRUGGLE_MS total without a capture, onStruggle fires → manual mode.
 
-/** Visual state reported to the UI every tick so it can draw the guidance overlay. */
 export type AutoCaptureState = 'dark' | 'content' | 'moving' | 'steadying' | 'disarmed';
 
 export interface AutoCaptureCallbacks {
@@ -24,21 +26,30 @@ const CONTENT_MIN = 7;
 const MOTION_STEADY = 6;
 const REARM_MOTION = 13;
 const STEADY_TICKS = 5;
-const ESCALATE_MS = 5500;  // time before escalating to the follow-up message
-const STRUGGLE_MS = 14000; // total armed time before giving up and going manual
+const ESCALATE_MS = 5500;
+const STRUGGLE_MS = 14000;
+const HEARTBEAT_MS = 4500;
+
+// Countdown messages on each steady tick (1-indexed). STEADY_TICKS fires capture.
+const COUNTDOWN: Record<number, string> = {
+  1: 'Hold still.',
+  2: 'Three.',
+  3: 'Two.',
+  4: 'One.',
+};
 
 const STAGE_MSGS: Record<string, [string, string]> = {
   dark: [
     "It's a bit dark. Try moving to a brighter spot or closer to a light.",
-    "Still too dark. A flashlight or lamp would help. Or tap Override to take the photo now.",
+    "Still too dark. A flashlight or lamp would help. Or tap Take photo to capture now.",
   ],
   content: [
     'Point the camera at the menu text so it fills the screen.',
-    'Still not seeing text. Hold the phone flat, about 30 centimeters above the menu. Or tap Override to take the photo now.',
+    'Still not seeing text. Hold the phone flat, about 30 centimeters above the menu. Or tap Take photo to capture now.',
   ],
   moving: [
-    'Good -- now hold still.',
-    'Try resting your elbow on the table to steady your hand. Or tap Override whenever you are ready.',
+    'Good — now hold still.',
+    'Try resting your elbow on the table to steady your hand. Or tap Take photo whenever you are ready.',
   ],
 };
 
@@ -54,9 +65,10 @@ export class AutoCaptureController {
   private video: HTMLVideoElement | null = null;
   private cb: AutoCaptureCallbacks | null = null;
 
-  private coachState = '';   // which state we're currently coaching
-  private coachStage = 0;    // 0 = initial, 1 = escalated
-  private coachAt = 0;       // when we last spoke
+  private coachState = '';
+  private coachStage = 0;
+  private coachAt = 0;
+  private lastCoachAt = 0;
 
   constructor() {
     this.canvas.width = W;
@@ -74,6 +86,7 @@ export class AutoCaptureController {
     this.coachState = '';
     this.coachStage = 0;
     this.coachAt = 0;
+    this.lastCoachAt = Date.now();
     this.armedAt = Date.now();
     this.struggled = false;
     this.timer = setInterval(() => this.tick(), TICK_MS);
@@ -92,23 +105,50 @@ export class AutoCaptureController {
     this.coachAt = 0;
   }
 
-  private coach(state: string) {
+  private emit(msg: string) {
+    this.lastCoachAt = Date.now();
+    this.cb?.onCoach(msg);
+  }
+
+  private coach(state: string, extraMsg?: string) {
     const msgs = STAGE_MSGS[state];
     if (!msgs) return;
     const now = Date.now();
     if (state !== this.coachState) {
-      // New state: speak stage 0 immediately.
       this.coachState = state;
       this.coachStage = 0;
       this.coachAt = now;
-      this.cb?.onCoach(msgs[0]);
+      this.emit(extraMsg ? `${msgs[0]} ${extraMsg}` : msgs[0]);
     } else if (this.coachStage === 0 && now - this.coachAt > ESCALATE_MS) {
-      // Still stuck: escalate to stage 1 (different, more helpful message).
       this.coachStage = 1;
       this.coachAt = now;
-      this.cb?.onCoach(msgs[1]);
+      this.emit(msgs[1]);
     }
     // Stage 1 reached: go silent until state changes.
+  }
+
+  // Compute horizontal/vertical centroid of gradient energy. Returns a direction
+  // hint string if content is significantly off-center, else null.
+  private directionHint(gray: Float32Array): string | null {
+    let gx = 0, gy = 0, total = 0;
+    for (let y = 0; y < H; y++) {
+      for (let x = 1; x < W; x++) {
+        const g = Math.abs(gray[y * W + x] - gray[y * W + x - 1]);
+        gx += g * x;
+        gy += g * y;
+        total += g;
+      }
+    }
+    if (total < 1) return null;
+    const cx = gx / total / W; // 0..1
+    const cy = gy / total / H;
+    const dx = cx - 0.5;
+    const dy = cy - 0.5;
+    if (Math.abs(dx) < 0.18 && Math.abs(dy) < 0.18) return null;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx > 0 ? 'Move the menu to the left.' : 'Move the menu to the right.';
+    }
+    return dy > 0 ? 'Move the menu up.' : 'Move the menu down.';
   }
 
   private tick() {
@@ -152,7 +192,7 @@ export class AutoCaptureController {
         this.armedAt = Date.now();
         this.struggled = false;
         this.coachState = '';
-        this.cb?.onCoach('Ready for the next page.');
+        this.emit('Ready for the next page.');
       }
       return;
     }
@@ -169,12 +209,16 @@ export class AutoCaptureController {
       this.cb.onProgress?.('dark', 0, STEADY_TICKS);
       return;
     }
+
     if (grad < CONTENT_MIN) {
       this.steady = 0;
-      this.coach('content');
+      // Add directional hint when there's at least a little gradient signal.
+      const dir = grad > 0.3 ? this.directionHint(gray) : null;
+      this.coach('content', dir ?? undefined);
       this.cb.onProgress?.('content', 0, STEADY_TICKS);
       return;
     }
+
     if (motion === Infinity || motion > MOTION_STEADY) {
       this.steady = 0;
       this.coach('moving');
@@ -182,18 +226,23 @@ export class AutoCaptureController {
       return;
     }
 
+    // Steadying — spoken countdown on specific ticks.
     this.steady++;
     if (this.steady >= STEADY_TICKS) {
       this.steady = 0;
-      this.cb?.onCoach('Capturing now.');
+      this.emit('Capturing now.');
       this.cb.onProgress?.('steadying', STEADY_TICKS, STEADY_TICKS);
       this.cb.onCapture();
     } else {
-      if (this.coachState !== 'steadying') {
-        this.coachState = 'steadying';
-        this.cb?.onCoach('Hold it... almost there.');
-      }
+      if (this.coachState !== 'steadying') this.coachState = 'steadying';
+      const countMsg = COUNTDOWN[this.steady];
+      if (countMsg) this.emit(countMsg);
       this.cb.onProgress?.('steadying', this.steady, STEADY_TICKS);
+    }
+
+    // Heartbeat: if too quiet, remind the user we're still working.
+    if (this.armed && Date.now() - this.lastCoachAt > HEARTBEAT_MS && this.steady === 0) {
+      this.emit('Still looking, keep the menu in view.');
     }
   }
 }

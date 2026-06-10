@@ -1,12 +1,9 @@
 // Menu capture (web). Live camera preview with AUTO-SHUTTER + audio coaching,
-// plus a manual shutter, multi-photo, library upload, then AI analysis.
+// plus a manual shutter, multi-photo library upload, then AI analysis.
 //
-// Auto mode (default): src/lib/autocapture.ts watches the video for
-// brightness + content + steadiness and fires on its own while coaching by
-// voice. Manual mode: tap the Override button.
-//
-// Voice commands (after ≥1 photo captured): "analyze" / "done" → analyze,
-// "another" / "more" → capture another, "cancel" / "back" → cancel.
+// All capture coaching goes through browser speechSynthesis (coach()) on a
+// single channel — no OpenAI TTS during capture so there's no double-talk.
+// Analysis wait: periodic speak() reassurance while parseMenuFromImages runs.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, PrimaryButton, SecondaryButton } from '../components';
@@ -16,11 +13,13 @@ import { startCamera, stopCamera, captureFrame, compressImage, enableTorch, disa
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { AutoCaptureController } from '../lib/autocapture';
-import { useVoiceNav } from '../hooks/useVoiceNav';
-import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
-import { watchForSilence } from '../lib/vad';
-import { transcribeAudio } from '../lib/openai';
 import { earconTick, earconCapture } from '../lib/earcon';
+
+const ANALYSIS_PHRASES = [
+  'Still reading your menu, just a moment.',
+  'Almost there, hang tight.',
+  'Still working on it, one more moment.',
+];
 
 export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -29,34 +28,16 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const autoRef = useRef<AutoCaptureController | null>(null);
   const analyzingRef = useRef(false);
   const prevSteadyRef = useRef(0);
+  const reassureIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reassureCountRef = useRef(0);
 
   const [photos, setPhotos] = useState<string[]>([]);
   const [name, setName] = useState('');
-  const [nameRecState, setNameRecState] = useState<'idle' | 'recording' | 'working'>('idle');
   const [status, setStatus] = useState('Starting camera…');
   const [camError, setCamError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [autoMode, setAutoMode] = useState(true);
-
-  // Voice commands available once at least one photo has been captured.
-  const photosRef = useRef<string[]>([]);
-  const { phase: voicePhase, listen: voiceListen } = useVoiceNav({
-    commands: [
-      { id: 'analyze', keywords: ['analyze', 'analyse', 'done', 'finish', 'go', 'read', 'process'] },
-      { id: 'another', keywords: ['another', 'more', 'next', 'page', 'additional'] },
-      { id: 'cancel',  keywords: ['cancel', 'back', 'stop', 'exit', 'never mind', 'nevermind'] },
-      { id: 'manual',  keywords: ['capture', 'take', 'photo', 'shoot', 'snap'] },
-    ],
-    onCommand: async (id) => {
-      if (id === 'analyze') { analyze(); }
-      else if (id === 'another') { addPhoto(captureFrame(videoRef.current!), false); }
-      else if (id === 'manual') { manualCapture(); }
-      else if (id === 'cancel') { goBack(); }
-    },
-    onNoMatch: () =>
-      `Say "analyze" to read the menu, "another" for another photo, or "cancel" to go back.`,
-  });
 
   // Start / stop camera.
   useEffect(() => {
@@ -65,13 +46,10 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       try {
         if (videoRef.current) {
           const s = await startCamera(videoRef.current);
-          if (cancelled) {
-            stopCamera(s);
-            return;
-          }
+          if (cancelled) { stopCamera(s); return; }
           streamRef.current = s;
           setCameraReady(true);
-          enableTorch(s); // no-op on iOS; improves lighting on Android
+          enableTorch(s);
         }
       } catch {
         const msg =
@@ -90,7 +68,27 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     };
   }, []);
 
-  // Run / stop the auto-capture controller based on mode + state.
+  // Periodic reassurance while analysis runs.
+  useEffect(() => {
+    if (!analyzing) {
+      if (reassureIdRef.current) {
+        clearInterval(reassureIdRef.current);
+        reassureIdRef.current = null;
+      }
+      reassureCountRef.current = 0;
+      return;
+    }
+    reassureCountRef.current = 0;
+    const id = setInterval(() => {
+      const msg = ANALYSIS_PHRASES[reassureCountRef.current % ANALYSIS_PHRASES.length];
+      reassureCountRef.current++;
+      speak(msg);
+    }, 5000);
+    reassureIdRef.current = id;
+    return () => clearInterval(id);
+  }, [analyzing]);
+
+  // Run / stop the auto-capture controller.
   useEffect(() => {
     const active = autoMode && cameraReady && !analyzing && !camError;
     if (!active) {
@@ -104,13 +102,9 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     const intro =
       'Auto capture is on. Hold your phone flat, about a foot above the menu. ' +
       'I will guide you and take the photo automatically. If I take too long, ' +
-      'find the Override button below the camera.';
+      'find the Take photo button below the camera.';
     setStatus('Auto capture on. Hold your phone flat over the menu.');
 
-    // Speak the intro FIRST and wait for it to finish, THEN start the controller.
-    // Otherwise the intro (OpenAI audio) and the rapid coaching cues
-    // (SpeechSynthesis) play on two channels at once and talk over each other —
-    // which is what made the screen feel silent and confusing.
     (async () => {
       await speak(intro);
       if (cancelled || !videoRef.current) return;
@@ -125,8 +119,8 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         },
         onStruggle: () => {
           setAutoMode(false);
-          const msg = 'Auto capture is having trouble. Switching to manual. Find the Capture photo button and tap it when you are ready.';
-          setStatus('Switched to manual. Tap "Capture photo" to take the shot.');
+          const msg = 'Auto capture is having trouble. Switching to manual. Find the Take photo button and tap it when you are ready.';
+          setStatus('Switched to manual. Tap "Take photo" to take the shot.');
           coach(msg);
         },
         onProgress: (state, steady, max) => {
@@ -147,29 +141,17 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   }, [autoMode, cameraReady, analyzing, camError]);
 
   const addPhoto = (b64: string | null, viaAuto: boolean) => {
-    if (!b64) {
-      if (!viaAuto) announce('That photo did not capture. Try again.');
-      return;
-    }
+    if (!b64) return;
     if (viaAuto) earconCapture();
     setPhotos((prev) => {
       const next = [...prev, b64];
-      photosRef.current = next;
-      const msg = `Got it. Photo ${next.length} captured. ${
-        viaAuto
-          ? 'Move to the next page, or tap Done. You can also say "analyze" or "another".'
-          : 'Take another, or tap Done to analyze. You can also say "analyze" or "another".'
-      }`;
+      const msg = viaAuto
+        ? `Got it, photo ${next.length}. Line up the next page, or tap Analyze to read the menu.`
+        : `Photo ${next.length} captured. Take another, or tap Analyze.`;
       setStatus(msg);
-      if (viaAuto) coach(`Photo ${next.length} captured. Say analyze or another.`);
-      else speak(msg);
+      coach(msg);
       return next;
     });
-  };
-
-  const announce = (msg: string) => {
-    setStatus(msg);
-    speak(msg);
   };
 
   const manualCapture = () => {
@@ -182,28 +164,24 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     if (!files.length) return;
     e.target.value = '';
 
-    announce(`Processing ${files.length} photo${files.length > 1 ? 's' : ''}…`);
+    const msg = `Processing ${files.length} photo${files.length > 1 ? 's' : ''}…`;
+    setStatus(msg);
 
     const results = await Promise.allSettled(files.map((f) => compressImage(f)));
     const added: string[] = [];
     const failedNames: string[] = [];
     results.forEach((r, i) => {
-      if (r.status === 'fulfilled') {
-        added.push(r.value);
-      } else {
-        failedNames.push(files[i].name);
-      }
+      if (r.status === 'fulfilled') added.push(r.value);
+      else failedNames.push(files[i].name);
     });
 
     if (added.length) {
       setPhotos((prev) => {
         const next = [...prev, ...added];
-        photosRef.current = next;
-        let msg = `Added ${added.length} photo${added.length > 1 ? 's' : ''}. ${next.length} total.`;
-        if (failedNames.length) {
-          msg += ` ${failedNames.length} could not be read — use JPEG or PNG.`;
-        }
-        announce(msg);
+        let m = `Added ${added.length} photo${added.length > 1 ? 's' : ''}. ${next.length} total.`;
+        if (failedNames.length) m += ` ${failedNames.length} could not be read — use JPEG or PNG.`;
+        setStatus(m);
+        speak(m);
         return next;
       });
     } else {
@@ -211,58 +189,42 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         failedNames.length === 1
           ? `Could not read "${failedNames[0]}". Use a JPEG or PNG photo.`
           : `Could not read ${failedNames.length} files. Use JPEG or PNG photos.`;
-      announce(errMsg);
+      setStatus(errMsg);
+      speak(errMsg);
     }
-  };
-
-  const speakName = async () => {
-    if (nameRecState !== 'idle') return;
-    const ok = await requestMicPermission();
-    if (!ok) { announce('Microphone access needed. Allow it and try again.'); return; }
-    try {
-      await startRecording();
-      setNameRecState('recording');
-    } catch {
-      announce('Could not start microphone. Try typing the name instead.');
-      return;
-    }
-    const s = getActiveStream();
-    if (s) await new Promise<void>((resolve) => { watchForSilence(s, 3000, 30000, resolve); });
-    setNameRecState('working');
-    let blob: Blob | null = null;
-    try { blob = await stopRecording(); } catch {}
-    if (!blob) { setNameRecState('idle'); return; }
-    try {
-      const text = await transcribeAudio(blob);
-      if (text) setName(text.replace(/^(it'?s?|this is|the restaurant is|called?)\s+/i, '').replace(/[.!?]+$/, '').trim());
-    } catch {}
-    setNameRecState('idle');
   };
 
   const analyze = async () => {
     if (photos.length === 0) {
-      announce('Capture at least one photo of the menu first.');
+      const m = 'Capture at least one photo of the menu first.';
+      setStatus(m);
+      speak(m);
       return;
     }
     if (!hasApiKey()) {
-      announce('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
+      const m = 'No API key configured. Set OPENAI_API_KEY in Vercel environment variables.';
+      setStatus(m);
+      speak(m);
       return;
     }
     analyzingRef.current = true;
     setAnalyzing(true);
     autoRef.current?.stop();
     stopCoach();
-    announce('Reading the menu. This takes a few seconds.');
+    const startMsg = 'Reading the menu. This takes a few seconds.';
+    setStatus(startMsg);
+    speak(startMsg);
     try {
       const menu = await parseMenuFromImages(photos);
-      // Use typed/spoken name, fall back to what the AI extracted, then generic.
       const restaurantName = name.trim() || menu.restaurantName?.trim() || 'This restaurant';
       if (!name.trim() && menu.restaurantName) setName(menu.restaurantName);
       await saveRestaurant(restaurantName, menu).catch(() => {});
       stopCamera(streamRef.current);
       navigate({ name: 'conversation', menu, restaurantName });
     } catch (e: any) {
-      announce(e?.message ?? 'I could not read the menu. Try retaking the photos with more light.');
+      const errMsg = e?.message ?? 'I could not read the menu. Try retaking the photos with more light.';
+      setStatus(errMsg);
+      speak(errMsg);
       setAnalyzing(false);
       analyzingRef.current = false;
     }
@@ -281,34 +243,15 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         </div>
       </div>
 
-      <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
-        <input
-          className="input"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Restaurant name (auto-detected or type)"
-          aria-label="Restaurant name, optional — tap mic to speak it"
-          style={{ flex: 1, margin: 0 }}
-        />
-        <button
-          onClick={speakName}
-          disabled={nameRecState !== 'idle' || analyzing}
-          aria-label={nameRecState === 'recording' ? 'Listening for restaurant name' : 'Speak the restaurant name'}
-          style={{
-            minHeight: 64,
-            minWidth: 64,
-            borderRadius: 'var(--r-md)',
-            border: `2px solid ${nameRecState === 'recording' ? 'var(--success)' : 'var(--border)'}`,
-            background: nameRecState === 'recording' ? 'var(--success)' : 'var(--surface-high)',
-            color: 'var(--text-primary)',
-            fontSize: 22,
-            cursor: 'pointer',
-          }}
-        >
-          {nameRecState === 'idle' ? 'Mic' : '…'}
-        </button>
-      </div>
+      <input
+        className="input"
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Restaurant name (auto-detected or type)"
+        aria-label="Restaurant name, optional"
+        disabled={analyzing}
+      />
 
       <button
         onClick={() => setAutoMode((v) => !v)}
@@ -373,39 +316,29 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       <div className="col">
         <PrimaryButton
           label={
-            !cameraReady && !camError ? 'Starting camera…' :
-            autoMode ? 'Override — take photo now' : 'Capture photo'
+            !cameraReady && !camError ? 'Starting camera…' : 'Take photo'
           }
           hint={autoMode ? 'Take the photo immediately without waiting for auto-capture' : 'Takes a photo of the menu'}
           onClick={manualCapture}
           disabled={analyzing || !!camError || !cameraReady}
           style={{ minHeight: 80 }}
         />
-        <div className="row">
-          <SecondaryButton label="Upload from Library" onClick={() => fileRef.current?.click()} disabled={analyzing} />
-          <PrimaryButton label={`Done — Analyze (${photos.length})`} onClick={analyze} disabled={analyzing || photos.length === 0} />
-        </div>
 
-        {photos.length > 0 && !analyzing && (
-          <PrimaryButton
-            label={
-              voicePhase === 'recording'    ? 'Listening…'    :
-              voicePhase === 'transcribing' ? 'Hearing you…'  :
-              voicePhase === 'announcing'   ? 'Please wait…'  :
-                                              'Say "analyze", "another", or "cancel"'
-            }
-            hint="Voice command: analyze, another photo, or cancel"
-            onClick={voiceListen}
-            disabled={voicePhase !== 'idle'}
-            style={{
-              minHeight: 70,
-              background: voicePhase === 'recording' ? 'var(--success)' : 'var(--surface-high)',
-              color: 'var(--text-primary)',
-              border: '2px solid var(--border)',
-              fontSize: 16,
-            }}
+        <div className="row">
+          <SecondaryButton
+            label="Upload from Library"
+            onClick={() => fileRef.current?.click()}
+            disabled={analyzing}
           />
-        )}
+          {photos.length > 0 && (
+            <PrimaryButton
+              label={analyzing ? 'Reading…' : `Analyze (${photos.length})`}
+              hint="Send the captured photos to AI for menu extraction"
+              onClick={analyze}
+              disabled={analyzing}
+            />
+          )}
+        </div>
 
         <SecondaryButton label="Cancel" onClick={goBack} disabled={analyzing} />
       </div>
