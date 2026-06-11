@@ -6,6 +6,8 @@
 // - Reliable on iOS Safari (webkitSpeechRecognition works; Web Audio VAD does not)
 // - Auto-restart when iOS cuts the session short mid-session
 
+import { track } from './telemetry';
+
 // Minimal types for Web Speech API — not in all TypeScript DOM lib versions.
 interface SR {
   continuous: boolean;
@@ -87,6 +89,7 @@ export class SpeechManager {
       if (event.error === 'not-allowed' || event.error === 'audio-capture') {
         this.clearSilenceTimer();
         this.shouldRestart = false;
+        track('speech', 'stt_error', { outcome: 'failure', metadata: { error: event.error } });
         this.onError(
           'I need microphone access to hear you. Please allow microphone access, then tap Try again.',
         );

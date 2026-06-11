@@ -7,6 +7,7 @@
 //     directly to OpenAI (so you don't need a local server).
 
 import { ParsedMenu, UserProfile, ChatTurn } from '../types';
+import { track } from './telemetry';
 
 const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
 const VISION_MODEL = 'gpt-5.4-mini';
@@ -207,6 +208,9 @@ export async function chatReplyStream(
 
   const body = { model: CHAT_MODEL, messages, max_completion_tokens: 220, stream: true };
 
+  const t0 = Date.now();
+  track('ask', 'llm_request', { metadata: { model: CHAT_MODEL, history_len: history.length } });
+
   let res: Response;
   if (DIRECT) {
     res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -222,13 +226,19 @@ export async function chatReplyStream(
     });
   }
 
-  if (!res.ok) throw new Error(await parseApiError(res));
+  if (!res.ok) {
+    const status = res.status;
+    const errMsg = await parseApiError(res);
+    track('ask', 'error', { outcome: 'failure', metadata: { error_code: status, message: errMsg } });
+    throw new Error(errMsg);
+  }
   if (!res.body) return chatReply(menu, profile, history, userText);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let fullText = '';
   let buf = '';
+  let firstToken = false;
 
   try {
     while (true) {
@@ -245,6 +255,10 @@ export async function chatReplyStream(
           const json = JSON.parse(data);
           const delta = json.choices?.[0]?.delta?.content;
           if (typeof delta === 'string' && delta) {
+            if (!firstToken) {
+              firstToken = true;
+              track('ask', 'llm_first_token', { durationMs: Date.now() - t0, metadata: { model: CHAT_MODEL } });
+            }
             fullText += delta;
             onDelta(delta);
           }
@@ -255,7 +269,14 @@ export async function chatReplyStream(
     reader.releaseLock();
   }
 
-  return fullText.trim() || "Sorry, I missed that. Could you say it again?";
+  const reply = fullText.trim() || "Sorry, I missed that. Could you say it again?";
+  track('ask', 'llm_reply', {
+    outcome: 'success',
+    durationMs: Date.now() - t0,
+    content: { text: reply },
+    metadata: { model: CHAT_MODEL, est_completion_tokens: Math.ceil(reply.length / 4) },
+  });
+  return reply;
 }
 
 export interface SessionLearnings {
@@ -289,11 +310,16 @@ export async function extractSessionLearnings(turns: ChatTurn[]): Promise<Sessio
       ],
     });
     const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? '{}');
-    return {
+    const result = {
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
       likes: Array.isArray(parsed.likes) ? parsed.likes : [],
       dislikes: Array.isArray(parsed.dislikes) ? parsed.dislikes : [],
     };
+    track('learnings', 'extracted', {
+      outcome: 'success',
+      content: { orders: result.orders, cuisines_liked: result.likes, dislikes: result.dislikes },
+    });
+    return result;
   } catch {
     return empty;
   }
@@ -301,6 +327,7 @@ export async function extractSessionLearnings(turns: ChatTurn[]): Promise<Sessio
 
 /** Restaurant website URL -> structured menu (scrape then GPT parse). */
 export async function parseMenuFromUrl(url: string): Promise<ParsedMenu> {
+  const t0 = Date.now();
   const scrapeRes = await fetch('/api/scrape', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -308,7 +335,9 @@ export async function parseMenuFromUrl(url: string): Promise<ParsedMenu> {
   });
   if (!scrapeRes.ok) {
     const err = await scrapeRes.json().catch(() => ({}));
-    throw new Error((err as any).error ?? "Hey, sorry — I couldn't reach that website. Double-check the link and try again.");
+    const msg = (err as any).error ?? "Hey, sorry — I couldn't reach that website. Double-check the link and try again.";
+    track('menu', 'parse_url', { outcome: 'failure', durationMs: Date.now() - t0, metadata: { url, reason: 'scrape_failed' } });
+    throw new Error(msg);
   }
 
   const data = (await scrapeRes.json()) as { text?: string; imageUrl?: string };
@@ -355,10 +384,18 @@ export async function parseMenuFromUrl(url: string): Promise<ParsedMenu> {
     throw new Error("Hey, sorry — something went wrong reading that menu. Try a different link.");
   }
   if (!parsed.categories || parsed.categories.length === 0) {
+    track('menu', 'parse_url', { outcome: 'failure', durationMs: Date.now() - t0, metadata: { url, reason: 'no_items' } });
     throw new Error(
       "Hey, sorry — I couldn't find any menu items on that page. It might be the homepage rather than the menu itself. Try adding /menu to the address, or find a link that goes directly to their food menu."
     );
   }
+  const itemCount = parsed.categories.reduce((s: number, c: any) => s + c.items.length, 0);
+  track('menu', 'parse_url', {
+    outcome: 'success',
+    durationMs: Date.now() - t0,
+    content: { restaurantName: parsed.restaurantName, itemCount },
+    metadata: { url },
+  });
   return parsed;
 }
 

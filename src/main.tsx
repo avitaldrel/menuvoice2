@@ -4,6 +4,9 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import './index.css';
 import App from './App';
 import { unlockAudio } from './lib/audioUnlock';
+import { initTelemetry } from './lib/telemetry';
+
+initTelemetry();
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 

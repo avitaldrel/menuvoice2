@@ -3,6 +3,7 @@
 // across users" feature needs no migration.
 
 import { UserProfile, EMPTY_PROFILE, SavedRestaurant, ParsedMenu } from '../types';
+import { track } from './telemetry';
 
 const PROFILE_KEY = 'menuvoice.profile.v1';
 const SAVED_KEY = 'menuvoice.savedRestaurants.v1';
@@ -12,12 +13,18 @@ const SAVED_KEY = 'menuvoice.savedRestaurants.v1';
 async function pushToCloud(profile: UserProfile, restaurants: SavedRestaurant[]) {
   if (!profile.email) return;
   try {
+    const body = JSON.stringify({ email: profile.email, profile, restaurants });
     await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: profile.email, profile, restaurants }),
+      body,
+    });
+    track('sync', 'push', {
+      outcome: 'success',
+      metadata: { bytes: body.length, restaurant_count: restaurants.length },
     });
   } catch {
+    track('sync', 'push', { outcome: 'failure' });
     // offline — local save already happened, cloud will be stale until next push
   }
 }
@@ -28,6 +35,10 @@ export async function loadFromCloud(email: string): Promise<{ profile: UserProfi
     if (!res.ok) return null;
     const data = await res.json();
     if (!data) return null;
+    track('sync', 'pull', {
+      outcome: 'success',
+      metadata: { restaurant_count: (data.restaurants ?? []).length },
+    });
     return { profile: data.profile ?? null, restaurants: data.restaurants ?? [] };
   } catch {
     return null;
@@ -76,6 +87,7 @@ function trySetItem(key: string, value: string): void {
   } catch (e: any) {
     const isQuota = e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014;
     if (!isQuota) throw e;
+    track('error', 'storage_quota', { metadata: { key } });
     // Storage full — drop oldest saved restaurants one at a time until it fits.
     try {
       let trimmed = JSON.parse(value) as SavedRestaurant[];
@@ -102,6 +114,7 @@ export async function saveRestaurant(name: string, menu: ParsedMenu): Promise<Sa
   const filtered = list.filter((r) => r.name.toLowerCase() !== entry.name.toLowerCase());
   filtered.unshift(entry);
   trySetItem(SAVED_KEY, JSON.stringify(filtered));
+  track('restaurant', 'saved', { content: { id: entry.id, name: entry.name } });
   const profile = await loadProfile();
   pushToCloud(profile, filtered);
   return entry;
@@ -111,6 +124,7 @@ export async function deleteRestaurant(id: string): Promise<void> {
   const list = await loadSavedRestaurants();
   const updated = list.filter((r) => r.id !== id);
   localStorage.setItem(SAVED_KEY, JSON.stringify(updated));
+  track('restaurant', 'deleted', { content: { id } });
   const profile = await loadProfile();
   pushToCloud(profile, updated);
 }

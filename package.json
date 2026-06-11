@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
+    "@vercel/blob": "^2.4.0",
     "@vercel/kv": "^3.0.0",
+    "@vercel/postgres": "^0.10.0",
     "jwt-decode": "^4.0.0",
     "puppeteer": "^25.1.0",
     "react": "^18.3.1",

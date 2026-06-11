@@ -2,21 +2,22 @@
 // browser's built-in speechSynthesis when there's no key or the call fails.
 
 import { synthesizeSpeech, hasApiKey } from './openai';
+import { track } from './telemetry';
 
 let currentAudio: HTMLAudioElement | null = null;
 let currentUrl: string | null = null;
-// Resolves the in-flight playUtterance promise so stopSpeaking() never hangs.
 let settleCurrent: (() => void) | null = null;
-// True while any TTS is actively playing.
 let _speaking = false;
-// Cancel hook for an active streaming-speech handle.
 let activeStreamCancel: (() => void) | null = null;
 
 export function isSpeaking(): boolean {
   return _speaking;
 }
 
-export function stopSpeaking() {
+export function stopSpeaking(reason?: 'bargein') {
+  if (_speaking && reason === 'bargein') {
+    track('speech', 'bargein', {});
+  }
   _speaking = false;
   if (activeStreamCancel) {
     const cancel = activeStreamCancel;
@@ -39,29 +40,7 @@ export function stopSpeaking() {
   try { window.speechSynthesis?.cancel(); } catch {}
 }
 
-// Internal: play ONE utterance without cancelling prior audio.
-// Called by speak() (after stopSpeaking) and by createStreamingSpeech sequentially.
-async function playUtterance(text: string, voice?: string): Promise<void> {
-  if (!text.trim()) return;
-  if (hasApiKey()) {
-    try {
-      await playOpenAI(text, voice);
-      return;
-    } catch (e) {
-      console.warn('OpenAI TTS failed, falling back to browser voice:', e);
-    }
-  }
-  await playBrowser(text);
-}
-
-export async function speak(text: string, voice?: string): Promise<void> {
-  stopSpeaking();
-  if (!text.trim()) return;
-  await playUtterance(text, voice);
-}
-
-async function playOpenAI(text: string, voice?: string): Promise<void> {
-  const blob = await synthesizeSpeech(text, voice);
+async function playBlob(blob: Blob): Promise<void> {
   const url = URL.createObjectURL(blob);
   currentUrl = url;
   const audio = new Audio(url);
@@ -83,10 +62,37 @@ async function playOpenAI(text: string, voice?: string): Promise<void> {
   }
 }
 
+async function playUtterance(text: string, voice?: string): Promise<void> {
+  if (!text.trim()) return;
+  const t0 = Date.now();
+  track('speech', 'tts_start', { metadata: { text_len: text.length, voice: voice ?? 'default' } });
+  if (hasApiKey()) {
+    try {
+      await playBlob(await synthesizeSpeech(text, voice));
+      track('speech', 'tts_end', { outcome: 'success', durationMs: Date.now() - t0 });
+      return;
+    } catch (e) {
+      console.warn('OpenAI TTS failed, falling back to browser voice:', e);
+      track('speech', 'tts_fallback', { metadata: { reason: 'openai_failed' } });
+    }
+  } else {
+    track('speech', 'tts_fallback', { metadata: { reason: 'no_api_key' } });
+  }
+  await playBrowser(text);
+  track('speech', 'tts_end', { outcome: 'success', durationMs: Date.now() - t0, metadata: { via: 'browser' } });
+}
+
+export async function speak(text: string, voice?: string): Promise<void> {
+  stopSpeaking();
+  if (!text.trim()) return;
+  await playUtterance(text, voice);
+}
+
 // Instant, free, local speech for real-time coaching (capture screen).
 // Silenced if the main TTS (speak()) is active.
 export function coach(text: string) {
   if (_speaking) return;
+  track('speech', 'coach', { content: { text } });
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -157,18 +163,53 @@ export function createStreamingSpeech(
   let draining = false;
   let drainDone: (() => void) | null = null;
 
-  activeStreamCancel = () => { cancelled = true; };
+  // Prefetch: TTS request started in parallel with the previous sentence playing.
+  let prefetchedBlob: Promise<Blob> | null = null;
+  let prefetchedFor: string | null = null;
+
+  activeStreamCancel = () => {
+    cancelled = true;
+    prefetchedBlob = null;
+    prefetchedFor = null;
+  };
+
+  function startPrefetch(text: string) {
+    if (!hasApiKey() || prefetchedFor === text) return;
+    prefetchedFor = text;
+    prefetchedBlob = synthesizeSpeech(text, voice);
+  }
 
   async function drain() {
     if (draining) return;
     draining = true;
     while (queue.length > 0 && !cancelled) {
       const sentence = queue.shift()!;
+
       if (!firstSpoken) {
         firstSpoken = true;
         opts?.onSpeakingStart?.();
       }
-      await playUtterance(sentence, voice);
+
+      // Kick off TTS for the next sentence NOW so it runs while this one plays.
+      if (queue.length > 0) startPrefetch(queue[0]);
+
+      if (hasApiKey()) {
+        try {
+          let blob: Blob;
+          if (prefetchedFor === sentence && prefetchedBlob) {
+            blob = await prefetchedBlob;
+            prefetchedBlob = null;
+            prefetchedFor = null;
+          } else {
+            blob = await synthesizeSpeech(sentence, voice);
+          }
+          if (!cancelled) await playBlob(blob);
+          continue;
+        } catch (e) {
+          console.warn('OpenAI TTS failed, falling back to browser voice:', e);
+        }
+      }
+      await playBrowser(sentence);
     }
     draining = false;
     if (drainDone) {
@@ -184,8 +225,22 @@ export function createStreamingSpeech(
     const [sentences, remainder] = extractComplete(buffer);
     if (sentences.length > 0) {
       buffer = remainder;
+      // Prefetch the first new sentence immediately — before drain() even starts.
+      if (!prefetchedBlob && sentences[0]) startPrefetch(sentences[0]);
       queue.push(...sentences);
       drain();
+    } else if (buffer.length > 120) {
+      // Long clause with no sentence-ending punctuation yet — split at last comma.
+      const lastComma = buffer.lastIndexOf(',');
+      if (lastComma > 40) {
+        const chunk = buffer.slice(0, lastComma + 1).trim();
+        buffer = buffer.slice(lastComma + 1).trimStart();
+        if (chunk) {
+          if (!prefetchedBlob) startPrefetch(chunk);
+          queue.push(chunk);
+          drain();
+        }
+      }
     }
   }
 

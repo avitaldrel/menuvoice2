@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { UserProfile, EMPTY_PROFILE } from '../types';
 import { loadProfile, saveProfile } from '../lib/storage';
+import { track } from '../lib/telemetry';
 
 interface ProfileCtx {
   profile: UserProfile;
@@ -24,6 +25,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   const update = useCallback(
     async (patch: Partial<UserProfile>) => {
+      track('profile', 'update', { content: { fields: Object.keys(patch) } });
       setProfile((prev) => {
         const next = { ...prev, ...patch };
         saveProfile(next).catch(() => {});

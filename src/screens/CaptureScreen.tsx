@@ -14,6 +14,7 @@ import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { AutoCaptureController } from '../lib/autocapture';
 import { earconTick, earconCapture } from '../lib/earcon';
+import { track, isImageLoggingOn } from '../lib/telemetry';
 
 const ANALYSIS_PHRASES = [
   'Still reading your menu, just a moment.',
@@ -32,7 +33,6 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
   const reassureCountRef = useRef(0);
 
   const [photos, setPhotos] = useState<string[]>([]);
-  const [name, setName] = useState('');
   const [status, setStatus] = useState('Starting camera…');
   const [camError, setCamError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
@@ -50,12 +50,15 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           streamRef.current = s;
           setCameraReady(true);
           enableTorch(s);
+          track('capture', 'camera_start', { outcome: 'success' });
         }
       } catch {
         const msg =
           'Camera unavailable. On iPhone, open this site over HTTPS and allow camera access. You can still upload photos using the Upload from Library button.';
         setCamError(msg);
         speak(msg);
+        track('capture', 'camera_start', { outcome: 'failure', metadata: { error: msg } });
+        track('error', 'camera', { metadata: { error: msg } });
       }
     })();
     return () => {
@@ -150,6 +153,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         : `Photo ${next.length} captured. Take another, or tap Analyze.`;
       setStatus(msg);
       coach(msg);
+      track('capture', 'photo_added', { metadata: { mode: viaAuto ? 'auto' : 'manual', photo_count: next.length } });
       return next;
     });
   };
@@ -175,6 +179,9 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
       else failedNames.push(files[i].name);
     });
 
+    track('capture', 'file_upload', {
+      metadata: { count: files.length, added: added.length, failed: failedNames.length },
+    });
     if (added.length) {
       setPhotos((prev) => {
         const next = [...prev, ...added];
@@ -214,14 +221,53 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     const startMsg = 'Reading the menu. This takes a few seconds.';
     setStatus(startMsg);
     speak(startMsg);
+
+    track('capture', 'analyze_start', { metadata: { photo_count: photos.length } });
+    const t0 = Date.now();
+
+    // Upload images to Blob only when the owner has the toggle on.
+    let blobUrls: string[] | undefined;
+    if (isImageLoggingOn()) {
+      try {
+        const uploads = await Promise.allSettled(
+          photos.map(async (b64, i) => {
+            const r = await fetch('/api/upload-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageBase64: b64, filename: `cap-${Date.now()}-${i}.jpg` }),
+            });
+            const d = await r.json() as { url?: string };
+            return d.url ?? null;
+          })
+        );
+        blobUrls = uploads
+          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && !!r.value)
+          .map((r) => r.value);
+      } catch {}
+    }
+
     try {
       const menu = await parseMenuFromImages(photos);
-      const restaurantName = name.trim() || menu.restaurantName?.trim() || 'This restaurant';
-      if (!name.trim() && menu.restaurantName) setName(menu.restaurantName);
+      const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
+      track('capture', 'ocr_result', {
+        outcome: 'success',
+        durationMs: Date.now() - t0,
+        content: {
+          restaurantName: menu.restaurantName,
+          itemCount,
+          ...(blobUrls ? { blobUrls } : {}),
+        },
+      });
+      const restaurantName = menu.restaurantName?.trim() || 'This restaurant';
       await saveRestaurant(restaurantName, menu).catch(() => {});
       stopCamera(streamRef.current);
       navigate({ name: 'conversation', menu, restaurantName });
     } catch (e: any) {
+      track('capture', 'ocr_result', {
+        outcome: 'failure',
+        durationMs: Date.now() - t0,
+        metadata: { error: String(e?.message) },
+      });
       const errMsg = e?.message ?? 'I could not read the menu. Try retaking the photos with more light.';
       setStatus(errMsg);
       speak(errMsg);
@@ -243,16 +289,6 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
         </div>
       </div>
 
-      <input
-        className="input"
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Restaurant name (auto-detected or type)"
-        aria-label="Restaurant name, optional"
-        disabled={analyzing}
-      />
-
       <button
         onClick={() => setAutoMode((v) => !v)}
         aria-pressed={autoMode}
@@ -265,7 +301,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           color: autoMode ? 'var(--accent)' : 'var(--text-secondary)',
         }}
       >
-        {autoMode ? 'Auto-capture: ON' : 'Auto-capture: OFF'}
+        <span aria-hidden="true">{autoMode ? 'Auto-capture: ON' : 'Auto-capture: OFF'}</span>
       </button>
 
       <div

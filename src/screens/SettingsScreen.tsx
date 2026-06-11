@@ -11,6 +11,7 @@ import { startRecording, stopRecording, requestMicPermission, getActiveStream } 
 import { transcribeAudio } from '../lib/openai';
 import { speak } from '../lib/speech';
 import { watchForSilence } from '../lib/vad';
+import { track } from '../lib/telemetry';
 
 const VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'fable', 'onyx'];
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
@@ -237,6 +238,25 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
       <label
         className="card"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: 16 }}
+      >
+        <div>
+          <span style={{ fontSize: 18 }}>Save menu photos for analysis</span>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+            When on, captured photos are uploaded so you can review them later.
+          </p>
+        </div>
+        <input
+          type="checkbox"
+          checked={!!profile.imageLogging}
+          onChange={(e) => update({ imageLogging: e.target.checked })}
+          aria-label="Save menu photos for analysis — when on, captured photos are uploaded for later review"
+          style={{ width: 28, height: 28, flexShrink: 0 }}
+        />
+      </label>
+
+      <label
+        className="card"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
       >
         <span style={{ fontSize: 18 }}>Hide prices</span>
@@ -301,11 +321,18 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
       <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} />
       <SecondaryButton label="Back" onClick={goBack} />
+      <Body style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>
+        Usage is recorded to improve the app.
+      </Body>
       <SecondaryButton
         label="Sign out"
         tone="danger"
         hint="Clear your account and return to the login screen"
-        onClick={async () => { await reset(); navigate({ name: 'home' }); }}
+        onClick={async () => {
+          track('auth', 'logout', {});
+          await reset();
+          navigate({ name: 'home' });
+        }}
       />
     </Screen>
   );

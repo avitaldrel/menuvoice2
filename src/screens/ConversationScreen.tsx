@@ -25,6 +25,7 @@ import {
   BargeInListener,
 } from '../lib/speechRecognition';
 import { buildOpeningLine, chatReplyStream, extractSessionLearnings, hasApiKey } from '../lib/openai';
+import { track } from '../lib/telemetry';
 import {
   earconStart,
   earconStop,
@@ -108,7 +109,7 @@ export default function ConversationScreen({
   useEffect(() => {
     if (phase !== 'speaking' || !speakMode) return;
     const listener: BargeInListener = createBargeInListener(() => {
-      stopSpeaking();
+      stopSpeaking('bargein');
       startMicRef.current();
     });
     return () => listener.stop();
@@ -181,6 +182,11 @@ export default function ConversationScreen({
       return;
     }
 
+    track('ask', 'user_utterance', {
+      content: { text: userText },
+      metadata: { history_len: turns.length },
+    });
+
     const t = userText.toLowerCase().trim();
     const hadExchange = turns.some((x) => x.role === 'user');
 
@@ -188,6 +194,7 @@ export default function ConversationScreen({
       hadExchange &&
       EXIT_PHRASES.some((p) => t === p || t.startsWith(p + ' ') || t.endsWith(' ' + p));
     if (isExit) {
+      track('ask', 'exit_phrase', { content: { text: t } });
       await sayReply("Of course. I'll save what we talked about. Goodbye!", undefined, false);
       finish();
       return;
@@ -195,6 +202,7 @@ export default function ConversationScreen({
 
     const isRepeat = REPEAT_PHRASES.some((p) => t.includes(p));
     if (isRepeat) {
+      track('ask', 'repeat_phrase', { content: { text: t } });
       const last = [...turns].reverse().find((x) => x.role === 'assistant');
       if (last) { await sayReply(last.text); return; }
     }
@@ -202,6 +210,7 @@ export default function ConversationScreen({
     const history = turns;
     const withUser: ChatTurn[] = [...history, { role: 'user' as const, text: userText }];
     setTurns(withUser);
+    track('message', 'turn', { content: { role: 'user', text: userText }, metadata: { turn_index: withUser.length } });
     setLatestUser(userText);
     setLiveText('');
     setPhase('thinking');
@@ -237,6 +246,7 @@ export default function ConversationScreen({
 
       const withReply: ChatTurn[] = [...withUser, { role: 'assistant', text: fullReply }];
       setTurns(withReply);
+      track('message', 'turn', { content: { role: 'assistant', text: fullReply }, metadata: { turn_index: withReply.length } });
       setLatestAssistant(fullReply);
       setLiveText('');
       await startMic();
@@ -258,6 +268,7 @@ export default function ConversationScreen({
       earconThinkingStop();
       const withReply: ChatTurn[] = [...withUser, { role: 'assistant', text: fullReply }];
       setTurns(withReply);
+      track('message', 'turn', { content: { role: 'assistant', text: fullReply }, metadata: { turn_index: withReply.length } });
       setLatestAssistant(fullReply);
       setLiveText('');
       setPhase('idle');
@@ -384,7 +395,7 @@ export default function ConversationScreen({
           <SecondaryButton
             label="Stop speaking"
             hint="Interrupt and speak now"
-            onClick={() => { stopSpeaking(); startMicRef.current(); }}
+            onClick={() => { stopSpeaking('bargein'); startMicRef.current(); }}
             style={{ minHeight: 70 }}
           />
         </div>

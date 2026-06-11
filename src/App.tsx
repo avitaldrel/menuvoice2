@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ProfileProvider, useProfile } from './state/ProfileContext';
 import { Route, Navigate } from './nav';
+import { track, setCurrentScreen } from './lib/telemetry';
 
 import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -14,6 +15,8 @@ import UrlScreen from './screens/UrlScreen';
 function Root() {
   const { profile, loaded } = useProfile();
   const [stack, setStack] = useState<Route[]>([{ name: 'home' }]);
+  const prevScreenRef = useRef<string>('');
+  const screenEnterRef = useRef<number>(Date.now());
 
   const navigate: Navigate = useCallback((route) => {
     if (route.name === 'home') setStack([{ name: 'home' }]);
@@ -23,6 +26,21 @@ function Root() {
   const goBack = useCallback(() => {
     setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
   }, []);
+
+  useEffect(() => {
+    const name = stack[stack.length - 1].name;
+    const prev = prevScreenRef.current;
+    if (prev && prev !== name) {
+      track('nav', 'screen_exit', {
+        screen: prev,
+        durationMs: Date.now() - screenEnterRef.current,
+      });
+    }
+    setCurrentScreen(name);
+    track('nav', 'screen_enter', { screen: name });
+    screenEnterRef.current = Date.now();
+    prevScreenRef.current = name;
+  }, [stack]);
 
   if (!loaded) {
     return (

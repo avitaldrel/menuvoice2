@@ -9,6 +9,7 @@ export interface UserProfile {
   hidePrices: boolean;
   ttsVoice: string;
   onboarded: boolean;
+  imageLogging: boolean;
 }
 
 export interface MenuItem {
@@ -52,4 +53,5 @@ export const EMPTY_PROFILE: UserProfile = {
   hidePrices: false,
   ttsVoice: 'shimmer',
   onboarded: false,
+  imageLogging: false,
 };

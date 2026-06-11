@@ -11,6 +11,7 @@ import { earconStart, earconStop } from '../lib/earcon';
 import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { restoreFromCloud } from '../lib/storage';
+import { track } from '../lib/telemetry';
 
 type RecState = 'idle' | 'recording' | 'working';
 
@@ -44,7 +45,7 @@ export default function LoginScreen() {
     return () => stopSpeaking();
   }, []);
 
-  const loginWithEmail = async (emailToUse: string, name?: string) => {
+  const loginWithEmail = async (emailToUse: string, name?: string, method: 'email' | 'google' = 'email') => {
     const trimmed = emailToUse.trim();
     if (!trimmed) {
       speak('Please enter your email address first.');
@@ -53,6 +54,10 @@ export default function LoginScreen() {
     const restored = await restoreFromCloud(trimmed);
     const base = restored ?? { email: trimmed };
     await update(name ? { ...base, name } : base);
+    track('auth', 'login', {
+      outcome: 'success',
+      metadata: { method, cloud_restore_hit: !!restored },
+    });
   };
 
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
@@ -60,15 +65,17 @@ export default function LoginScreen() {
     try {
       const decoded = jwtDecode<GoogleJwt>(credentialResponse.credential);
       speak(`Welcome, ${decoded.name ?? decoded.email}. Signing you in.`);
-      await loginWithEmail(decoded.email, decoded.name);
+      await loginWithEmail(decoded.email, decoded.name, 'google');
     } catch {
       speak('Google sign-in failed. Please enter your email instead.');
+      track('auth', 'login', { outcome: 'failure', metadata: { method: 'google' } });
       setShowEmail(true);
     }
   };
 
   const handleGoogleError = () => {
     speak('Google sign-in failed. Please enter your email instead.');
+    track('auth', 'login', { outcome: 'failure', metadata: { method: 'google' } });
     setShowEmail(true);
   };
 
