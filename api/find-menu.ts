@@ -48,6 +48,37 @@ function buildPrompt(query: string): string {
   ].join('\n');
 }
 
+/**
+ * Validate the LLM's categories payload. Drops anything that is not an object
+ * with a string name and an items array; skips items without a string name.
+ * Garbage shapes here used to reach the client and crash mid-speech.
+ */
+function sanitizeCategories(raw: unknown): ParsedMenu['categories'] {
+  if (!Array.isArray(raw)) return [];
+  const categories: ParsedMenu['categories'] = [];
+  for (const cat of raw) {
+    if (!cat || typeof cat !== 'object' || Array.isArray(cat)) continue;
+    const { name, items } = cat as { name?: unknown; items?: unknown };
+    if (typeof name !== 'string' || !name.trim() || !Array.isArray(items)) continue;
+    const cleanItems = [];
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const it = item as Record<string, unknown>;
+      if (typeof it.name !== 'string' || !it.name.trim()) continue;
+      cleanItems.push({
+        name: it.name.trim(),
+        description: typeof it.description === 'string' ? it.description : undefined,
+        price: typeof it.price === 'string' ? it.price : undefined,
+        ingredients: Array.isArray(it.ingredients)
+          ? it.ingredients.filter((x): x is string => typeof x === 'string')
+          : undefined,
+      });
+    }
+    if (cleanItems.length > 0) categories.push({ name: name.trim(), items: cleanItems });
+  }
+  return categories;
+}
+
 /** Concatenate output_text items from a Responses API result. */
 function responseText(data: any): string {
   if (typeof data?.output_text === 'string' && data.output_text) return data.output_text;
@@ -101,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Stage 1: the search model read the menu directly.
     const direct: ParsedMenu = {
-      categories: Array.isArray(result?.categories) ? result.categories : [],
+      categories: sanitizeCategories(result?.categories),
       notes: typeof result?.notes === 'string' ? result.notes : undefined,
       restaurantName: restaurantName ?? undefined,
       incomplete: result?.incomplete === true,

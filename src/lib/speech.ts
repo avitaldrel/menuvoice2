@@ -130,6 +130,9 @@ export async function speak(text: string, voice?: string): Promise<void> {
 
 // Instant, free, local speech for real-time coaching (capture screen).
 // Silenced if the main TTS (speak()) is active.
+// iOS Safari silently drops an utterance queued in the same tick as cancel(),
+// so the speak is deferred one beat after the cancel.
+let _coachTimer: ReturnType<typeof setTimeout> | null = null;
 export function coach(text: string) {
   if (!_appVoiceOn) return;
   if (_speaking) return;
@@ -137,13 +140,22 @@ export function coach(text: string) {
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.05;
-    window.speechSynthesis.speak(u);
+    if (_coachTimer) clearTimeout(_coachTimer);
+    _coachTimer = setTimeout(() => {
+      _coachTimer = null;
+      if (_speaking) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.05;
+      window.speechSynthesis.speak(u);
+    }, 60);
   } catch {}
 }
 
 export function stopCoach() {
+  if (_coachTimer) {
+    clearTimeout(_coachTimer);
+    _coachTimer = null;
+  }
   try { window.speechSynthesis?.cancel(); } catch {}
 }
 
