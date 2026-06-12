@@ -95,13 +95,15 @@ body {
 /* ── Screen ─────────────────────────────────────── */
 .screen {
   flex: 1;
+  min-height: 0;        /* allows flex child to scroll rather than overflow */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 28px 20px;
   padding-bottom: max(28px, env(safe-area-inset-bottom));
   padding-top: max(28px, env(safe-area-inset-top));
-  min-height: 100%;
 }
 
 /* ── Typography ──────────────────────────────────── */
@@ -439,6 +441,8 @@ body {
   font-size: 17px;
   line-height: 1.5;
   color: var(--text-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* ── Browse mode ─────────────────────────────────── */

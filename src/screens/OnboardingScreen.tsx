@@ -17,9 +17,9 @@ import { cleanName, parseList } from '../util';
 type Step = 'intro' | 'name' | 'allergies';
 
 const INTRO =
-  'Welcome to MenuVoice. I read restaurant menus aloud and talk with you about the food, ' +
-  'so you can decide what to order on your own. Two quick questions to set up — just tap the ' +
-  'big button and speak your answer. You can change anything later in Settings.';
+  'Welcome to MenuVoice. Point your camera at any menu, search a restaurant by name, or paste a link — ' +
+  'and I will read it aloud and help you decide what to order. ' +
+  'Two quick questions to get started.';
 
 export default function OnboardingScreen() {
   const { update } = useProfile();
