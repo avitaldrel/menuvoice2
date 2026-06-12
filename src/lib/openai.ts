@@ -93,8 +93,11 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
         'For each item include: name, description (if shown), price (as written, with currency symbol), ' +
         'and a best-effort ingredients list inferred from the name and description. ' +
         'Also extract the restaurant name if it is visible on the menu (e.g. on the header or cover). ' +
-        'If a photo is unreadable, note it. Respond ONLY with JSON matching this shape: ' +
-        '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string}',
+        'If a photo is unreadable, note it. ' +
+        'Set "incomplete" to true if these photos clearly show only PART of the menu — text cut off at ' +
+        'an edge, sections referenced but not pictured, or unreadable areas. Set it to false if the menu appears whole. ' +
+        'Respond ONLY with JSON matching this shape: ' +
+        '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string,"incomplete":boolean}',
     },
   ];
   for (const b64 of imagesBase64) {
@@ -117,6 +120,7 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
   if (!parsed.categories || parsed.categories.length === 0) {
     throw new Error('I could not find any menu items in those photos. Try again with more light.');
   }
+  parsed.incomplete = parsed.incomplete === true;
   return parsed;
 }
 
@@ -149,6 +153,9 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
       : '- Say prices when relevant.',
     '- Keep answers short and conversational — this is spoken aloud. 1-3 sentences unless they ask for detail. No markdown, no bullet symbols, no emoji.',
     '- Never invent items that are not on the menu. If unsure, say so.',
+    menu.incomplete
+      ? '- This menu capture is INCOMPLETE — some items or sections are missing. If asked about something not listed, say it may be on a part of the menu that was not captured, and suggest adding more photos.'
+      : '',
     '- End most turns with a brief, natural question that keeps the conversation moving.',
     '',
     'REMEMBERING THEIR CHOICE:',
@@ -167,7 +174,9 @@ export function buildOpeningLine(menu: ParsedMenu): string {
   const list = names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
   const sectionWord = names.length === 1 ? 'section' : 'sections';
   const itemPart = totalItems > 0 ? ` and ${totalItems} item${totalItems === 1 ? '' : 's'}` : '';
-  return `I found ${names.length} ${sectionWord}${itemPart} on this menu: ${list}. Where would you like to start?`;
+  // Incomplete warning comes FIRST and stays to one sentence.
+  const prefix = menu.incomplete ? "This wasn't a complete menu. " : '';
+  return `${prefix}I found ${names.length} ${sectionWord}${itemPart} on this menu: ${list}. Where would you like to start?`;
 }
 
 // Keep the first 2 turns (establishes what was ordered/discussed early on) plus

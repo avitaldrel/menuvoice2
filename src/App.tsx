@@ -59,7 +59,7 @@ function Root() {
     case 'home':
       return <HomeScreen navigate={navigate} goBack={goBack} />;
     case 'capture':
-      return <CaptureScreen navigate={navigate} goBack={goBack} />;
+      return <CaptureScreen navigate={navigate} goBack={goBack} route={current} />;
     case 'url':
       return <UrlScreen navigate={navigate} goBack={goBack} />;
     case 'find':

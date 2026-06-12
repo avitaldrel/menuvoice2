@@ -7,7 +7,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, PrimaryButton, SecondaryButton } from '../components';
-import { ScreenProps } from '../nav';
+import { ScreenProps, Route } from '../nav';
+import { ParsedMenu } from '../types';
 import { speak, coach, stopCoach } from '../lib/speech';
 import { startCamera, stopCamera, captureFrame, compressImage, enableTorch, disableTorch } from '../lib/camera';
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
@@ -22,7 +23,40 @@ const ANALYSIS_PHRASES = [
   'Still working on it, one more moment.',
 ];
 
-export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
+// When supplementing an existing (incomplete) menu, fold the new parse into it:
+// items join their matching category by name; new categories are appended.
+function mergeMenus(base: ParsedMenu, extra: ParsedMenu): ParsedMenu {
+  const categories = base.categories.map((c) => ({ ...c, items: [...c.items] }));
+  for (const cat of extra.categories) {
+    const existing = categories.find(
+      (c) => c.name.trim().toLowerCase() === cat.name.trim().toLowerCase()
+    );
+    if (!existing) {
+      categories.push(cat);
+      continue;
+    }
+    for (const item of cat.items) {
+      const dup = existing.items.some(
+        (i) => i.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+      );
+      if (!dup) existing.items.push(item);
+    }
+  }
+  return {
+    ...base,
+    categories,
+    restaurantName: base.restaurantName || extra.restaurantName,
+    // Stay honest: only clear the flag if the new photos look complete too.
+    incomplete: extra.incomplete === true,
+  };
+}
+
+export default function CaptureScreen({
+  navigate,
+  goBack,
+  route,
+}: ScreenProps & { route: Extract<Route, { name: 'capture' }> }) {
+  const appendTo = route.appendTo;
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -85,6 +119,7 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     const id = setInterval(() => {
       const msg = ANALYSIS_PHRASES[reassureCountRef.current % ANALYSIS_PHRASES.length];
       reassureCountRef.current++;
+      setStatus(msg);
       speak(msg);
     }, 5000);
     reassureIdRef.current = id;
@@ -251,7 +286,8 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
     }
 
     try {
-      const menu = await parseMenuFromImages(photos);
+      let menu = await parseMenuFromImages(photos);
+      if (appendTo) menu = mergeMenus(appendTo.menu, menu);
       const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
       track('capture', 'ocr_result', {
         outcome: 'success',
@@ -262,7 +298,8 @@ export default function CaptureScreen({ navigate, goBack }: ScreenProps) {
           ...(blobUrls ? { blobUrls } : {}),
         },
       });
-      const restaurantName = menu.restaurantName?.trim() || 'This restaurant';
+      const restaurantName =
+        appendTo?.restaurantName || menu.restaurantName?.trim() || 'This restaurant';
       await saveRestaurant(restaurantName, menu).catch(() => {});
       stopCamera(streamRef.current);
       navigate({ name: 'conversation', menu, restaurantName });

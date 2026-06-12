@@ -28,6 +28,7 @@ export interface ParsedMenu {
   categories: MenuCategory[];
   notes?: string;
   restaurantName?: string; // extracted from the menu photos if visible
+  incomplete?: boolean; // model judged the menu partial (cut off, missing sections)
 }
 
 export interface SavedRestaurant {

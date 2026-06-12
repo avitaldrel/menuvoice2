@@ -24,6 +24,7 @@ export interface ParsedMenu {
   categories: MenuCategory[];
   notes?: string;
   restaurantName?: string;
+  incomplete?: boolean;
 }
 
 export type MenuSource =
@@ -178,7 +179,7 @@ export async function fetchMenuSource(url: string): Promise<MenuSource> {
 }
 
 const MENU_JSON_SHAPE =
-  '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string}';
+  '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string,"incomplete":boolean}';
 
 const PARSE_INSTRUCTIONS =
   'Extract EVERY menu item you can find. Group items into the menu\'s natural sections ' +
@@ -186,6 +187,9 @@ const PARSE_INSTRUCTIONS =
   'description (if shown), price (as written, with currency symbol), and a best-effort ' +
   'ingredients list inferred from the name and description. Extract the restaurant name if visible. ' +
   'If no menu items are found, set categories to an empty array. ' +
+  'Set "incomplete" to true if this looks like only PART of the menu — text cut off, ' +
+  'sections referenced but missing, a page clearly continuing elsewhere, or unreadable areas. ' +
+  'Set it to false if the menu appears whole. ' +
   `Respond ONLY with JSON matching: ${MENU_JSON_SHAPE}`;
 
 async function openaiChat(body: object): Promise<any> {
@@ -255,6 +259,7 @@ export async function parseMenuSource(src: MenuSource): Promise<ParsedMenu> {
   const raw = json.choices?.[0]?.message?.content ?? '{}';
   const parsed = extractJson(raw) as ParsedMenu;
   if (!Array.isArray(parsed.categories)) parsed.categories = [];
+  parsed.incomplete = parsed.incomplete === true;
   return parsed;
 }
 

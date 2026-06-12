@@ -51,7 +51,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
     // Periodic reassurance — the web search is slow and silence reads as broken.
     let i = 0;
     reassureRef.current = setInterval(() => {
-      speak(SEARCH_PHRASES[i % SEARCH_PHRASES.length]);
+      announce(SEARCH_PHRASES[i % SEARCH_PHRASES.length]);
       i++;
     }, 9000);
 

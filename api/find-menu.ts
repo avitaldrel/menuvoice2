@@ -23,7 +23,7 @@ const SEARCH_MODEL = process.env.SEARCH_MODEL ?? 'gpt-5.4-mini';
 const FIND_JSON_SHAPE =
   '{"found":boolean,"restaurantName":string|null,"menuUrl":string|null,' +
   '"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],' +
-  '"notes":string,"reason":string}';
+  '"notes":string,"reason":string,"incomplete":boolean}';
 
 function buildPrompt(query: string): string {
   return [
@@ -35,6 +35,9 @@ function buildPrompt(query: string): string {
     'Extract EVERY menu item you can actually read from the pages you visit: name,',
     'description, price as written with currency symbol, and a best-effort ingredients',
     'list. Group items into the menu\'s natural sections. NEVER invent items you did not read.',
+    '',
+    'Set "incomplete" to true if you could only read PART of the menu (some sections',
+    'unreadable or missing, or sources only show highlights). Set it to false if it appears whole.',
     '',
     'If you can identify the restaurant but cannot read its full menu, set "categories" to []',
     'and put the single best menu URL you found (prefer a direct menu page or PDF) in "menuUrl".',
@@ -101,6 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       categories: Array.isArray(result?.categories) ? result.categories : [],
       notes: typeof result?.notes === 'string' ? result.notes : undefined,
       restaurantName: restaurantName ?? undefined,
+      incomplete: result?.incomplete === true,
     };
     if (menuItemCount(direct) >= 3) {
       return res.status(200).json({

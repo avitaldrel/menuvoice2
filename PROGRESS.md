@@ -56,7 +56,45 @@ the "LEFT OFF" line at the bottom says exactly where.
 - Scanner thresholds (LUM_DARK, SHARP_MIN, EDGE_MIN in scanner.ts) tuned on
   theory; adjust after a real-device test in restaurant lighting.
 
-LEFT OFF: all five improvements shipped, deployed, and smoke-tested in
-production (https://menuvoice-sigma.vercel.app). Next session: real-device test
-of the new scanner in restaurant lighting, then tune scanner.ts thresholds; check
-whether BROWSERLESS_TOKEN needs renewing for JS-heavy menu sites.
+## 2026-06-12
+
+### Incomplete-menu honesty + supplement flow (user-requested)
+- [x] `ParsedMenu.incomplete?: boolean` added (src/types.ts + api/_menuCore.ts).
+      Every parse path now asks the model to judge completeness: photo OCR
+      (openai.ts), URL/PDF pipeline (_menuCore.ts PARSE_INSTRUCTIONS), and
+      find-by-name web search (find-menu.ts FIND_JSON_SHAPE).
+- [x] Opening speech: when incomplete, says EXACTLY "This wasn't a complete
+      menu." FIRST, one sentence, then the normal section overview
+      (buildOpeningLine).
+- [x] Results page: banner at the very top — the same one sentence plus an
+      "Add menu photos" button.
+- [x] Add-photos flow: capture route takes `appendTo`; CaptureScreen merges the
+      new parse into the existing menu (mergeMenus: items join matching
+      categories by name, dedupe by item name; incomplete flag re-judged from
+      the new photos).
+- [x] Chat system prompt warns the assistant the menu is partial so it doesn't
+      overclaim and suggests adding photos.
+
+### VoiceOver P0/P1 fixes (from VOICEOVER-AUDIT.md)
+- [x] ConversationScreen phase indicator: aria-live OFF while recording so
+      VoiceOver isn't transcribed by the open mic (P0 #2).
+- [x] FindScreen + CaptureScreen reassurance phrases now also land in the
+      role="status" region, not TTS-only (P0 #3).
+- [x] Heading order fixed: page h1 = restaurant, menu section starts at
+      h2 "Full menu" → h2 categories → h3 dishes → h4 details; restaurant no
+      longer appears twice in the rotor (P1).
+
+### Sub-agent reports (in repo root)
+- VOICEOVER-AUDIT.md — 3 P0 / 9 P1 / 10 P2 findings with code fixes.
+  REMAINING P0 #1: app TTS talks over VoiceOver on screen entry; needs a
+  profile-level app-voice toggle gating speak() in speech.ts.
+- IDEAS.md — prioritized feature backlog (top: allergen flags in browse view,
+  voice input for FindScreen, waiter card, GPS-assisted find).
+- SMOKE-RESULTS.md + scripts/smoke-restaurants.mjs — production endpoint test
+  matrix (agent may still be writing).
+- REVIEW.md — code review of the last 3 commits (agent may still be writing).
+
+LEFT OFF (2026-06-12): incomplete-menu flow + VoiceOver fixes built and
+committed. Next: implement VOICEOVER-AUDIT P0 #1 (global app-voice setting),
+read SMOKE-RESULTS.md / REVIEW.md and fix what they surface, real-device
+scanner test in restaurant lighting, check BROWSERLESS_TOKEN.

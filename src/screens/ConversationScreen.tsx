@@ -50,22 +50,20 @@ const REPEAT_PHRASES = [
 //   heading, so a single rotor stop reads both) → h4 Description / Ingredients.
 function MenuDocument({
   menu,
-  restaurantName,
   headingRef,
 }: {
   menu: ParsedMenu;
-  restaurantName: string;
   headingRef?: React.RefObject<HTMLHeadingElement>;
 }) {
   return (
     <section aria-label="Full menu — browse with VoiceOver heading rotor" style={{ marginTop: 24 }}>
-      <h1
+      <h2
         ref={headingRef}
         tabIndex={-1}
         style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}
       >
-        {restaurantName}
-      </h1>
+        Full menu
+      </h2>
       {menu.categories.map((cat) => (
         <section key={cat.name}>
           <h2 className="browse-category">
@@ -400,11 +398,46 @@ export default function ConversationScreen({
 
   return (
     <Screen>
-      <h2 className="heading" style={{ marginTop: 4 }}>{restaurantName}</h2>
+      <h1 className="heading" style={{ marginTop: 4 }}>{restaurantName}</h1>
 
+      {/* Incomplete-menu notice — first thing on the page, one sentence, with
+          the option to supplement by adding photos. */}
+      {menu.incomplete && (
+        <div
+          role="note"
+          style={{
+            background: 'var(--surface-high)',
+            border: '2px solid var(--accent)',
+            borderRadius: 'var(--r-md)',
+            padding: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <p className="body" style={{ margin: 0, fontWeight: 600 }}>
+            This wasn't a complete menu.
+          </p>
+          <button
+            className="btn btn-secondary"
+            style={{ minHeight: 56 }}
+            aria-label="Add photos of the missing parts of the menu"
+            onClick={() => {
+              stopSpeaking();
+              speechManagerRef.current?.destroy();
+              navigate({ name: 'capture', appendTo: { menu, restaurantName } });
+            }}
+          >
+            Add menu photos
+          </button>
+        </div>
+      )}
+
+      {/* aria-live OFF while recording: otherwise VoiceOver announces the phase
+          change into the open mic and the recognizer transcribes VoiceOver itself. */}
       <div
         role="status"
-        aria-live="polite"
+        aria-live={phase === 'recording' ? 'off' : 'polite'}
         aria-label={indicator.label}
         className={`phase-indicator phase-${phaseClass(phase)}`}
       >
@@ -493,7 +526,7 @@ export default function ConversationScreen({
       />
 
       {/* Semantic menu — VoiceOver heading rotor: h1 restaurant → h2 category → h3 item */}
-      <MenuDocument menu={menu} restaurantName={restaurantName} headingRef={menuHeadingRef} />
+      <MenuDocument menu={menu} headingRef={menuHeadingRef} />
     </Screen>
   );
 }
