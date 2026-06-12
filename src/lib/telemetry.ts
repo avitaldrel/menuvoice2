@@ -85,11 +85,24 @@ export function track(
   } catch {}
 }
 
+// keepalive fetch and sendBeacon reject bodies over 64 KiB; stay safely under.
+const MAX_BODY_BYTES = 60_000;
+
 async function flush(beacon = false) {
   if (!_queue.length) return;
   const batch = _queue.splice(0, MAX_BATCH);
+  let body = JSON.stringify({ events: batch });
+  // Shrink the batch until it fits; return the overflow to the queue.
+  while (body.length > MAX_BODY_BYTES && batch.length > 1) {
+    _queue.unshift(...batch.splice(Math.ceil(batch.length / 2)));
+    body = JSON.stringify({ events: batch });
+  }
+  if (body.length > MAX_BODY_BYTES) {
+    // Single poison event too large to ever send: drop it instead of wedging.
+    persist();
+    return;
+  }
   persist();
-  const body = JSON.stringify({ events: batch });
   if (beacon && navigator.sendBeacon) {
     const ok = navigator.sendBeacon('/api/events', new Blob([body], { type: 'application/json' }));
     if (!ok) { _queue.unshift(...batch); persist(); }

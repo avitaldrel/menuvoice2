@@ -107,8 +107,28 @@ async function fetchWithBrowserless(url: string): Promise<string> {
   return res.text();
 }
 
+// SSRF guard: only plain http(s) to public hosts. Blocks localhost, private
+// ranges, link-local/metadata endpoints, and raw IPv6 literals.
+const PRIVATE_HOST_RE =
+  /^(localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[|::)/i;
+function assertPublicUrl(raw: string): void {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new FriendlyError('That does not look like a valid web address.', 400);
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    throw new FriendlyError('Only regular web links are supported.', 400);
+  }
+  if (PRIVATE_HOST_RE.test(u.hostname) || u.hostname.endsWith('.internal') || u.hostname.endsWith('.local')) {
+    throw new FriendlyError('That address cannot be reached from here.', 400);
+  }
+}
+
 /** Fetch one URL and classify its content. No link-following at this level. */
 async function fetchOne(url: string): Promise<MenuSource> {
+  assertPublicUrl(url);
   const response = await fetch(url, {
     headers: {
       'User-Agent':
@@ -127,6 +147,8 @@ async function fetchOne(url: string): Promise<MenuSource> {
 
   const contentType = response.headers.get('content-type') ?? '';
   const finalUrl = response.url || url;
+  // Redirects followed above could land on a private host — re-check.
+  if (finalUrl !== url) assertPublicUrl(finalUrl);
 
   if (contentType.startsWith('image/')) {
     return { kind: 'image', url: finalUrl };

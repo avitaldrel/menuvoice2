@@ -22,6 +22,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const reassureRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     speak('Find a restaurant. Type the restaurant name, and the city if you know it. Then tap Find menu.');
@@ -37,6 +38,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
   };
 
   const find = async () => {
+    if (inFlightRef.current) return; // a search is already running
     const trimmed = query.trim();
     if (!trimmed) { announce('Please type the restaurant name first.'); return; }
     if (!hasApiKey()) {
@@ -44,6 +46,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
     track('find', 'search_start', { content: { query: trimmed } });
     announce(`Searching for ${trimmed} and their menu. This can take up to a minute.`);
@@ -63,6 +66,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       navigate({ name: 'conversation', menu, restaurantName: name, source: 'url' });
     } catch (e: any) {
       if (reassureRef.current) clearInterval(reassureRef.current);
+      inFlightRef.current = false;
       setLoading(false);
       announce(e?.message ?? "I couldn't find that restaurant's menu online. Try adding the city to the name.");
     }
