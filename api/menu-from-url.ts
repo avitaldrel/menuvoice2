@@ -4,7 +4,7 @@
 // Replaces the old client round trip of /api/scrape -> /api/chat.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { fetchMenuSource, parseMenuSource, menuItemCount, FriendlyError } from './_menuCore';
+import { fetchMenuSource, parseMenuSource, menuItemCount, FriendlyError } from './_menuCore.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();

@@ -16,7 +16,7 @@ import {
   extractJson,
   FriendlyError,
   type ParsedMenu,
-} from './_menuCore';
+} from './_menuCore.js';
 
 const SEARCH_MODEL = process.env.SEARCH_MODEL ?? 'gpt-5.4-mini';
 
