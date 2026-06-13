@@ -158,10 +158,13 @@ export default function ConversationScreen({
     started.current = true;
     (async () => {
       const base = buildOpeningLine(menu);
-      const opening =
+      const onlineNote =
         route.source === 'url'
-          ? `${base} Just a heads up. This menu is from the website you shared, so it should be their current version, but details may vary.`
-          : base;
+          ? ' Just a heads up. This menu is from the website you shared, so it should be their current version, but details may vary.'
+          : route.source === 'find'
+            ? ' Just a heads up. I found this menu online, so it should be current, but details may vary.'
+            : '';
+      const opening = `${base}${onlineNote}`;
       setTurns([{ role: 'assistant', text: opening }]);
       setLatestAssistant(opening);
       setPhase('speaking');

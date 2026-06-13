@@ -8,7 +8,7 @@ export type Route =
   | { name: 'capture'; appendTo?: { menu: ParsedMenu; restaurantName: string } }
   | { name: 'url' }
   | { name: 'find' }
-  | { name: 'conversation'; menu: ParsedMenu; restaurantName: string; source?: 'url' }
+  | { name: 'conversation'; menu: ParsedMenu; restaurantName: string; source?: 'url' | 'find' | 'photo' }
   | { name: 'saved' }
   | { name: 'settings' };
 

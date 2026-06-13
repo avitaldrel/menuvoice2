@@ -91,7 +91,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       if (reassureRef.current) clearInterval(reassureRef.current);
       const name = restaurantName?.trim() || trimmed;
       await saveRestaurant(name, menu).catch(() => {});
-      navigate({ name: 'conversation', menu, restaurantName: name, source: 'url' });
+      navigate({ name: 'conversation', menu, restaurantName: name, source: 'find' });
     } catch (e: any) {
       if (reassureRef.current) clearInterval(reassureRef.current);
       inFlightRef.current = false;
@@ -122,7 +122,6 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
         placeholder="Luigi's Pizza, Springfield   or   restaurant.com/menu"
         aria-label="Restaurant name or website link"
         disabled={loading}
-        autoFocus
         style={{ fontSize: 18 }}
       />
 
