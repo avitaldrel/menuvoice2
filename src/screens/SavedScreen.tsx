@@ -1,7 +1,7 @@
 // Saved restaurants. Load a captured menu without re-capturing.
 
-import { useEffect, useState } from 'react';
-import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
+import { useEffect, useRef, useState } from 'react';
+import { Screen, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { SavedRestaurant } from '../types';
 import { loadSavedRestaurants, deleteRestaurant } from '../lib/storage';
@@ -10,6 +10,11 @@ import { track } from '../lib/telemetry';
 
 export default function SavedScreen({ navigate, goBack }: ScreenProps) {
   const [list, setList] = useState<SavedRestaurant[] | null>(null);
+  const [srStatus, setSrStatus] = useState('');
+  const [armedId, setArmedId] = useState<string | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  const announce = (msg: string) => { setSrStatus(msg); speak(msg); };
 
   const refresh = () => loadSavedRestaurants().then(setList);
   useEffect(() => { refresh(); }, []);
@@ -25,16 +30,30 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
     }
   }, [list]);
 
-  const remove = async (id: string, rName: string) => {
+  // Two-tap delete: first tap arms with a spoken warning, second tap confirms.
+  // Prevents a single mis-tap from wiping a saved menu (no undo).
+  const onDelete = async (id: string, rName: string) => {
+    if (armedId !== id) {
+      setArmedId(id);
+      announce(`Delete ${rName}? Tap Delete again to confirm.`);
+      return;
+    }
+    setArmedId(null);
     await deleteRestaurant(id);
     track('saved', 'delete', { content: { restaurantName: rName } });
-    refresh();
-    speak(`Deleted ${rName}.`);
+    await refresh();
+    announce(`Deleted ${rName}.`);
+    // Return focus to the heading so VoiceOver isn't stranded on the removed card.
+    setTimeout(() => headingRef.current?.focus(), 50);
   };
 
   return (
     <Screen>
-      <Title>Saved restaurants</Title>
+      <h1 className="title" ref={headingRef} tabIndex={-1}>Saved restaurants</h1>
+
+      <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0 }}>
+        {srStatus}
+      </p>
 
       {list === null ? (
         <Body>Loading…</Body>
@@ -64,9 +83,10 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
                   style={{ flex: 1 }}
                 />
                 <SecondaryButton
-                  label="Delete"
+                  label={armedId === r.id ? 'Tap to confirm' : 'Delete'}
+                  hint={armedId === r.id ? `Confirm deleting ${r.name}` : `Delete ${r.name}`}
                   tone="danger"
-                  onClick={() => remove(r.id, r.name)}
+                  onClick={() => onDelete(r.id, r.name)}
                   style={{ flex: 1 }}
                 />
               </div>

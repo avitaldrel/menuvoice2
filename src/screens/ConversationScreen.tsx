@@ -469,7 +469,6 @@ export default function ConversationScreen({
       <div
         role="status"
         aria-live={phase === 'recording' ? 'off' : 'polite'}
-        aria-label={indicator.label}
         className={`phase-indicator phase-${phaseClass(phase)}`}
       >
         <span className="phase-dot" aria-hidden="true" />

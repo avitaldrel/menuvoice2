@@ -1,14 +1,15 @@
 // Home: three large action buttons, silent on mount.
 // VoiceOver reads the buttons — no app TTS, no voice-command mic.
 
-import { Screen, PrimaryButton, SecondaryButton } from '../components';
+import { Screen, Title, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 
 export default function HomeScreen({ navigate }: ScreenProps) {
 
   return (
     <Screen>
-      <div className="col" style={{ marginTop: 32 }}>
+      <Title>MenuVoice</Title>
+      <div className="col" style={{ marginTop: 24 }}>
         <PrimaryButton
           label="Scan a Menu"
           hint="Point your camera at a paper menu and I will read it"

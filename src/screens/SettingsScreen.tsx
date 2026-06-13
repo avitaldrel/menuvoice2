@@ -29,9 +29,19 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const [newDislike, setNewDislike] = useState('');
   const [dislikeRec, setDislikeRec] = useState<RecState>('idle');
 
+  const [srStatus, setSrStatus] = useState('');
+
   const persist = async () => {
-    await update({ allergies: splitList(allergies), cuisinesLiked: splitList(cuisines) });
+    const allergyList = splitList(allergies);
+    await update({ allergies: allergyList, cuisinesLiked: splitList(cuisines) });
     setSaved(true);
+    // Allergies are a safety feature — confirm in the DOM and aloud what was
+    // saved so a VoiceOver user knows the warning list took effect (P1-6).
+    const msg = allergyList.length
+      ? `Saved. I will warn you about ${allergyList.join(', ')}.`
+      : 'Saved. No allergies set.';
+    setSrStatus(msg);
+    speak(msg);
     setTimeout(() => setSaved(false), 2000);
   };
 
@@ -343,6 +353,9 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       </div>
 
       <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} />
+      <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0, textAlign: 'center' }}>
+        {srStatus}
+      </p>
       <SecondaryButton label="Back" onClick={goBack} />
       <Body style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>
         Usage is recorded to improve the app.

@@ -138,7 +138,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
         label={loading ? 'Finding…' : 'Find menu'}
         hint="Find this restaurant's menu and read it to me"
         onClick={find}
-        disabled={loading || !query.trim()}
+        disabled={loading}
         style={{ minHeight: 80 }}
       />
       <SecondaryButton label="Cancel" onClick={goBack} disabled={loading} />
