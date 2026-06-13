@@ -142,6 +142,10 @@ export class MenuScanner {
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    // Release the detached <video>/stream and React closures (REVIEW.md #11).
+    this.video = null;
+    this.cb = null;
+    this.prev = null;
   }
 
   /** Call after a capture so the scanner waits for movement before re-arming. */
@@ -177,7 +181,9 @@ export class MenuScanner {
     } else if (this.coachStage === 0 && now - this.stateAt > ESCALATE_MS) {
       this.coachStage = 1;
       this.emit(msgs[1]);
-    } else if (now - this.lastCoachAt > HEARTBEAT_MS) {
+    } else if (this.coachStage === 1 && now - this.lastCoachAt > HEARTBEAT_MS * 3) {
+      // After both staged messages, only a rare, state-neutral nudge — not an
+      // every-6s nag in states where the canned text would be wrong (#10).
       this.emit('Still looking. Keep the menu under the camera.');
     }
   }
@@ -263,7 +269,15 @@ export class MenuScanner {
       return;
     }
 
-    if (!this.struggled && Date.now() - this.armedAt > STRUGGLE_MS) {
+    // Only fall back to manual if the user is making NO progress. If they just
+    // got steady (goodSince set, or steady ticks accumulating), a capture is
+    // imminent — don't yank auto mode away right before it fires (REVIEW.md #9).
+    if (
+      !this.struggled &&
+      this.steady === 0 &&
+      !this.goodSince &&
+      Date.now() - this.armedAt > STRUGGLE_MS
+    ) {
       this.struggled = true;
       this.cb.onStruggle?.();
       return;
