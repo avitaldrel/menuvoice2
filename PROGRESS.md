@@ -163,7 +163,11 @@ Ingredients / price stop hijacking dish-to-dish navigation; polish + ship.
   earconCapture fires on auto-capture.)
 - VOICEOVER-AUDIT remaining: P1-3 (Onboarding focus on step change), P1-4
   (mic-transcription feedback in DOM on Login/Onboarding/Settings), P1-8/P2-* polish.
-- Allergy spellcheck (FIXES-NEEDED MEDIUM): fuzzy-correct misspelled allergens.
+- [x] Allergy spellcheck (FIXES-NEEDED MEDIUM): DONE. util.ts correctAllergen /
+      normalizeAllergens (curated allergen list + aliases + edit-distance, local
+      and offline) wired into Settings save (announces corrections) and
+      Onboarding finish. Verified: peanutts->peanuts, glooten->gluten,
+      shellfsh->shellfish, chicken/tomato left untouched.
 - SMOKE-RESULTS.md chain-restaurant 404s: renew BROWSERLESS_TOKEN, re-run
   scripts/smoke-restaurants.mjs against the new deploy.
 

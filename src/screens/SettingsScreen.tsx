@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
-import { splitList } from '../util';
+import { splitList, normalizeAllergens } from '../util';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { speak, setAppVoice } from '../lib/speech';
@@ -32,13 +32,20 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const [srStatus, setSrStatus] = useState('');
 
   const persist = async () => {
-    const allergyList = splitList(allergies);
+    // Auto-correct misspelled/misheard allergens before saving — an allergen
+    // that doesn't match the menu text is a safety failure.
+    const { list: allergyList, corrections } = normalizeAllergens(splitList(allergies));
+    if (corrections.length) setAllergies(allergyList.join(', '));
     await update({ allergies: allergyList, cuisinesLiked: splitList(cuisines) });
     setSaved(true);
     // Allergies are a safety feature — confirm in the DOM and aloud what was
-    // saved so a VoiceOver user knows the warning list took effect (P1-6).
+    // saved so a VoiceOver user knows the warning list took effect (P1-6), and
+    // surface any spelling corrections so a silent change can't hide a mistake.
+    const fixNote = corrections.length
+      ? ` I corrected ${corrections.map(([from, to]) => `${from} to ${to}`).join(', ')}.`
+      : '';
     const msg = allergyList.length
-      ? `Saved. I will warn you about ${allergyList.join(', ')}.`
+      ? `Saved.${fixNote} I will warn you about ${allergyList.join(', ')}.`
       : 'Saved. No allergies set.';
     setSrStatus(msg);
     speak(msg);

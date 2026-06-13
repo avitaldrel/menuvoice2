@@ -12,7 +12,7 @@ import { earconStart, earconStop } from '../lib/earcon';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { watchForSilence } from '../lib/vad';
 import { transcribeAudio } from '../lib/openai';
-import { cleanName, parseList } from '../util';
+import { cleanName, parseList, normalizeAllergens } from '../util';
 
 type Step = 'intro' | 'name' | 'allergies';
 
@@ -52,7 +52,8 @@ export default function OnboardingScreen() {
   }, [step]);
 
   const finish = async () => {
-    const allergies = parseList(allergiesText);
+    // Correct misheard/misspelled allergens on the way in — safety path.
+    const { list: allergies } = normalizeAllergens(parseList(allergiesText));
     await update({ name: cleanName(name), allergies, onboarded: true });
     await speak(
       `Thanks${name.trim() ? ', ' + cleanName(name) : ''}. You're all set. ` +
