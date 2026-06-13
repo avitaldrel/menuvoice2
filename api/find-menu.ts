@@ -92,7 +92,7 @@ function responseText(data: any): string {
   return out;
 }
 
-async function searchForMenu(query: string): Promise<any> {
+async function searchForMenu(query: string, timeoutMs: number): Promise<any> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new FriendlyError('No API key configured on the server.', 500);
 
@@ -104,7 +104,7 @@ async function searchForMenu(query: string): Promise<any> {
       tools: [{ type: 'web_search' }],
       input: buildPrompt(query),
     }),
-    signal: AbortSignal.timeout(50000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -123,8 +123,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'query required' });
   }
 
+  // Stage budget. Vercel kills the function at 60s (vercel.json maxDuration), so
+  // the search and the stage-2 fetch must share a total deadline. Cap the search
+  // at 35s, and only attempt the slower stage-2 fetch if enough time remains —
+  // otherwise the user hears an opaque 504 instead of the honest "menu not
+  // online" message. (REVIEW.md #7)
+  const deadline = Date.now() + 55_000;
+  const remaining = () => deadline - Date.now();
+
   try {
-    const result = await searchForMenu(query.trim().slice(0, 200));
+    const result = await searchForMenu(query.trim().slice(0, 200), Math.min(35_000, remaining()));
     const restaurantName: string | null =
       typeof result?.restaurantName === 'string' && result.restaurantName.trim()
         ? result.restaurantName.trim()
@@ -146,8 +154,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Stage 2: it found a menu URL but couldn't read it — fetch and parse ourselves.
-    if (typeof result?.menuUrl === 'string' && /^https?:\/\//i.test(result.menuUrl)) {
+    // Stage 2: it found a menu URL but couldn't read it — fetch and parse
+    // ourselves, but only if there's budget left to finish before the 60s kill.
+    if (typeof result?.menuUrl === 'string' && /^https?:\/\//i.test(result.menuUrl) && remaining() > 15_000) {
       try {
         const source = await fetchMenuSource(result.menuUrl);
         const menu = await parseMenuSource(source);

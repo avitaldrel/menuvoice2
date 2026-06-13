@@ -29,10 +29,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(422).json({
         error:
           "I couldn't find any menu items on that page. It might be the homepage rather than the menu itself. " +
-          'Try adding /menu to the address, or use Find restaurant to search by name instead.',
+          'Try adding /menu to the address, or just type the restaurant name instead.',
       });
     }
-    return res.status(200).json({ menu, sourceUrl: source.kind === 'html' ? source.url : source.url });
+    return res.status(200).json({ menu, sourceUrl: source.url });
   } catch (e: any) {
     if (e instanceof FriendlyError) return res.status(e.status).json({ error: e.message });
     const msg =
