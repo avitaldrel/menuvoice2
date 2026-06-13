@@ -27,7 +27,10 @@ export default function LoginScreen() {
   const [email, setEmail] = useState(profile.email ?? '');
   const [rec, setRec] = useState<RecState>('idle');
   const [showEmail, setShowEmail] = useState(!googleAvailable);
+  const [srStatus, setSrStatus] = useState('');
   const didSpeak = useRef(false);
+
+  const announce = (msg: string) => { setSrStatus(msg); speak(msg); };
 
   useEffect(() => {
     if (didSpeak.current) return;
@@ -83,7 +86,7 @@ export default function LoginScreen() {
     if (rec === 'idle') {
       const ok = await requestMicPermission();
       if (!ok) {
-        speak('I could not access the microphone. Please type your email address.');
+        announce('I could not access the microphone. Please type your email address.');
         return;
       }
       try {
@@ -91,7 +94,7 @@ export default function LoginScreen() {
         earconStart();
         setRec('recording');
       } catch {
-        speak('Could not start the microphone. Please type your email address.');
+        announce('Could not start the microphone. Please type your email address.');
       }
       return;
     }
@@ -114,9 +117,9 @@ export default function LoginScreen() {
           .replace(/\s+dot\s+/g, '.')
           .replace(/\s/g, '');
         setEmail(cleaned);
-        speak(`I heard: ${cleaned}. Tap Login if that is correct, or edit the field to fix it.`);
+        announce(`I heard: ${cleaned}. Tap Login if that is correct, or edit the field to fix it.`);
       } catch {
-        speak('Sorry, I had trouble hearing that. Please type your email address.');
+        announce('Sorry, I had trouble hearing that. Please type your email address.');
       }
       setRec('idle');
     }
@@ -192,6 +195,9 @@ export default function LoginScreen() {
           />
         </>
       )}
+      <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0, textAlign: 'center' }}>
+        {srStatus}
+      </p>
     </Screen>
   );
 }

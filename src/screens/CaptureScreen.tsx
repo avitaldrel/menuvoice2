@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps, Route } from '../nav';
 import { ParsedMenu } from '../types';
-import { speak, coach, stopCoach } from '../lib/speech';
+import { speak, coach, stopCoach, isAppVoiceOn } from '../lib/speech';
 import { startCamera, stopCamera, captureFrame, compressImage, enableTorch, disableTorch } from '../lib/camera';
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
@@ -68,6 +68,7 @@ export default function CaptureScreen({
 
   const [photos, setPhotos] = useState<string[]>([]);
   const [status, setStatus] = useState('Starting camera…');
+  const [coachStatus, setCoachStatus] = useState('');
   const [camError, setCamError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -141,14 +142,14 @@ export default function CaptureScreen({
       'Auto capture is on. Hold your phone flat, about a foot above the menu. ' +
       'I will guide you and take the photo automatically. If I take too long, ' +
       'find the Take photo button below the camera.';
-    setStatus('Auto capture on. Hold your phone flat over the menu.');
+    setCoachStatus('Auto capture on. Hold your phone flat over the menu.');
 
     (async () => {
       await speak(intro);
       if (cancelled || !videoRef.current) return;
       autoRef.current!.start(videoRef.current, {
         onCoach: (msg) => {
-          setStatus(msg);
+          setCoachStatus(msg);
           coach(msg);
         },
         onCapture: () => {
@@ -159,7 +160,7 @@ export default function CaptureScreen({
           setAutoMode(false);
           track('capture', 'scanner_struggle', { metadata: { fallback: 'manual' } });
           const msg = 'Auto capture is having trouble. Switching to manual. Find the Take photo button and tap it when you are ready.';
-          setStatus('Switched to manual. Tap "Take photo" to take the shot.');
+          setCoachStatus('Switched to manual. Tap "Take photo" to take the shot.');
           coach(msg);
         },
         onState: (state, detail) => {
@@ -386,7 +387,12 @@ export default function CaptureScreen({
       {camError ? (
         <p role="alert" className="body" style={{ color: 'var(--danger)' }}>{camError}</p>
       ) : null}
-      <p role="status" className="body" aria-live="polite" style={{ textAlign: 'center', minHeight: 28 }}>
+      {/* Scanner coaching — silenced for VoiceOver when app voice is on (coach() already speaks it) */}
+      <p role="status" className="body" aria-live={isAppVoiceOn() ? 'off' : 'polite'} style={{ textAlign: 'center', minHeight: 24 }}>
+        {coachStatus}
+      </p>
+      {/* Analysis and photo-count feedback — always announced */}
+      <p role="status" className="body" aria-live="polite" style={{ textAlign: 'center', minHeight: 24 }}>
         {status}
       </p>
 

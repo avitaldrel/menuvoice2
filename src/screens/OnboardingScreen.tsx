@@ -4,8 +4,8 @@
 // preferences are NOT interrogated here — they're learned naturally from what
 // the guest decides to order over time (see ConversationScreen + profile).
 
-import { useEffect, useRef, useState } from 'react';
-import { Screen, Title, Heading, Body, PrimaryButton, SecondaryButton } from '../components';
+import React, { useEffect, useRef, useState } from 'react';
+import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
 import { speak, stopSpeaking } from '../lib/speech';
 import { earconStart, earconStop } from '../lib/earcon';
@@ -42,12 +42,16 @@ export default function OnboardingScreen() {
   // Speaking starts only after the user taps "Let's begin", which is the natural
   // handoff point from VoiceOver navigation to app-driven voice.
   const spoken = useRef<Set<Step>>(new Set());
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (step === 'intro') return;
     if (!spoken.current.has(step)) {
       spoken.current.add(step);
       speak(promptFor(step));
     }
+    // Move focus to the new step heading so VoiceOver users land on the question
+    // instead of stranding on <body> after the previous button unmounts.
+    stepHeadingRef.current?.focus();
     return () => stopSpeaking();
   }, [step]);
 
@@ -89,6 +93,7 @@ export default function OnboardingScreen() {
           transform={cleanName}
           onNext={() => setStep('allergies')}
           nextLabel="Next"
+          headingRef={stepHeadingRef}
         />
       )}
 
@@ -104,6 +109,7 @@ export default function OnboardingScreen() {
           onNext={finish}
           nextLabel="Finish"
           onBack={() => setStep('name')}
+          headingRef={stepHeadingRef}
         />
       )}
     </Screen>
@@ -122,6 +128,7 @@ function VoiceStep({
   onNext,
   nextLabel,
   onBack,
+  headingRef,
 }: {
   question: string;
   help: string;
@@ -132,14 +139,18 @@ function VoiceStep({
   onNext: () => void;
   nextLabel: string;
   onBack?: () => void;
+  headingRef?: React.RefObject<HTMLHeadingElement>;
 }) {
   const [rec, setRec] = useState<RecState>('idle');
+  const [srStatus, setSrStatus] = useState('');
+
+  const announce = (msg: string) => { setSrStatus(msg); speak(msg); };
 
   const toggleMic = async () => {
     if (rec !== 'idle') return;
     const ok = await requestMicPermission();
     if (!ok) {
-      speak('I could not access the microphone. You can type your answer instead.');
+      announce('I could not access the microphone. You can type your answer instead.');
       return;
     }
     try {
@@ -147,7 +158,7 @@ function VoiceStep({
       earconStart();
       setRec('recording');
     } catch {
-      speak('I could not start the microphone. Please type your answer.');
+      announce('I could not start the microphone. Please type your answer.');
       return;
     }
     const s = getActiveStream();
@@ -161,9 +172,9 @@ function VoiceStep({
       const raw = await transcribeAudio(blob);
       const v = transform ? transform(raw) : raw.trim();
       onChange(v);
-      speak(v ? `I heard: ${v}. Tap ${nextLabel}, or speak again to redo.` : 'I didn\'t catch that. Try again, or type it.');
+      announce(v ? `I heard: ${v}. Tap ${nextLabel}, or speak again to redo.` : 'I didn\'t catch that. Try again, or type it.');
     } catch {
-      speak('Sorry, I had trouble hearing that. Try again, or type your answer.');
+      announce('Sorry, I had trouble hearing that. Try again, or type your answer.');
     }
     setRec('idle');
   };
@@ -172,7 +183,7 @@ function VoiceStep({
 
   return (
     <div className="col">
-      <Heading>{question}</Heading>
+      <h2 className="heading" ref={headingRef} tabIndex={-1}>{question}</h2>
       <Body>{help}</Body>
 
       <PrimaryButton
@@ -197,6 +208,9 @@ function VoiceStep({
 
       <PrimaryButton label={nextLabel} onClick={onNext} />
       {onBack ? <SecondaryButton label="Back" onClick={onBack} /> : null}
+      <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0, textAlign: 'center' }}>
+        {srStatus}
+      </p>
     </div>
   );
 }

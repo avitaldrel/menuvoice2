@@ -3,7 +3,7 @@
 // Fire-and-forget: telemetry errors never surface to callers.
 
 const SESSION_KEY = 'mv.tel.sid';
-const QUEUE_KEY = 'mv.tel.queue';
+const QUEUE_KEY_PREFIX = 'mv.tel.queue';
 const FLUSH_MS = 10_000;
 const MAX_BATCH = 50;
 
@@ -45,12 +45,14 @@ function email(): string | undefined {
   } catch { return undefined; }
 }
 
+function queueKey() { return `${QUEUE_KEY_PREFIX}.${sid()}`; }
+
 function persist() {
-  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(_queue)); } catch {}
+  try { localStorage.setItem(queueKey(), JSON.stringify(_queue)); } catch {}
 }
 
 function restore(): TelEvent[] {
-  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]') as TelEvent[]; } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(queueKey()) ?? '[]') as TelEvent[]; } catch { return []; }
 }
 
 export function setCurrentScreen(screen: string) { _screen = screen; }
@@ -124,7 +126,18 @@ export function isImageLoggingOn(): boolean {
 }
 
 export function initTelemetry() {
-  _queue = restore();
+  // Merge in-memory pre-init events with any persisted queue so neither is lost.
+  _queue = [...restore(), ..._queue];
+  // Remove queue keys from closed sessions (those with a different session ID).
+  try {
+    const myKey = queueKey();
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(QUEUE_KEY_PREFIX + '.') && k !== myKey) stale.push(k);
+    }
+    stale.forEach((k) => localStorage.removeItem(k));
+  } catch {}
   _t0 = Date.now();
   track('session', 'start');
   setInterval(() => { flush().catch(() => {}); }, FLUSH_MS);

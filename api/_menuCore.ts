@@ -93,9 +93,9 @@ function scoreLink(url: string): number {
 }
 
 async function fetchWithBrowserless(url: string): Promise<string> {
-  const res = await fetch(`https://chrome.browserless.io/content?token=${BROWSERLESS_TOKEN}`, {
+  const res = await fetch('https://chrome.browserless.io/content', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${BROWSERLESS_TOKEN}` },
     body: JSON.stringify({ url, waitFor: 3000 }),
     signal: AbortSignal.timeout(25000),
   });
