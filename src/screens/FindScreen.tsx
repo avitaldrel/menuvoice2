@@ -1,12 +1,16 @@
-// Find a restaurant's menu by NAME — no URL hunting.
-// The user types (or dictates with the keyboard mic) "Restaurant name, city";
-// the server searches the web, reads the restaurant's site / PDF / listings,
-// and returns the structured menu. If the menu isn't online, we say so plainly.
+// Unified "Find a menu" screen — one box for ANYTHING.
+//
+// The user types a restaurant NAME ("Luigi's Pizza, Springfield"), pastes a
+// website LINK, or a direct PDF/menu URL. We detect which it is and route to the
+// right server pipeline:
+//   - looks like a URL  -> parseMenuFromUrl (fetch + parse the page/PDF)
+//   - otherwise (a name) -> findMenuByName (web search + read their site)
+// If the menu isn't online, we say so plainly. One place to put anything.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
-import { findMenuByName, hasApiKey } from '../lib/openai';
+import { findMenuByName, parseMenuFromUrl, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { speak, stopSpeaking } from '../lib/speech';
 import { track } from '../lib/telemetry';
@@ -17,6 +21,16 @@ const SEARCH_PHRASES = [
   'Still working on it, one more moment.',
 ];
 
+// A single token with a dot and a real-looking ending is a link
+// (restaurant.com, site.com/menu, a .pdf). Anything with a space is a name
+// ("Luigi's Pizza, Springfield"). An explicit scheme is always a link.
+function looksLikeUrl(s: string): boolean {
+  const t = s.trim();
+  if (/^https?:\/\//i.test(t)) return true;
+  if (/\s/.test(t)) return false;
+  return /^[^\s]+\.[a-z]{2,}(\/|\?|$)/i.test(t);
+}
+
 export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
@@ -25,7 +39,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const inFlightRef = useRef(false);
 
   useEffect(() => {
-    speak('Find a restaurant. Type the restaurant name, and the city if you know it. Then tap Find menu.');
+    speak('Find a menu. Type a restaurant name, or paste a website link. Then tap Find menu.');
     return () => {
       if (reassureRef.current) clearInterval(reassureRef.current);
       stopSpeaking();
@@ -40,25 +54,39 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const find = async () => {
     if (inFlightRef.current) return; // a search is already running
     const trimmed = query.trim();
-    if (!trimmed) { announce('Please type the restaurant name first.'); return; }
+    if (!trimmed) { announce('Please type a restaurant name or paste a link first.'); return; }
     if (!hasApiKey()) {
       announce('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
       return;
     }
 
+    const isUrl = looksLikeUrl(trimmed);
+
     inFlightRef.current = true;
     setLoading(true);
-    track('find', 'search_start', { content: { query: trimmed } });
-    announce(`Searching for ${trimmed} and their menu. This can take up to a minute.`);
-
-    // Periodic reassurance — the web search is slow and silence reads as broken.
-    let i = 0;
-    reassureRef.current = setInterval(() => {
-      announce(SEARCH_PHRASES[i % SEARCH_PHRASES.length]);
-      i++;
-    }, 9000);
 
     try {
+      if (isUrl) {
+        let fullUrl = trimmed;
+        if (!/^https?:\/\//i.test(fullUrl)) fullUrl = 'https://' + fullUrl;
+        track('find', 'submit_url', { metadata: { url: fullUrl } });
+        announce('Reading the menu from that link. This may take a moment.');
+        const menu = await parseMenuFromUrl(fullUrl);
+        const restaurantName = menu.restaurantName?.trim() || 'This restaurant';
+        await saveRestaurant(restaurantName, menu).catch(() => {});
+        navigate({ name: 'conversation', menu, restaurantName, source: 'url' });
+        return;
+      }
+
+      // A restaurant name — web search can be slow, so reassure periodically.
+      track('find', 'search_start', { content: { query: trimmed } });
+      announce(`Searching for ${trimmed} and their menu. This can take up to a minute.`);
+      let i = 0;
+      reassureRef.current = setInterval(() => {
+        announce(SEARCH_PHRASES[i % SEARCH_PHRASES.length]);
+        i++;
+      }, 9000);
+
       const { menu, restaurantName } = await findMenuByName(trimmed);
       if (reassureRef.current) clearInterval(reassureRef.current);
       const name = restaurantName?.trim() || trimmed;
@@ -68,26 +96,31 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       if (reassureRef.current) clearInterval(reassureRef.current);
       inFlightRef.current = false;
       setLoading(false);
-      announce(e?.message ?? "I couldn't find that restaurant's menu online. Try adding the city to the name.");
+      const fallback = isUrl
+        ? "Hey, sorry. I couldn't read the menu from that link. Try a different link, or just type the restaurant's name."
+        : "I couldn't find that restaurant's menu online. Try adding the city to the name.";
+      announce(e?.message ?? fallback);
     }
   };
 
   return (
     <Screen>
-      <Title>Find a restaurant</Title>
+      <Title>Find a menu</Title>
       <Body>
-        Type the restaurant's name — adding the city helps. I will find their menu online for
-        you, whether it is on their website, a PDF, or an ordering page.
+        Type a restaurant name, adding the city helps, or paste a website link or PDF.
+        I will find the menu and read it to you, whether it is on their site, a PDF, or an
+        ordering page.
       </Body>
 
       <input
         className="input"
         type="text"
+        inputMode="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && !loading) find(); }}
-        placeholder="e.g. Luigi's Pizza, Springfield"
-        aria-label="Restaurant name and city"
+        placeholder="Luigi's Pizza, Springfield   or   restaurant.com/menu"
+        aria-label="Restaurant name or website link"
         disabled={loading}
         autoFocus
         style={{ fontSize: 18 }}
@@ -103,8 +136,8 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       </p>
 
       <PrimaryButton
-        label={loading ? 'Searching…' : 'Find menu'}
-        hint="Search the web for this restaurant's menu"
+        label={loading ? 'Finding…' : 'Find menu'}
+        hint="Find this restaurant's menu and read it to me"
         onClick={find}
         disabled={loading || !query.trim()}
         style={{ minHeight: 80 }}

@@ -107,6 +107,32 @@ the "LEFT OFF" line at the bottom says exactly where.
       adding appVoice to profile, gating speak()/coach() in src/lib/speech.ts,
       Settings toggle. If not committed, check git status for its edits.
 
+## 2026-06-12 (third session — unify + a11y polish, 1-hour sprint)
+
+Goal: merge find-by-name and menu-from-link into ONE place; fix the speaking
+page (overlapping bubbles, VoiceOver); fix the heading rotor so Description /
+Ingredients / price stop hijacking dish-to-dish navigation; polish + ship.
+
+- [x] UNIFIED FIND: FindScreen now takes a restaurant name OR a website link in a
+      single box. looksLikeUrl() routes: explicit scheme or single dotted token
+      -> parseMenuFromUrl; anything with a space (a name) -> findMenuByName.
+      One in-flight guard, per-mode error copy. UrlScreen + 'url' route are now
+      dead (kept for back-compat, unreferenced).
+- [x] HOME: collapsed "Find a Restaurant" + "Menu from a Website Link" into one
+      "Find a Menu" button. Saved restaurants kept.
+- [x] HEADING ROTOR FIX (the big a11y ask): each dish is now a SINGLE h3 stop.
+      dishLabel() folds name + price + description + ingredients into the h3
+      aria-label; the visible price/description/ingredients are aria-hidden, so
+      they are no longer h4 headings and no longer pollute the rotor. "Ingredients"
+      is now an inline aria-hidden label, not a heading. Price reads as part of the
+      dish, never its own stop.
+- [x] BROWSE GUIDANCE: first switch into browse mode speaks how to use the rotor
+      (open rotor, choose Headings, swipe up/down — one stop per dish).
+- [x] SPEAKING PAGE: conversation transcript is now a bounded .convo-area region;
+      bubbles are full-width, bordered, vertical-stacked with gaps (no overlap,
+      assistant bubble accent-bordered, AAA surfaces). Empty-state placeholder.
+- [x] No em-dashes in any new copy. npm run build green.
+
 LEFT OFF (2026-06-12 second session): three REVIEW.md Tier-1 fixes committed
 (f0f725d) and build green. Sub-agent was finishing the app-voice toggle at the
 4:41 PM hard stop — verify speech.ts/SettingsScreen.tsx edits, run npm run

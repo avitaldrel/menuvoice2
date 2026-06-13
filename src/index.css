@@ -412,19 +412,35 @@ body {
 }
 
 /* ── Conversation transcript ──────────────────────── */
+/* Bounded region that holds the latest exchange. Vertical stack with gaps so
+   message bubbles can never overlap each other or the controls below. */
+.convo-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 16px;
+  min-height: 84px;
+}
+
 .turn {
-  max-width: 92%;
+  max-width: 100%;
+  width: 100%;
   border-radius: var(--r-md);
   padding: 12px 16px;
+  border: 1px solid var(--border);
 }
 
 .turn-assistant {
-  align-self: flex-start;
+  align-self: stretch;
   background: var(--surface-high);
+  border-color: var(--accent);
 }
 
 .turn-user {
-  align-self: flex-end;
+  align-self: stretch;
   background: var(--surface-user);
 }
 
@@ -498,15 +514,11 @@ body {
   line-height: 1.5;
 }
 
-/* h4 sub-headings inside a dish (Description / Ingredients) — visually quiet,
-   but full rotor stops for VoiceOver users navigating by heading level. */
+/* Inline "Ingredients:" label inside a dish. NOT a heading — it is aria-hidden
+   plain text, so it never lands in the VoiceOver heading rotor. Visual only. */
 .browse-item-sub {
-  font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--text-muted);
-  margin: 10px 0 0;
 }
 
 /* ── Keyframes ────────────────────────────────────── */

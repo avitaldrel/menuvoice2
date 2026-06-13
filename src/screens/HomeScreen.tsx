@@ -16,8 +16,8 @@ export default function HomeScreen({ navigate }: ScreenProps) {
           style={{ minHeight: 96 }}
         />
         <PrimaryButton
-          label="Find a Restaurant"
-          hint="Type a restaurant name and I will find their menu online"
+          label="Find a Menu"
+          hint="Type a restaurant name or paste a website link, and I will find the menu and read it"
           onClick={() => navigate({ name: 'find' })}
           style={{ minHeight: 96 }}
         />
@@ -26,12 +26,6 @@ export default function HomeScreen({ navigate }: ScreenProps) {
           hint="Open a menu you captured before"
           onClick={() => navigate({ name: 'saved' })}
           style={{ minHeight: 96 }}
-        />
-        <SecondaryButton
-          label="Menu from a Website Link"
-          hint="Paste a restaurant URL and I will read the menu"
-          onClick={() => navigate({ name: 'url' })}
-          style={{ minHeight: 72 }}
         />
       </div>
 

@@ -45,9 +45,28 @@ const REPEAT_PHRASES = [
   'repeat that', 'say that again', 'what did you say', 'say it again', 'pardon', 'come again',
 ];
 
-// Semantic menu document — VoiceOver heading rotor hierarchy:
-//   h1 restaurant → h2 category (with item count) → h3 dish (name + price in one
-//   heading, so a single rotor stop reads both) → h4 Description / Ingredients.
+// One dish heading's spoken text: name, price, description, and ingredients
+// folded into a single natural line. This is the dish's accessible name, so a
+// VoiceOver user gets the whole dish in ONE rotor stop. Price is read as part of
+// the dish, never as its own stop.
+function dishLabel(item: ParsedMenu['categories'][number]['items'][number]): string {
+  let label = item.name;
+  if (item.price) label += `, ${item.price}`;
+  if (item.description) label += `. ${item.description}`;
+  if (item.ingredients && item.ingredients.length > 0) {
+    label += `. Ingredients: ${item.ingredients.join(', ')}`;
+  }
+  return label;
+}
+
+// Semantic menu document — VoiceOver heading rotor hierarchy is intentionally
+// shallow so navigation is fast:
+//   h2 "Full menu" → h2 category (with item count) → h3 dish.
+// Each dish is a SINGLE h3 stop whose accessible name (aria-label) reads the
+// whole dish. Price, description, and ingredients are visible for sighted and
+// low-vision users but aria-hidden, so they are NOT separate headings or extra
+// rotor stops. Words like "Description" and "Ingredients" are plain labels, not
+// headings, so the heading rotor jumps cleanly dish to dish.
 function MenuDocument({
   menu,
   headingRef,
@@ -75,23 +94,23 @@ function MenuDocument({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10, marginBottom: 24 }}>
             {cat.items.map((item) => (
               <article key={item.name} className="browse-item">
-                <h3 className="browse-item-name">
-                  {item.name}
+                {/* Single rotor stop: the whole dish, spoken from aria-label.
+                    Visible content below is aria-hidden so nothing is read twice
+                    and nothing extra lands in the heading rotor. */}
+                <h3 className="browse-item-name" aria-label={dishLabel(item)}>
+                  <span aria-hidden="true">{item.name}</span>
                   {item.price && (
-                    <span className="browse-item-price">{' '}{item.price}</span>
+                    <span className="browse-item-price" aria-hidden="true">{' '}{item.price}</span>
                   )}
                 </h3>
                 {item.description && (
-                  <>
-                    <h4 className="browse-item-sub">Description</h4>
-                    <p className="browse-item-desc">{item.description}</p>
-                  </>
+                  <p className="browse-item-desc" aria-hidden="true">{item.description}</p>
                 )}
                 {item.ingredients && item.ingredients.length > 0 && (
-                  <>
-                    <h4 className="browse-item-sub">Ingredients</h4>
-                    <p className="browse-item-desc">{item.ingredients.join(', ')}</p>
-                  </>
+                  <p className="browse-item-desc" aria-hidden="true">
+                    <span className="browse-item-sub">Ingredients: </span>
+                    {item.ingredients.join(', ')}
+                  </p>
                 )}
               </article>
             ))}
@@ -337,12 +356,21 @@ export default function ConversationScreen({
     navigate({ name: 'home' });
   };
 
+  const browseHintGiven = useRef(false);
   const toggleSpeakMode = () => {
     const next = !speakMode;
     setSpeakMode(next);
     track('conversation', 'mode_toggle', { metadata: { mode: next ? 'voice' : 'browse' } });
     if (!next) {
       stopSpeaking();
+      // First time into browse mode, tell the user how to navigate by heading.
+      if (!browseHintGiven.current) {
+        browseHintGiven.current = true;
+        speak(
+          'Browse mode. To move dish by dish, open your VoiceOver rotor, choose Headings, then swipe up or down. Each dish reads its name, price, and description in one stop.',
+          profile.ttsVoice,
+        );
+      }
       // Browse mode: land on the menu heading so VoiceOver starts at content
       setTimeout(() => menuHeadingRef.current?.focus(), 50);
     } else {
@@ -445,19 +473,10 @@ export default function ConversationScreen({
         {indicator.label}
       </div>
 
-      {/* Latest exchange */}
-      <div
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--r-md)',
-          padding: 16,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          minHeight: 80,
-        }}
-      >
+      {/* Latest exchange — a bounded conversation region. Each message is its
+          own bubble in a vertical stack with gaps, so bubbles never overlap each
+          other or the controls, no matter how long a reply runs. */}
+      <section className="convo-area" aria-label="Conversation">
         {/* "You said" — live because the app does not speak user words back */}
         <div aria-live="polite" aria-atomic="true">
           {latestUser && (
@@ -477,7 +496,12 @@ export default function ConversationScreen({
             <div className="turn-text">{displayText}</div>
           </div>
         )}
-      </div>
+        {!latestUser && !displayText && (
+          <p className="body" style={{ margin: 0, color: 'var(--text-muted)' }}>
+            Your conversation will appear here.
+          </p>
+        )}
+      </section>
 
       {/* Error message — announced immediately via role="alert" */}
       {phase === 'error' && errorMsg && (
