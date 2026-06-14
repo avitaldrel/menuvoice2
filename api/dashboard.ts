@@ -19,9 +19,40 @@
 //   format=json raw JSON instead of the HTML shell
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-// Reuse the morning report's shared helpers so all three analytics views agree:
-// same DB client and the same internal/test-account exclusion (REPORT_EXCLUDE_EMAILS).
-import { withClient, excludeList, esc } from './_morningData';
+import { createClient } from '@vercel/postgres';
+
+// Self-contained on purpose: this endpoint depends only on @vercel/postgres (the
+// same surface as the working /api/report). It deliberately does NOT import
+// ./_morningData — doing so pulls that module's whole dependency graph into load,
+// which has crashed view endpoints (FUNCTION_INVOCATION_FAILED). The three helpers
+// below mirror _morningData's excludeList()/withClient()/esc() so all three views
+// stay consistent; keep the exclusion default in sync if it changes there.
+
+async function withClient<T>(fn: (client: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
+  const client = createClient();
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await client.end();
+  }
+}
+
+function esc(v: unknown): string {
+  if (v == null) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Internal/test accounts to hide. Mirrors _morningData.excludeList() (same env var
+// + default) so /api/report, /api/morning, and /api/dashboard agree.
+function excludeList(): string[] {
+  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com';
+  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expected = process.env.REPORT_KEY;
