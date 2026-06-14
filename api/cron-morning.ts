@@ -44,6 +44,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const d = await buildMorningReport(hours);
 
+    // Don't email a "nothing happened" report. If no one used MenuVoice in the
+    // window there is nothing new to say, so we skip the send entirely (a clean
+    // 200 no-op). Append ?force=1 to override (useful for manual test sends).
+    const force = req.query.force === '1' || req.query.force === 'true';
+    if (!d.anyoneUsed && !force) {
+      return res.status(200).json({ ok: true, sent: false, reason: 'no activity in window — nothing new to report' });
+    }
+
     const date = new Date().toISOString().slice(0, 10);
     // Stable, unique tag so a Gmail filter can label every report reliably.
     const subject = d.anyoneUsed

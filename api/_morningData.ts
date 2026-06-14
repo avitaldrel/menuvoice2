@@ -35,6 +35,10 @@ export interface MorningData {
   newUsers: UserRow[];
   returningUsers: UserRow[];
   excluded: string[];
+  // The immediately preceding window of the same length (e.g. the prior 24h),
+  // so each report can show what changed vs "yesterday" and never reads identical.
+  prev: { users: number; sessions: number; events: number; newUsers: number };
+  deltas: { users: number; sessions: number; events: number; newUsers: number };
 }
 
 // Accounts we never want to see in the report (own testing). Override with the
@@ -132,6 +136,33 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       [exclude]
     );
 
+    // Previous window of equal length [now-2h, now-h] for day-over-day deltas.
+    const prevQ = await client.query(
+      `WITH life AS (
+         SELECT user_email, min(ts) AS first_ts
+         FROM events WHERE user_email IS NOT NULL AND ${notExcluded}
+         GROUP BY user_email
+       ),
+       prev AS (
+         SELECT user_email,
+                count(*) AS events,
+                count(DISTINCT session_id) AS sessions
+         FROM events
+         WHERE user_email IS NOT NULL AND ${notExcluded}
+           AND ts >  now() - interval '${hours * 2} hours'
+           AND ts <= now() - interval '${hours} hours'
+         GROUP BY user_email
+       )
+       SELECT
+         (SELECT count(*)                FROM prev)                         AS users,
+         (SELECT coalesce(sum(sessions),0) FROM prev)                       AS sessions,
+         (SELECT coalesce(sum(events),0)   FROM prev)                       AS events,
+         (SELECT count(*) FROM life
+            WHERE first_ts >  now() - interval '${hours * 2} hours'
+              AND first_ts <= now() - interval '${hours} hours')           AS new_users`,
+      [exclude]
+    );
+
     const rows = users.rows as UserRow[];
     const num = (v: unknown) => Number(v) || 0;
     const totals = {
@@ -143,20 +174,51 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       dataTo: rows.length ? fmtTs(rows.reduce((max, u) => (u.last_in_window > max ? u.last_in_window : max), rows[0].last_in_window)) : '',
     };
 
+    const pr = prevQ.rows[0] ?? {};
+    const prev = {
+      users: num(pr.users),
+      sessions: num(pr.sessions),
+      events: num(pr.events),
+      newUsers: num(pr.new_users),
+    };
+    const newUsers = rows.filter((u) => u.is_new);
+    const deltas = {
+      users: totals.users - prev.users,
+      sessions: totals.sessions - prev.sessions,
+      events: totals.events - prev.events,
+      newUsers: newUsers.length - prev.newUsers,
+    };
+
     return {
       windowLabel,
       hours,
       generated: fmtTs(new Date().toISOString()),
       anyoneUsed: rows.length > 0,
       totals,
-      newUsers: rows.filter((u) => u.is_new),
+      newUsers,
       returningUsers: rows.filter((u) => !u.is_new),
       excluded: exclude,
+      prev,
+      deltas,
     };
   });
 }
 
 // ---- Renderers ----
+
+// "vs previous 24 hours" / "vs yesterday" label for the comparison line.
+function comparePeriod(d: MorningData): string {
+  if (d.hours === 24) return 'yesterday';
+  if (d.hours % 24 === 0) return `previous ${d.hours / 24} days`;
+  return `previous ${d.hours}h`;
+}
+
+// "+3", "-1", "no change" — signed delta for plain text.
+function signed(n: number): string {
+  if (n > 0) return `+${n}`;
+  if (n < 0) return `${n}`;
+  return '±0';
+}
 
 export function renderText(d: MorningData): string {
   const t = d.totals;
@@ -169,6 +231,7 @@ export function renderText(d: MorningData): string {
   } else {
     lines.push(`Yes, MenuVoice was used by ${t.users} ${t.users === 1 ? 'person' : 'people'}.`);
     lines.push(`  ${t.sessions} session(s), ${t.events} event(s), ${t.failures} failure(s)`);
+    lines.push(`  vs ${comparePeriod(d)}: users ${signed(d.deltas.users)}, actions ${signed(d.deltas.events)}, new users ${signed(d.deltas.newUsers)}`);
     lines.push('');
     lines.push(`NEW users (${d.newUsers.length}):`);
     if (!d.newUsers.length) lines.push('  (none)');
@@ -236,6 +299,29 @@ export function renderEmailHtml(d: MorningData, dashboardUrl?: string): string {
          </td></tr>
        </table>`;
 
+  // Day-over-day comparison strip: a green up-chip, red down-chip, or grey flat-chip
+  // per metric so two consecutive reports never look identical.
+  const chip = (label: string, n: number) => {
+    const up = n > 0, down = n < 0;
+    const bg = up ? C.greenBg : down ? C.redBg : '#eef2f7';
+    const fg = up ? C.greenDk : down ? C.red : C.sub;
+    const arrow = up ? '&#9650;' : down ? '&#9660;' : '&#8211;';
+    const val = n === 0 ? '0' : `${n > 0 ? '+' : ''}${n}`;
+    return `<td style="padding:0 4px"><div style="background:${bg};border-radius:8px;padding:7px 10px;font-family:${ff};text-align:center">
+      <span style="font-size:13px;font-weight:800;color:${fg}">${arrow} ${val}</span>
+      <span style="font-size:11px;color:${C.sub};margin-left:4px">${label}</span>
+    </div></td>`;
+  };
+  const compareStrip = d.anyoneUsed
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px -4px 0"><tr>
+         <td colspan="3" style="padding:0 4px 6px;font-family:${ff};font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${C.sub}">vs ${comparePeriod(d)}</td>
+       </tr><tr>
+         ${chip('users', d.deltas.users)}
+         ${chip('actions', d.deltas.events)}
+         ${chip('new', d.deltas.newUsers)}
+       </tr></table>`
+    : '';
+
   const tile = (label: string, value: number, accent: string) =>
     `<td width="50%" style="padding:0 6px">
        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:1px solid ${C.line};border-radius:12px">
@@ -272,6 +358,7 @@ export function renderEmailHtml(d: MorningData, dashboardUrl?: string): string {
         <tr><td style="background:${C.bg};padding:18px 18px 24px;border:1px solid ${C.line};border-top:none;border-radius:0 0 14px 14px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr><td>${verdict}</td></tr>
+            ${compareStrip ? `<tr><td>${compareStrip}</td></tr>` : ''}
             <tr><td style="padding-top:12px">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 -6px"><tr>
                 ${tile('New users', d.newUsers.length, C.newBadge)}
