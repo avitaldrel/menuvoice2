@@ -103,13 +103,14 @@ function trySetItem(key: string, value: string): void {
   }
 }
 
-export async function saveRestaurant(name: string, menu: ParsedMenu): Promise<SavedRestaurant> {
+export async function saveRestaurant(name: string, menu: ParsedMenu, sourceUrl?: string): Promise<SavedRestaurant> {
   const list = await loadSavedRestaurants();
   const entry: SavedRestaurant = {
     id: `r-${Date.now()}`,
     name: name.trim() || 'Unnamed restaurant',
     menu,
     capturedAt: new Date().toISOString(),
+    ...(sourceUrl ? { sourceUrl } : {}),
   };
   const filtered = list.filter((r) => r.name.toLowerCase() !== entry.name.toLowerCase());
   filtered.unshift(entry);

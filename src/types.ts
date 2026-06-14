@@ -37,6 +37,7 @@ export interface SavedRestaurant {
   name: string;
   menu: ParsedMenu;
   capturedAt: string; // ISO date
+  sourceUrl?: string;
 }
 
 export interface ChatTurn {

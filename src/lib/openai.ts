@@ -362,7 +362,7 @@ export async function parseMenuFromUrl(url: string): Promise<ParsedMenu> {
 
 /** Restaurant NAME (+ city) -> structured menu, via server-side web search.
  * Throws a friendly Error when the menu isn't online. */
-export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu; restaurantName: string | null }> {
+export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu; restaurantName: string | null; sourceUrl?: string }> {
   const t0 = Date.now();
   const res = await fetch('/api/find-menu', {
     method: 'POST',
@@ -373,6 +373,7 @@ export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu;
     menu?: ParsedMenu;
     restaurantName?: string | null;
     via?: string;
+    sourceUrl?: string;
     error?: string;
   };
   if (!res.ok || !data.menu) {
@@ -388,9 +389,9 @@ export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu;
     outcome: 'success',
     durationMs: Date.now() - t0,
     content: { restaurantName: data.menu.restaurantName ?? data.restaurantName, itemCount },
-    metadata: { query, via: data.via },
+    metadata: { query, via: data.via, sourceUrl: data.sourceUrl },
   });
-  return { menu: data.menu, restaurantName: data.restaurantName ?? data.menu.restaurantName ?? null };
+  return { menu: data.menu, restaurantName: data.restaurantName ?? data.menu.restaurantName ?? null, sourceUrl: data.sourceUrl };
 }
 
 /** Text -> mp3 Blob (OpenAI TTS). */

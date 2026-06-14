@@ -39,7 +39,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const inFlightRef = useRef(false);
 
   useEffect(() => {
-    speak('Find a menu. Type a restaurant name, or paste a website link. Then tap Find menu.');
+    speak('Find a menu. Type a restaurant name with the city, like Burger Bros, Springfield, or paste a website link. Then tap Find menu.');
     return () => {
       if (reassureRef.current) clearInterval(reassureRef.current);
       stopSpeaking();
@@ -61,6 +61,11 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
     }
 
     const isUrl = looksLikeUrl(trimmed);
+
+    if (!isUrl && !trimmed.includes(',')) {
+      announce('Please include the city so I find the right location. For example: Burger Bros, Springfield.');
+      return;
+    }
 
     inFlightRef.current = true;
     setLoading(true);
@@ -87,10 +92,10 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
         i++;
       }, 9000);
 
-      const { menu, restaurantName } = await findMenuByName(trimmed);
+      const { menu, restaurantName, sourceUrl } = await findMenuByName(trimmed);
       if (reassureRef.current) clearInterval(reassureRef.current);
       const name = restaurantName?.trim() || trimmed;
-      await saveRestaurant(name, menu).catch(() => {});
+      await saveRestaurant(name, menu, sourceUrl).catch(() => {});
       navigate({ name: 'conversation', menu, restaurantName: name, source: 'find' });
     } catch (e: any) {
       if (reassureRef.current) clearInterval(reassureRef.current);
@@ -107,9 +112,8 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
     <Screen>
       <Title>Find a menu</Title>
       <Body>
-        Type a restaurant name, adding the city helps, or paste a website link or PDF.
-        I will find the menu and read it to you, whether it is on their site, a PDF, or an
-        ordering page.
+        Type a restaurant name and city (for example: Burger Bros, Springfield), or paste a website link or PDF.
+        The city is required so I find the right location.
       </Body>
 
       <input
