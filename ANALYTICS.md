@@ -81,6 +81,69 @@ Pulls all linked env vars and runs `api/*.ts` locally. The table is created on f
 
 ## Browsing data
 
+### Live dashboard (`/api/dashboard`) — the visual command center
+
+The richest view: **what is everyone doing, updating itself.** Open it once and leave
+it up — it re-fetches every 30 seconds and re-renders in place (no reload), pausing
+while the tab is hidden.
+
+```
+https://<deployment>/api/dashboard?key=<REPORT_KEY>
+```
+
+What it shows:
+- **KPI cards with trend deltas** — events, sessions, signed-in users, anon sessions,
+  failures, each compared against the *previous equal window* (▲/▼ %), so you see change.
+- **Activity-over-time chart** — events per hour (or per day for windows > 72h), with
+  failures highlighted in red and quiet gaps visible at a glance.
+- **Usage funnel** — camera → photo → analyze → menu read → asked → answered, with the
+  step-to-step conversion %, so you see where people drop off.
+- **Top screens** and **top events** (count, failures, avg latency).
+- **People** — per-user table: sessions, events, photos, questions, failures, lifetime
+  sessions, last-seen, and a NEW badge for first-time users.
+- **Live event stream** and a **failures** panel, both auto-updating.
+- Window switcher (1h / 6h / 24h / 7d / 30d / all) with no reload.
+
+Same `REPORT_KEY` guard, same `events` table, zero AI tokens. `?format=json` returns the
+same numbers as raw JSON (this is what the page polls). Validate the SQL locally with
+`node scripts/test-dashboard.mjs [hours]`.
+
+Use `/api/morning` for the daily "who's new" email digest, `/api/report` for static
+table dumps, and `/api/dashboard` for the always-on visual view.
+
+### Morning report (`/api/morning`)
+
+A focused daily digest answering: **did anyone use MenuVoice, who is new, who came back.**
+
+```
+https://<deployment>/api/morning?key=<REPORT_KEY>
+```
+
+- **New users** = first-ever event landed inside the window.
+- **Returning ("original") users** = used it before, came back — shown with lifetime session count + "what they did" (menus scanned, questions asked, searches, saves).
+- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com`).
+- Window: `?hours=N` or `?days=N` (default 24h). Output: HTML (default), `?format=text` (cron/email friendly), or `?format=json`.
+- Same `REPORT_KEY` guard. Zero AI tokens.
+
+#### Automated daily email (`/api/cron-morning`)
+
+A Vercel Cron (configured in `vercel.json`, runs `0 13 * * *` = 13:00 UTC daily) calls
+`/api/cron-morning`, builds the digest, and emails it. The Gmail account
+**2firemaster27@gmail.com** has a **"MenuVoice Reports"** label + a filter
+(subject contains `[MenuVoice] Morning report`) so every report is auto-labeled.
+
+Required env vars in Vercel (Project → Settings → Env Vars), then redeploy:
+- `REPORT_KEY` — already set (guards the manual trigger).
+- **One** email transport:
+  - `RESEND_API_KEY` (+ optional `RESEND_FROM`), **or**
+  - `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail account + an App Password; requires 2FA).
+- Optional: `REPORT_EMAIL_TO` (default `2firemaster27@gmail.com`),
+  `REPORT_EMAIL_HOURS` (default 24), `REPORT_EXCLUDE_EMAILS`.
+
+Notes: Vercel Cron only fires on **production** deployments. To test delivery on demand,
+hit `https://<deployment>/api/cron-morning?key=<REPORT_KEY>`. Validate the SQL locally with
+`node scripts/test-morning.mjs [hours]`.
+
 ### Vercel dashboard (quickest)
 
 Storage → your Postgres db → **Query** tab — full SQL editor, live data.
