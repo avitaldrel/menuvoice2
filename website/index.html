@@ -497,8 +497,9 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 .cta-form { margin:36px auto 0;display:flex;gap:10px;max-width:480px;flex-wrap:wrap;justify-content:center; }
 .cta-form input { flex:1;min-width:220px;min-height:60px;background:var(--bg-soft);border:1.5px solid var(--border);border-radius:14px;color:var(--text-primary);font-family:var(--font-body);font-size:16px;padding:0 20px;transition:border-color 140ms ease; }
 .cta-form input::placeholder { color:var(--text-muted); }
-.cta-form input:focus { outline:none;border-color:var(--accent); }
+.cta-form input:focus-visible { outline:3px solid var(--accent);outline-offset:3px;border-color:var(--accent); }
 .cta-form .btn { min-width:168px; }
+.cta-form .btn:disabled { cursor:wait;opacity:0.72;transform:none; }
 .cta-mini { margin-top:18px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted); }
 .cta-msg { margin-top:18px;font-size:15px;color:var(--success);min-height:22px;font-weight:600; }
 
@@ -764,11 +765,11 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
         <p class="lede">Request a demo, join the waitlist, or tell us you're a restaurant who wants in. We'll get back to you personally.</p>
         <form class="cta-form" id="waitlist-form" novalidate>
           <label for="email" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Email</label>
-          <input type="email" id="email" name="email" placeholder="you@email.com" autocomplete="email" required />
+          <input type="email" id="email" name="email" placeholder="you@email.com" autocomplete="email" inputmode="email" maxlength="254" aria-describedby="cta-msg cta-privacy" required />
           <button type="submit" class="btn btn-primary btn-lg">Request a demo</button>
         </form>
         <p class="cta-msg" id="cta-msg" role="status" aria-live="polite"></p>
-        <p class="cta-mini">No spam. We'll only write about the pilot.</p>
+        <p class="cta-mini" id="cta-privacy">No spam. We'll only write about the pilot.</p>
       </div>
     </div>
   </section>
@@ -1139,6 +1140,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
     var form = document.getElementById('waitlist-form');
     var msg  = document.getElementById('cta-msg');
     if (!form) return;
+    var btn  = form.querySelector('button[type="submit"]');
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var input = document.getElementById('email');
@@ -1148,9 +1150,29 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
         msg.textContent = 'Please enter a valid email address.';
         input.focus(); return;
       }
-      msg.style.color = 'var(--success)';
-      msg.textContent = 'Thanks \u2014 you\u2019re on the list. We\u2019ll be in touch personally.';
-      form.reset();
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+      msg.style.color = 'var(--text-muted)';
+      msg.textContent = '';
+      fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: val })
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          msg.style.color = 'var(--success)';
+          msg.textContent = 'You\u2019re on the list. We\u2019ll be in touch personally.';
+          form.reset();
+        } else { throw new Error(data.error || 'error'); }
+      })
+      .catch(function () {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = 'Something went wrong. Please try again.';
+      })
+      .finally(function () {
+        if (btn) { btn.disabled = false; btn.textContent = 'Request a demo'; }
+      });
     });
   }
 
