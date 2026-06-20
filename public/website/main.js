@@ -162,9 +162,12 @@
     var currentPhase = null;
     var convoStarted = false;
     var camTimer = null;
+    var autoTimer = null;
+    var autoIdx = 0;
     var camIdx = 0;
     var CAM_PHASES = ['Finding the menu\u2026', 'Hold still\u2026', 'Got it!', 'Reading\u2026'];
     var CAM_DELAYS = [1600, 1400, 850, 1800];
+    var AUTO_DELAYS = [1900, 1100, 1900, 4200];
 
     /* ── Label trail: active → stays on screen as 'seen' ── */
     function setPhase(pid) {
@@ -195,6 +198,7 @@
         stopCam();
         startConvo();
       }
+      if (pid !== 'convo') convoStarted = false;
 
       // Cam phases
       if (pid === 'scan') startCam();
@@ -276,6 +280,24 @@
 
     function scrollBot() { if (cvConv) cvConv.scrollTop = cvConv.scrollHeight; }
 
+    function runAutoStep() {
+      var pid = PHASE_ORDER[autoIdx % PHASE_ORDER.length];
+      autoIdx++;
+      setPhase(pid);
+      autoTimer = setTimeout(runAutoStep, AUTO_DELAYS[PHASE_ORDER.indexOf(pid)] || 2200);
+    }
+
+    function startAutoDemo() {
+      if (autoTimer) return;
+      autoIdx = Math.max(0, PHASE_ORDER.indexOf(currentPhase));
+      runAutoStep();
+    }
+
+    function stopAutoDemo() {
+      clearTimeout(autoTimer);
+      autoTimer = null;
+    }
+
     /* ── Mobile fallback: auto-play on intersection ── */
     if (window.innerWidth < 900) {
       setPhase('scan');
@@ -283,14 +305,15 @@
         var mio = new IntersectionObserver(function (entries) {
           entries.forEach(function (e) {
             if (e.isIntersecting) {
-              mio.disconnect();
-              setTimeout(function () { setPhase('capture'); }, 2200);
-              setTimeout(function () { setPhase('reading'); }, 3800);
-              setTimeout(function () { setPhase('convo'); }, 5600);
+              startAutoDemo();
+            } else {
+              stopAutoDemo();
             }
           });
         }, { threshold: 0.18 });
         mio.observe(section);
+      } else {
+        startAutoDemo();
       }
       return; // Don't attach scroll listener on mobile
     }
@@ -318,6 +341,17 @@
     }
 
     setPhase('scan');
+    if ('IntersectionObserver' in window) {
+      var dio = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) startAutoDemo();
+          else stopAutoDemo();
+        });
+      }, { threshold: 0.22 });
+      dio.observe(section);
+    } else {
+      startAutoDemo();
+    }
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
     update();
