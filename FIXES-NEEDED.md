@@ -17,12 +17,12 @@ Verified with `npm run build` and `npm run a11y:audit` against Vite preview on
 | B2 | Done | Onboarding step changes now return focus to the active step heading instead of dropping VoiceOver on `<body>`. Verified in the current `npm run build` and `npm run a11y:audit` pass. | Real iPhone VoiceOver confirmation is still worth doing with the broader manual sweep. |
 | B3 | Partial | Settings name/dislike mic flows now update the `role="status"` region for permission, recording, transcription, and save/error states. | Login/Onboarding already have local announcers but still need a full Phase 2 verification pass. |
 | B4 | Done | Capture scanner coaching now avoids double-speaking by silencing the duplicate live region path when app voice is already handling the prompt. Verified in the current `npm run build` and `npm run a11y:audit` pass. | Real-device scan flow remains the final confidence check. |
-| B5 | Mostly code complete | Root loading text now has `role="status"`; `SavedScreen` cards use `role="group"`; Conversation uses `aria-disabled` plus no-op actions; Settings voice/spice pickers use radio semantics; transcribing labels and sign-out confirm were added; Find no longer auto-focuses; audit still passes with 0 violations. | Do one focused VoiceOver/manual pass across Conversation, Saved, and Settings to confirm behavior on device. |
+| B5 | Mostly code complete | Root loading text now has `role="status"`; `SavedScreen` cards use `role="group"`; Conversation uses `aria-disabled` plus no-op actions; Settings voice/spice pickers use radio semantics; transcribing labels and sign-out confirm were added; Find no longer auto-focuses; the current build and audit still pass with 0 violations. | Do one focused VoiceOver/manual pass across Conversation, Saved, and Settings to confirm behavior on device. |
 | A1 | Code complete, manual check needed | Capture preview now uses actual video aspect ratio plus `objectFit: contain`; fallback zoom crop is applied to `captureFrame()`. Build passed. | Real portrait/landscape device comparison of preview vs saved JPEG. |
 | A2 | Partial | Added camera zoom helpers, native zoom application, accessible zoom buttons, fallback preview scale, and matching centered capture crop. | Real iPhone fallback and Android native zoom checks. |
-| A3 | Code complete, manual check needed | `src/index.css` now adds a compact landscape capture layout that moves controls beside the preview without overlap. Build and a11y audit both passed after the CSS change. | Real landscape phone/tablet capture check for reachability, VoiceOver order, and upright saved images. |
+| A3 | Code complete, manual check needed | `src/index.css` now adds a compact landscape capture layout that moves controls beside the preview without overlap. The current build and a11y audit both pass with that CSS in place. | Real landscape phone/tablet capture check for reachability, VoiceOver order, and upright saved images. |
 | B7 | Partial | Added `PauseProvider`, a global Pause/Resume control, pause-aware speech stop, and a registered listening-stop hook so speech/listening do not auto-restart while paused. | Manual mic and screen-reader verification is still needed on real devices. |
-| B7a | Code complete, manual check needed | Conversation now lets empty-space taps interrupt speech, while preserving normal behavior on actual controls and keeping the explicit interrupt button. | Manual tap-interrupt testing with VoiceOver and touch exploration. |
+| B7a | Code complete, manual check needed | Conversation now lets empty-space taps interrupt speech, while preserving normal behavior on actual controls and keeping the explicit interrupt button. | Manual tap-interrupt testing with VoiceOver and touch exploration on a real device is still needed. |
 | B9 | Code complete, manual check needed | Find screen no longer rejects non-comma searches; normalizes state names/abbreviations such as `Montclair New Jersey` to `Montclair, NJ`. | Voice/manual search checks with ambiguous one-word locations. |
 | B10 | Partial | Name search results now require a touch confirmation before saving/opening. | Voice yes/no confirmation and next-match handling are not implemented. |
 | C1 | Code complete | `_menuCore.ts` already used Browserless `Authorization`; legacy `api/scrape.ts` now does too. | Confirm whether `api/scrape.ts` is still deployed/live. |
@@ -236,6 +236,80 @@ Do in one pass:
 **Acceptance:** Each screen can be navigated by VoiceOver without unnecessary copy, while still explaining what to do next anywhere the action would otherwise be unclear.
 
 ---
+
+## Bx — Menu extraction workflow
+
+### B12. Hybrid OCR + LLM extraction pipeline [L, HIGH RISK]
+**Source:** User backlog review, 2026-06-18  
+**Problem:** Menu extraction still asks the model to do too much in one step. The app can already parse menu URLs and camera captures, but it depends too heavily on end-to-end model interpretation instead of first establishing whether the source is readable, rotated correctly, text-dense enough, or obviously partial. That makes bad captures, PDFs, and image-heavy menus less predictable than they need to be.  
+**Why this matters:** This is the main reliability upgrade for the product. It improves both live capture and imported menus, reduces wasted model calls on unreadable input, and creates the structure needed for better confidence handling, partial-menu handling, and later evaluation fixtures.  
+**Files likely involved:** `src/screens/CaptureScreen.tsx`, `src/lib/scanner.ts`, `src/lib/openai.ts`, `api/_menuCore.ts`, `api/menu-from-url.ts`, `src/types.ts`, plus any new shared helper such as `src/lib/menuPrepass.ts` or `api/_menuPrepass.ts`.  
+**What needs to be done:**
+- Add a pre-pass result object that is produced before the structured menu extraction call. It should include fields such as `readability`, `blur`, `orientation`, `hasText`, `likelyPartial`, `languageHint`, and normalized `textBlocks` when available.
+- For camera capture, reuse the existing scanner or capture signals where possible instead of inventing a second independent quality system.
+- For URL and PDF flows, run OCR or text normalization before menu reasoning so the LLM receives cleaner text and clearer context about what kind of source it is reading.
+- Split the current "extract everything" flow into two stages:
+  1. inspect and normalize the source
+  2. reason over the normalized source into the existing `ParsedMenu` shape
+- Expand `ParsedMenu` or adjacent metadata only where it helps downstream decisions. Do not bloat the spoken UI with raw technical fields.
+- Preserve existing saved-menu behavior, but persist enough extraction metadata to support later QA and reprocessing.
+- Add fixture coverage for clean menu photos, blurry photos, rotated photos, cropped partial menus, PDFs, and image-heavy restaurant pages.
+**Implementation plan:**
+1. Define a stable pre-pass contract and where it lives in shared types.
+2. Route camera captures through that contract first, using existing scanner signals as the first data source.
+3. Route URL and PDF parsing through the same contract so imported menus and scanned menus converge before final extraction.
+4. Update extraction prompts and helper functions to consume pre-pass output instead of raw input alone.
+5. Add telemetry for pre-pass outcomes and extraction fallbacks, but avoid storing sensitive raw images beyond current policy.
+6. Add regression fixtures and confirm that failure states produce actionable recovery copy.
+**Fix (preferred):**
+- Create one shared menu-ingestion pipeline:
+  - source acquisition
+  - pre-pass quality and OCR analysis
+  - structured extraction
+  - conversation opening summary
+- Keep the output contract conservative and explicit about uncertainty.
+- Reuse the existing `find` and `capture` entry points instead of adding a third parallel ingestion path.
+**Acceptance:**
+- A blurry or text-poor menu is rejected or coached before a full extraction call.
+- Rotated, PDF, and image-based imports use the same normalized extraction contract.
+- Successful captures or imports produce fewer empty or malformed categories than the current flow.
+- The pipeline exposes enough metadata to support partial-menu warnings and future eval fixtures without forcing technical details into the spoken UX.
+
+### B13. Post-extraction opening summary should be useful, not numeric [M, HIGH RISK]
+**Source:** User backlog review, 2026-06-18  
+**Problem:** The app needs a post-extraction checkpoint before it starts reading the menu, but raw counts such as "5 sections" or "42 items" do not help the user make a decision. That adds noise. The user only needs to know which restaurant menu was opened and whether anything important appears to be missing or unreliable.  
+**Why this matters:** The checkpoint idea is right, but the copy target was wrong. The summary should improve confidence and control, not sound like internal diagnostics.  
+**Files likely involved:** `src/lib/openai.ts` (`buildOpeningLine` and related helpers), `src/screens/ConversationScreen.tsx`, `src/types.ts`, and any extraction metadata introduced by B12.  
+**What needs to be done:**
+- Replace count-heavy opening summaries with short restaurant-first copy.
+- Default opening should identify the restaurant and move straight into the next action, for example: "This is the menu for Luigi's. What would you like to hear?"
+- Only mention extraction problems when they are material, for example:
+  - the menu looks partial
+  - prices are missing in many places
+  - a section is unreadable
+  - the source may not be the full menu
+- Keep technical counts out of the spoken default path unless a future debug or admin mode needs them.
+- Give the user clear next actions when something is missing, for example: add another photo, try a different link, or ask for the section that was captured.
+**Implementation plan:**
+1. Define the decision rules for when extraction quality is good enough to stay quiet versus important enough to mention.
+2. Refactor the opening-line builder so it consumes restaurant name plus extraction-quality flags, not just category counts.
+3. Update conversation entry so the first spoken response is short and restaurant-first.
+4. Add tests or fixtures for:
+   - complete menu
+   - clearly partial menu
+   - mostly missing prices
+   - low-confidence or unreadable sections
+5. Verify that the UI still offers recovery actions without overwhelming the default happy path.
+**Fix (preferred):**
+- Use copy shaped like:
+  - Normal: "This is the menu for [restaurant]. What would you like to hear?"
+  - Partial: "This is the menu for [restaurant], but some parts look missing. I can read what I found, or you can add another photo."
+  - Weak source: "I found part of the menu for [restaurant], but this source does not look complete. Want to hear what I found or try another menu?"
+- Do not announce section counts or item counts in the default user flow.
+**Acceptance:**
+- On good captures or imports, the opening summary names the restaurant and moves on without numeric counts.
+- On materially incomplete captures or imports, the app clearly says something important is missing and offers a recovery path.
+- Users are not exposed to internal extraction diagnostics unless the omission actually affects what they can trust or do next.
 
 ## C — Code / Security
 
