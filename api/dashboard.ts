@@ -47,10 +47,10 @@ function esc(v: unknown): string {
     .replace(/"/g, '&quot;');
 }
 
-// Internal/test accounts to hide. Mirrors _morningData.excludeList() (same env var
-// + default) so /api/report, /api/morning, and /api/dashboard agree.
+// Internal/test accounts to hide. Mirrors _morningData.excludeList() so
+// /api/report, /api/morning, and /api/dashboard agree.
 function excludeList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com';
+  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '';
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 }
 

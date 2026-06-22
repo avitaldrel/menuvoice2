@@ -21,7 +21,7 @@ CARTESIA_VOICE_ID=<voice id from Cartesia>
 CARTESIA_TTS_ENABLED=true
 CARTESIA_STT_ENABLED=true
 OPENAI_API_KEY=<existing OpenAI key>
-REPORT_EMAIL_TO=2firemaster27@gmail.com
+REPORT_EMAIL_TO=<report recipient email>
 ```
 
 Optional:
@@ -29,11 +29,11 @@ Optional:
 ```text
 CARTESIA_TTS_MODEL=sonic-3.5
 CARTESIA_TTS_SPEED=1
-CARTESIA_ALERT_EMAIL_TO=2firemaster27@gmail.com
+CARTESIA_ALERT_EMAIL_TO=<alert recipient email>
 CARTESIA_ALERT_COOLDOWN_SECONDS=21600
 ```
 
-Cartesia credit and quota failures email `CARTESIA_ALERT_EMAIL_TO`, falling back to `REPORT_EMAIL_TO`, then `2firemaster27@gmail.com`. Alerts use the existing email transport: `RESEND_API_KEY` with optional `RESEND_FROM`, or `GMAIL_USER` plus `GMAIL_APP_PASSWORD`.
+Cartesia credit and quota failures email `CARTESIA_ALERT_EMAIL_TO`, falling back to `REPORT_EMAIL_TO`. If neither is configured, the alert is skipped. Alerts use the existing email transport: `RESEND_API_KEY` with optional `RESEND_FROM`, or `GMAIL_USER` plus `GMAIL_APP_PASSWORD`.
 
 To test only the voice output first, set `CARTESIA_TTS_ENABLED=true` and leave `CARTESIA_STT_ENABLED=false`.
 

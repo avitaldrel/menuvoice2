@@ -81,11 +81,16 @@ export interface MorningData {
   website: WebsiteReport;
 }
 
-// Accounts we never want to see in the report (own testing). Override with the
+// Accounts we never want to see in the report. Configure with the
 // REPORT_EXCLUDE_EMAILS env var (comma-separated). Lower-cased + trimmed.
 export function excludeList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com';
+  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '';
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+
+export function reportEmailRecipients(): string {
+  const raw = process.env.REPORT_EMAIL_TO ?? '';
+  return raw.split(',').map((e) => e.trim()).filter(Boolean).join(', ');
 }
 
 const STAGE_DEFS: { key: string; label: string }[] = [

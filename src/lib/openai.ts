@@ -17,7 +17,8 @@ const TTS_MODEL = 'tts-1-hd';
 const TTS_VOICE_DEFAULT = 'shimmer';
 
 // True when the direct browser→OpenAI path is available (local dev only).
-const DIRECT = DIRECT_KEY.startsWith('sk-') && DIRECT_KEY.length > 20;
+const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const DIRECT = LOCAL_DEV_HOSTS.has(window.location.hostname) && DIRECT_KEY.startsWith('sk-') && DIRECT_KEY.length > 20;
 
 export function hasApiKey(): boolean {
   // Always true in production because the proxy holds the key.

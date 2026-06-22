@@ -1,6 +1,6 @@
 # MenuVoice — Fixes & Open Work
 
-> Last updated: 2026-06-18. Single source of truth for all open bugs, a11y issues,
+> Last updated: 2026-06-22. Single source of truth for all open bugs, a11y issues,
 > and pending work. Consolidates REVIEW.md, VOICEOVER-AUDIT.md, SMOKE-RESULTS.md,
 > and PLAN-REMAINING.md. Completed history in PROGRESS.md. Feature backlog in IDEAS.md.
 
@@ -164,6 +164,12 @@ Do in one pass:
 
 **Acceptance:** With app voice on, no duplicate/overlapping VoiceOver speech on screen entry. With app voice off, VoiceOver still announces screen changes, mode changes, and required next actions.
 
+### B6a. Demo mode for guided testing and outreach [M, MED RISK]
+**Source:** User backlog note, 2026-06-22
+**Problem:** Testers and demo audiences can hit fragile live-search, live-menu, microphone, or restaurant-site failures before they understand the intended MenuVoice flow. That makes feedback hard to interpret: the person may be reacting to a blocked restaurant lookup instead of the core voice-first menu experience.
+**Fix:** Add a clearly labeled demo mode that uses a known sample restaurant/menu and walks through the same voice-first screens without requiring a live restaurant search or fresh menu extraction. Keep it honest: the app should say it is using a sample menu, not imply the restaurant data is live. Demo mode should still exercise VoiceOver navigation, app speech, allergy warnings, browse mode, conversation, and pause/resume controls.
+**Acceptance:** A tester can open MenuVoice, start demo mode, hear that it is a sample menu, browse and ask questions, test pause/resume, and exit back to the normal app. No user-facing demo copy makes claims about live restaurant accuracy.
+
 ### B7. Pause all app speech and listening [M, HIGH RISK]
 **Source:** User field-testing notes, 2026-06-16  
 **Problem:** Browse mode and other flows can keep listening or speaking while the user needs quiet control. There is no obvious pause control that stops both speech output and microphone/listening behavior.  
@@ -222,6 +228,17 @@ Do in one pass:
 **Problem:** When the app finds a restaurant, it can move forward before confirming that the found result is actually the restaurant the user wanted. A wrong restaurant means the user may browse, save, or ask about the wrong menu without realizing it.  
 **Fix:** Before opening the menu or saving the restaurant, present a confirmation step with the restaurant name, town/address when available, and a clear yes/no path. The user should be able to answer by voice or touch. If they say no, return to the search/location prompt or offer the next likely match.  
 **Acceptance:** After restaurant lookup, the app asks a clear confirmation such as "I found Mario's Pizza in Montclair. Is this the restaurant you want?" It only proceeds after a yes. A no does not save or open that restaurant.
+
+### B10a. Fix Find reliability or temporarily simplify it to restaurant-name lookup [M, HIGH RISK]
+**Source:** User backlog note, 2026-06-22; tester failures in `APP-TESTER-USAGE-REPORT.md`
+**Problem:** Find is still the first real product path many testers use, and live restaurant/menu lookup can fail in ways that sound like the restaurant has no online menu even when the app just could not read it. If the full search flow is not reliable enough for demos or outside testers, it should be narrowed temporarily instead of letting users hit confusing failures.
+**Fix:** Pick one of two paths before the next tester/demo round:
+- Fix the full Find flow so restaurant name, location, chain results, and unreadable-menu failures produce accurate, actionable outcomes.
+- Or temporarily simplify Find to restaurant-name-only lookup with clear copy and pause/disable brittle location, URL, or broad web-search behavior until it is reliable.
+
+In either path, never say a menu is not posted online unless the app has actually verified that. Prefer: "I found this restaurant but could not read its menu online. Try scanning the physical menu."
+
+**Acceptance:** A tester can search by restaurant name without being misled by false "not online" failures. If broader search modes are paused, the UI and VoiceOver copy make that limitation explicit and offer capture/demo mode as alternatives.
 
 ### B11. Copy audit for VoiceOver-first screens [S, MED RISK]
 **Source:** User field-testing notes, 2026-06-18  
@@ -310,6 +327,22 @@ Do in one pass:
 - On good captures or imports, the opening summary names the restaurant and moves on without numeric counts.
 - On materially incomplete captures or imports, the app clearly says something important is missing and offers a recovery path.
 - Users are not exposed to internal extraction diagnostics unless the omission actually affects what they can trust or do next.
+
+### B14. Organized menu mode should show allergy information [M, HIGH RISK]
+**Source:** User field-testing note, 2026-06-21
+**Problem:** The organized menu view, where items are grouped under section headers, can hide or fail to surface allergy/allergen information that is available elsewhere in the menu experience. A user browsing by headers needs the same conservative allergy warnings and unknown-allergen status without switching modes or asking a separate question.
+**Why this matters:** Organized mode is likely the easiest way for blind and low-vision users to scan a menu. If allergy details are missing there, the mode can feel complete while omitting safety-critical information.
+**Files likely involved:** `src/screens/ConversationScreen.tsx`, `src/lib/menuData.ts`, `src/lib/openai.ts`, `src/types.ts`, and any component/helper that renders the grouped or header-organized menu view.
+**What needs to be done:**
+- Identify the mode/view that organizes menu content by headers or sections.
+- For each dish, surface relevant allergy information already known from parsed menu data, saved user allergies, inferred warnings, or unknown-allergen metadata.
+- Keep copy conservative: distinguish verified menu disclosures, likely/inferred warnings, user-specific saved allergy matches, and unknowns.
+- Do not claim an item is safe. Use wording such as "Contains peanuts per menu", "May contain shellfish; ask staff", or "Allergens unknown".
+- Make the allergy line reachable by VoiceOver in the same navigation order as the item name, price, and description.
+**Acceptance:**
+- In the organized/header menu mode, items with known or likely allergen information expose that information inline or immediately after the item.
+- Items with unknown allergen status do not silently appear allergy-safe.
+- VoiceOver users can hear the allergy information while browsing by section headers without leaving organized mode.
 
 ## C — Code / Security
 
@@ -407,6 +440,17 @@ Telemetry already logs `capture/guidance` and `capture/scanner_struggle` events.
 Postgres and adjust constants. Consider logging per-frame metric values in the guidance event
 metadata to make tuning measurable.
 
+### D6. Investigate Joey/Joseph tester failure path [M, HIGH RISK]
+**Source:** User backlog note, 2026-06-22; `APP-TESTER-USAGE-REPORT.md`
+**Problem:** The strongest outside-tester session hit multiple real failures: Olive Garden lookup failed, McDonald's in Troy Alabama failed with misleading "menu not posted online" style copy, The Butcher's Daughter failed once before succeeding, and a capture/OCR extraction failed before Annie's Cafe succeeded. These are exactly the errors a real blind user would experience during first use.
+**Action:** Pull the production telemetry/events for that tester session, group the failures by flow, and convert each reproducible issue into a concrete bug or code fix:
+- Find/search failures for chains and local restaurants.
+- Misleading unreadable-menu copy.
+- Capture/OCR extraction failure before success.
+- Any duplicate/bad login email handling from the recorded duplicated email value.
+
+**Acceptance:** Each tester failure has either a verified root cause and fix, a reproduction command/fixture, or a documented external blocker. The final notes should distinguish app bugs from restaurant-site limitations.
+
 ---
 
 ## E — Content
@@ -420,6 +464,19 @@ metadata to make tuning measurable.
 ### E2. Code comments + doc em-dashes [optional]
 ~280 occurrences across `src/*` comments, `api/*` comments, and planning docs. Not user-facing,
 do not affect VoiceOver. Skip unless you want consistency.
+
+### E3. Fix public website before more outreach [M, MED RISK]
+**Source:** User backlog note, 2026-06-22
+**Problem:** The public website is part of the first impression for testers, partners, and outreach recipients, but the current open work only calls out em-dashes. The site also needs a full factual/content and deployment pass so it matches the actual product and does not overpromise.
+**Files:** `website/`, `public/website/index.html`, `menuvoice-site/README.md`, and the Vercel project serving `menuvoice.avitaldrel.com`.
+**Fix:** Review the live-served website, identify which source directory controls it, and make one grounded pass:
+- Remove salesy or unverified claims.
+- Make the product offer clear without fluff.
+- Ensure links from the website into the app work.
+- Ensure the demo section does not imply live data unless it is actually live.
+- Verify the deployed domain after push; do not treat a GitHub push as proof the public site changed.
+
+**Acceptance:** `menuvoice.avitaldrel.com` reflects the edited source, has no misleading claims, links correctly into the app, and uses factual copy aligned with the current MenuVoice build.
 
 ---
 

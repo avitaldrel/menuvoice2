@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import { sendEmail } from './_morningData.js';
+import { reportEmailRecipients, sendEmail } from './_morningData.js';
 
 const CARTESIA_ALERT_KEY = 'menuvoice:alerts:cartesia-credits';
 const DEFAULT_ALERT_TTL_SECONDS = 6 * 60 * 60;
@@ -16,8 +16,8 @@ function alertWindowSeconds(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_ALERT_TTL_SECONDS;
 }
 
-function alertRecipient(): string {
-  return process.env.CARTESIA_ALERT_EMAIL_TO || process.env.REPORT_EMAIL_TO || '2firemaster27@gmail.com';
+function alertRecipient(): string | null {
+  return process.env.CARTESIA_ALERT_EMAIL_TO?.trim() || reportEmailRecipients() || null;
 }
 
 export function looksLikeCartesiaCreditIssue(status: number, detail: unknown): boolean {
@@ -99,8 +99,14 @@ export async function maybeNotifyCartesiaCreditIssue(opts: {
       <p>Action: check the Cartesia account credits, quota, and billing status.</p>
     </body></html>`;
 
+    const to = alertRecipient();
+    if (!to) {
+      console.warn('[MenuVoice] Cartesia credit alert skipped: no CARTESIA_ALERT_EMAIL_TO or REPORT_EMAIL_TO configured.');
+      return;
+    }
+
     const via = await sendEmail({
-      to: alertRecipient(),
+      to,
       subject: 'MenuVoice Cartesia credits may be exhausted',
       text,
       html,

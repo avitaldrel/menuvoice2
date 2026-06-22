@@ -125,7 +125,8 @@ https://<deployment>/api/morning?key=<REPORT_KEY>
   pre-login rows (session start / first screen / welcome TTS, fired before Google
   login attaches the email) are NOT counted as a separate "anonymous" user — they
   belong to whichever account the session resolves to. There is no anonymous metric.
-- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com`).
+- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` when configured.
+  Use comma-separated addresses, for example `2firemaster27@gmail.com,avitaldrel@gmail.com,anibabug@gmail.com`.
 - Window: `?hours=N` or `?days=N` (default 24h). Output: HTML (default), `?format=text` (cron/email friendly), or `?format=json`.
 - Same `REPORT_KEY` guard. Zero AI tokens.
 
@@ -133,17 +134,18 @@ https://<deployment>/api/morning?key=<REPORT_KEY>
 
 A Vercel Cron (configured in `vercel.json`, runs `0 11 * * *` = 11:00 UTC =
 **7:00 AM Eastern during EDT**; it is 6 AM ET during winter/EST) calls
-`/api/cron-morning`, builds the digest, and emails it. The Gmail account
-**2firemaster27@gmail.com** has a **"MenuVoice Reports"** label + a filter
-(subject contains `[MenuVoice] Morning report`) so every report is auto-labeled.
+`/api/cron-morning`, builds the digest, and emails it to `REPORT_EMAIL_TO`.
+Use an inbox filter on subject `[MenuVoice] Morning report` if you want reports
+auto-labeled.
 
 Required env vars in Vercel (Project → Settings → Env Vars), then redeploy:
 - `REPORT_KEY` — already set (guards the manual trigger).
 - **One** email transport:
   - `RESEND_API_KEY` (+ optional `RESEND_FROM`), **or**
   - `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail account + an App Password; requires 2FA).
-- Optional: `REPORT_EMAIL_TO` (default `2firemaster27@gmail.com`),
-  `REPORT_EMAIL_HOURS` (default 24), `REPORT_EXCLUDE_EMAILS`.
+- Required when server email transport is configured: `REPORT_EMAIL_TO`. Use comma-separated
+  recipients, for example `2firemaster27@gmail.com,anibabug@gmail.com`.
+- Optional: `REPORT_EMAIL_HOURS` (default 24), `REPORT_EXCLUDE_EMAILS`.
 
 Notes: Vercel Cron only fires on **production** deployments. To test delivery on demand,
 hit `https://<deployment>/api/cron-morning?key=<REPORT_KEY>`. Validate the SQL locally with

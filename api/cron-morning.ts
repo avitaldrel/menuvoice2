@@ -4,14 +4,14 @@
 // `Authorization: Bearer $CRON_SECRET` on scheduled invocations; we verify it.
 // You can also trigger manually with ?key=<REPORT_KEY> (e.g. to test delivery).
 //
-// Recipient:  REPORT_EMAIL_TO   (defaults to 2firemaster27@gmail.com)
+// Recipient:  REPORT_EMAIL_TO
 // Transport:  RESEND_API_KEY  OR  GMAIL_USER + GMAIL_APP_PASSWORD  (see _morningData.sendEmail)
 // Window:     REPORT_EMAIL_HOURS (default 24).  ?hours= overrides for manual runs.
 //
 // Internal/test accounts are excluded via REPORT_EXCLUDE_EMAILS.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { buildMorningReport, renderText, renderEmailHtml, sendEmail } from './_morningData.js';
+import { buildMorningReport, renderText, renderEmailHtml, sendEmail, reportEmailRecipients } from './_morningData.js';
 
 function authorized(req: VercelRequest): boolean {
   const auth = (req.headers.authorization as string) ?? '';
@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
 
-  const to = process.env.REPORT_EMAIL_TO ?? '2firemaster27@gmail.com';
+  const to = reportEmailRecipients();
   const hoursRaw = Number(req.query.hours);
   const envHours = Number(process.env.REPORT_EMAIL_HOURS);
   const hours = Number.isFinite(hoursRaw) && hoursRaw > 0
@@ -39,6 +39,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const hasTransport = !!(process.env.RESEND_API_KEY || (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD));
   if (!hasTransport) {
     return res.status(200).json({ ok: true, sent: false, reason: 'no server transport configured; cloud agent handles delivery' });
+  }
+  if (!to) {
+    return res.status(500).json({ ok: false, error: 'REPORT_EMAIL_TO is required when email transport is configured' });
   }
 
   try {

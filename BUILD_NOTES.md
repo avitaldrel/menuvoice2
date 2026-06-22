@@ -136,7 +136,7 @@ Every `aria-live="polite"` region, `aria-label`, and minimum touch target that w
 - **Runtime spec:** `vercel.json` must specify `"runtime": "nodejs20.x"` for TypeScript API routes. An invalid runtime string causes silent deploy failures.
 - **`Buffer` type:** Vercel serverless TypeScript needs `import { Buffer } from 'buffer'` explicitly — it's not globally available like in Node.
 - **CORS origin:** The OAuth whitelist (if any) must match the exact production URL including protocol and subdomain.
-- **Env var naming:** Server-side functions use `process.env.OPENAI_API_KEY`; Vite client code uses `import.meta.env.VITE_OPENAI_API_KEY`. These are different — both must be set in Vercel's environment variable panel for the respective use cases.
+- **Env var naming:** Server-side functions use `process.env.OPENAI_API_KEY`. `VITE_OPENAI_API_KEY` is only for localhost development and should not be set in hosted environments.
 - **Static HTML file:** Inline all CSS and JS into a single `.html` file if you want Vercel to serve it without a build step. External file references fail because Vercel doesn't serve relative paths from the same directory by default for static assets in `public/`.
 
 ### Model Choices

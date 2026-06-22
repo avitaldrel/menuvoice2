@@ -52,20 +52,20 @@ Needs **Node 18+**.
 ```bash
 npm install
 
-# add your OpenAI key
-cp .env.example .env       # then edit .env, paste key into VITE_OPENAI_API_KEY
+# optional: add a local-only OpenAI key
+cp .env.example .env       # then edit .env if you want direct local OpenAI calls
 
 npm run dev                # opens http://localhost:5173
 ```
 
 On your computer, `localhost` is a "secure context", so camera + microphone work.
 
-### One OpenAI key
+### OpenAI keys
 
-`VITE_OPENAI_API_KEY` covers vision + Whisper + chat + TTS. Get it at
-https://platform.openai.com/api-keys. Optional overrides: `VITE_TTS_MODEL`
-(default `tts-1-hd`), `VITE_TTS_VOICE` (default `shimmer`),
-`VITE_VISION_MODEL` / `VITE_CHAT_MODEL` (default `gpt-4o-mini`).
+Production uses serverless API routes and reads `OPENAI_API_KEY` from the Vercel
+environment. For local browser-only development, `VITE_OPENAI_API_KEY` can be set
+in `.env`; it is only used on localhost. Get keys at
+https://platform.openai.com/api-keys.
 
 > After editing `.env`, restart `npm run dev` so Vite picks up the new value.
 
@@ -79,20 +79,19 @@ deploy to a free HTTPS host:
 npm run build            # outputs dist/
 ```
 
-- **Vercel:** `npx vercel` (or connect the repo). Set `VITE_OPENAI_API_KEY` in
-  the project's Environment Variables. Send the testers the URL.
-- **Netlify:** `npx netlify deploy --prod` after `npm run build`, same env var.
+- **Vercel:** `npx vercel` (or connect the repo). Set server-side
+  `OPENAI_API_KEY` in the project's Environment Variables. Send the testers the URL.
+- **Netlify:** `npx netlify deploy --prod` after `npm run build`, with equivalent
+  server-side function environment variables.
 
 Then on the iPhone: open the URL in Safari, allow camera + mic, turn on VoiceOver
 (Settings → Accessibility → VoiceOver).
 
-## Security (before any wider pilot)
+## Security
 
-This prototype calls OpenAI **directly from the browser** with the key in the
-bundle — extractable. Fine for a private demo on your own phone. Before handing a
-build to outside testers, move the four functions in `src/lib/openai.ts` behind a
-serverless proxy (Vercel/Netlify function) and point the app at that. Nothing
-else changes.
+Production OpenAI calls go through serverless routes so `OPENAI_API_KEY` stays
+server-side. Do not set `VITE_OPENAI_API_KEY` in hosted environments; keep it for
+local development only.
 
 ---
 
