@@ -126,7 +126,7 @@ https://<deployment>/api/morning?key=<REPORT_KEY>
   login attaches the email) are NOT counted as a separate "anonymous" user — they
   belong to whichever account the session resolves to. There is no anonymous metric.
 - **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` when configured.
-  Use comma-separated addresses, for example `2firemaster27@gmail.com,avitaldrel@gmail.com,anibabug@gmail.com`.
+  Use comma-separated addresses, for example `internal@example.com,qa@example.com`.
 - Window: `?hours=N` or `?days=N` (default 24h). Output: HTML (default), `?format=text` (cron/email friendly), or `?format=json`.
 - Same `REPORT_KEY` guard. Zero AI tokens.
 
@@ -144,7 +144,7 @@ Required env vars in Vercel (Project → Settings → Env Vars), then redeploy:
   - `RESEND_API_KEY` (+ optional `RESEND_FROM`), **or**
   - `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail account + an App Password; requires 2FA).
 - Required when server email transport is configured: `REPORT_EMAIL_TO`. Use comma-separated
-  recipients, for example `2firemaster27@gmail.com,anibabug@gmail.com`.
+  recipients, for example `reports@example.com,ops@example.com`.
 - Optional: `REPORT_EMAIL_HOURS` (default 24), `REPORT_EXCLUDE_EMAILS`.
 
 Notes: Vercel Cron only fires on **production** deployments. To test delivery on demand,
