@@ -476,6 +476,19 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 @media (max-width:480px) { .metrics{grid-template-columns:1fr} .metrics .m{border-left:0;padding-left:0} }
 
 
+/* ── Partners ── */
+.aud { margin-top:clamp(44px,5vw,64px);display:grid;grid-template-columns:1fr 1fr;gap:0; }
+.aud-col { padding:clamp(20px,3vw,44px);border-left:1px solid var(--hair);display:flex;flex-direction:column; }
+.aud-col:first-child { padding-left:0;border-left:0; }
+.aud-col .tag { font-family:var(--font-mono);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--accent); }
+.aud-col h3 { font-family:var(--font-display);font-size:clamp(24px,2.8vw,32px);font-weight:500;letter-spacing:-0.02em;margin:14px 0 0; }
+.aud-col > p { margin:14px 0 0;font-size:15.5px;color:var(--text-secondary);line-height:1.58; }
+.aud-col .pts { margin:20px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px; }
+.aud-col .pts li { font-size:14.5px;color:var(--text-secondary);display:flex;gap:11px;align-items:flex-start; }
+.aud-col .pts li::before { content:'';margin-top:8px;width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0; }
+.aud-col .spacer { flex:1;min-height:24px; }
+@media (max-width:760px) { .aud{grid-template-columns:1fr} .aud-col{border-left:0;padding:30px 0;border-top:1px solid var(--hair)} .aud-col:first-child{border-top:0;padding-top:0} }
+
 /* ── CTA ── */
 .cta { text-align:center;max-width:720px;margin:0 auto;position:relative; }
 .cta-wave { height:64px;margin-bottom:28px;position:relative; }
@@ -523,6 +536,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
     <div class="nav-links">
       <a href="#demo-section">How it works</a>
       <a href="#why">The problem</a>
+      <a href="#partners">Partners</a>
       <a class="btn btn-primary" href="#waitlist">Request a demo</a>
     </div>
   </nav>
@@ -690,6 +704,43 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 
   <hr class="rule" />
 
+  <!-- ═══════════════════════ PARTNERS ═══════════════════════ -->
+  <section class="section-pad" id="partners" aria-labelledby="part-h">
+    <div class="wrap">
+      <p class="eyebrow reveal">For partners</p>
+      <h2 class="display reveal" data-d="1" id="part-h">Two ways to <em>be part of it.</em></h2>
+      <p class="lede reveal" data-d="2">Help test MenuVoice with diners, or make your menu easier to read by voice.</p>
+      <div class="aud reveal" data-d="2">
+        <div class="aud-col">
+          <span class="tag">Funders &amp; accessibility orgs</span>
+          <h3>Help us reach every table.</h3>
+          <p>Support a real pilot with blind and low-vision diners.</p>
+          <ul class="pts">
+            <li>Working prototype</li>
+            <li>Voice-first restaurant flow</li>
+            <li>Clear pilot scope</li>
+          </ul>
+          <div class="spacer"></div>
+          <a class="btn btn-primary" href="#waitlist">Request a demo <span class="arrow">→</span></a>
+        </div>
+        <div class="aud-col">
+          <span class="tag">Restaurants &amp; venues</span>
+          <h3>Put your menu on the map.</h3>
+          <p>Register interest so your menu can be verified for voice access.</p>
+          <ul class="pts">
+            <li>Current dishes and prices</li>
+            <li>Ingredient and allergen notes</li>
+            <li>A better first experience for blind guests</li>
+          </ul>
+          <div class="spacer"></div>
+          <a class="btn btn-secondary" href="#waitlist">Register interest <span class="arrow">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
   <!-- ═══════════════════════ CTA ═══════════════════════ -->
   <section class="section-pad" id="waitlist" aria-labelledby="cta-h">
     <div class="wrap">
@@ -720,6 +771,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
       <div class="links">
         <a href="#why">The problem</a>
         <a href="#demo-section">How it works</a>
+        <a href="#partners">Partners</a>
         <a href="#waitlist">Request a demo</a>
       </div>
     </div>
