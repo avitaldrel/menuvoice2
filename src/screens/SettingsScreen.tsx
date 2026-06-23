@@ -12,7 +12,6 @@ import { transcribeAudio } from '../lib/openai';
 import { speak, setAppVoice } from '../lib/speech';
 import { watchForSilence } from '../lib/vad';
 import { track } from '../lib/telemetry';
-import { DEMO_MENU, DEMO_RESTAURANT_NAME } from '../lib/demoMenu';
 
 const VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'fable', 'onyx'];
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
@@ -382,19 +381,6 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0, textAlign: 'center' }}>
         {srStatus}
       </p>
-      <Heading>Testing</Heading>
-      <SecondaryButton
-        label="Demo Menu"
-        hint="Open a preloaded sample menu without using the camera or scan API"
-        onClick={() =>
-          navigate({
-            name: 'conversation',
-            menu: DEMO_MENU,
-            restaurantName: DEMO_RESTAURANT_NAME,
-            source: 'photo',
-          })
-        }
-      />
       <SecondaryButton label="Back" onClick={goBack} />
       <SecondaryButton
         label={confirmSignOut ? 'Confirm sign out' : 'Sign out'}
