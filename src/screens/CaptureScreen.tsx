@@ -9,7 +9,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps, Route } from '../nav';
 import { ParsedMenu } from '../types';
-import { speak, coach, stopCoach, isAppVoiceOn } from '../lib/speech';
+import { speak, coach, stopCoach, stopSpeaking, isAppVoiceOn } from '../lib/speech';
+import { usePause } from '../state/PauseContext';
 import {
   startCamera,
   stopCamera,
@@ -68,6 +69,7 @@ export default function CaptureScreen({
   route,
 }: ScreenProps & { route: Extract<Route, { name: 'capture' }> }) {
   const appendTo = route.appendTo;
+  const { paused, registerStopListening } = usePause();
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -129,9 +131,35 @@ export default function CaptureScreen({
     };
   }, []);
 
+  // Pause Voice must instantly silence the capture screen too. pause() calls
+  // this handler synchronously, so the auto-capture scanner and all coaching
+  // stop the moment the button is pressed — before any React re-render. The
+  // paused-gated effects below then keep them stopped until Resume Voice.
+  useEffect(() => {
+    return registerStopListening(() => {
+      autoRef.current?.stop();
+      stopCoach();
+      stopSpeaking();
+      if (reassureIdRef.current) {
+        clearInterval(reassureIdRef.current);
+        reassureIdRef.current = null;
+      }
+    });
+  }, [registerStopListening]);
+
+  // While paused, make sure nothing restarts and surface the paused state.
+  useEffect(() => {
+    if (!paused) return;
+    autoRef.current?.stop();
+    stopCoach();
+    stopSpeaking();
+    setStatus('Voice paused. Tap Resume Voice to continue capture guidance.');
+    setCoachStatus('');
+  }, [paused]);
+
   // Periodic reassurance while analysis runs.
   useEffect(() => {
-    if (!analyzing) {
+    if (!analyzing || paused) {
       if (reassureIdRef.current) {
         clearInterval(reassureIdRef.current);
         reassureIdRef.current = null;
@@ -148,11 +176,11 @@ export default function CaptureScreen({
     }, 5000);
     reassureIdRef.current = id;
     return () => clearInterval(id);
-  }, [analyzing]);
+  }, [analyzing, paused]);
 
   // Run / stop the auto-capture controller.
   useEffect(() => {
-    const active = autoMode && cameraReady && !analyzing && !camError;
+    const active = autoMode && cameraReady && !analyzing && !camError && !paused;
     if (!active) {
       autoRef.current?.stop();
       stopCoach();
@@ -204,7 +232,7 @@ export default function CaptureScreen({
       stopCoach();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoMode, cameraReady, analyzing, camError, zoom, zoomRange.native]);
+  }, [autoMode, cameraReady, analyzing, camError, zoom, zoomRange.native, paused]);
 
   const addPhoto = (b64: string | null, viaAuto: boolean) => {
     if (!b64) return;

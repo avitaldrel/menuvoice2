@@ -93,22 +93,28 @@ function Root() {
         {[pageStatus, status].filter(Boolean).join(' ')}
       </div>
       <button
-        className="btn btn-secondary"
+        className="btn btn-secondary voice-toggle"
         onClick={() => (paused ? resume() : pause())}
         aria-pressed={paused}
-        aria-label={paused ? 'Resume MenuVoice speech and listening' : 'Pause MenuVoice speech and listening'}
-        style={{
-          position: 'fixed',
-          right: 12,
-          bottom: 12,
-          zIndex: 20,
-          width: 'auto',
-          minHeight: 56,
-          padding: '10px 16px',
-          boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
-        }}
+        aria-label={
+          paused
+            ? 'Resume Voice. Turn the microphone and MenuVoice speech back on.'
+            : 'Pause Voice. Stop MenuVoice speech and turn off microphone listening.'
+        }
       >
-        {paused ? 'Resume' : 'Pause'}
+        <span className="voice-toggle__glyph" aria-hidden="true">
+          {paused ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5.5v13l11-6.5-11-6.5z" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6.5" y="5" width="3.6" height="14" rx="1.2" />
+              <rect x="13.9" y="5" width="3.6" height="14" rx="1.2" />
+            </svg>
+          )}
+        </span>
+        {paused ? 'Resume Voice' : 'Pause Voice'}
       </button>
       {screen}
     </>

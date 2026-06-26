@@ -5,7 +5,7 @@ interface PauseCtx {
   paused: boolean;
   status: string;
   pause: (message?: string) => void;
-  resume: () => void;
+  resume: (message?: string) => void;
   registerStopListening: (fn: (() => void) | null) => () => void;
 }
 
@@ -16,16 +16,16 @@ export function PauseProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState('');
   const stopListeningRef = useRef<(() => void) | null>(null);
 
-  const pause = useCallback((message = 'MenuVoice is paused. Speech and listening are stopped.') => {
+  const pause = useCallback((message = 'Voice paused. MenuVoice stopped speaking and the microphone is off. Your conversation is saved.') => {
     stopSpeaking();
     stopListeningRef.current?.();
     setPaused(true);
     setStatus(message);
   }, []);
 
-  const resume = useCallback(() => {
+  const resume = useCallback((message = 'Voice resumed. The microphone is on and MenuVoice can speak again.') => {
     setPaused(false);
-    setStatus('MenuVoice is resumed. Use the current screen controls to continue.');
+    setStatus(message);
   }, []);
 
   const registerStopListening = useCallback((fn: (() => void) | null) => {
