@@ -2,7 +2,7 @@
 // SavedRestaurant carries its own id + capturedAt so a future V2 "shared menus
 // across users" feature needs no migration.
 
-import { UserProfile, EMPTY_PROFILE, SavedRestaurant, ParsedMenu } from '../types';
+import { UserProfile, EMPTY_PROFILE, SavedRestaurant, ParsedMenu, MenuProvenance } from '../types';
 import { track } from './telemetry';
 
 const PROFILE_KEY = 'menuvoice.profile.v1';
@@ -103,7 +103,28 @@ function trySetItem(key: string, value: string): void {
   }
 }
 
-export async function saveRestaurant(name: string, menu: ParsedMenu, sourceUrl?: string): Promise<SavedRestaurant> {
+export interface SaveRestaurantOptions {
+  sourceUrl?: string;
+  location?: string; // confirmed branch address — keeps chain branches separate
+  provenance?: MenuProvenance;
+}
+
+// Identity key for de-duplication. A chain has many branches, so we key on the
+// restaurant name AND its location: "Cheesecake Factory" in Paramus and in
+// Freehold are DIFFERENT saved entries and must not overwrite each other. Only a
+// re-save of the SAME name at the SAME location (or both with no location)
+// replaces the previous one — that is a refresh, not a new place.
+function locationKey(r: { name: string; location?: string; provenance?: MenuProvenance }): string {
+  const loc = (r.location ?? r.provenance?.confirmedLocation ?? '').trim().toLowerCase();
+  return `${r.name.trim().toLowerCase()}|${loc}`;
+}
+
+export async function saveRestaurant(
+  name: string,
+  menu: ParsedMenu,
+  opts: SaveRestaurantOptions = {},
+): Promise<SavedRestaurant> {
+  const { sourceUrl, location, provenance } = opts;
   const list = await loadSavedRestaurants();
   const entry: SavedRestaurant = {
     id: `r-${Date.now()}`,
@@ -111,11 +132,17 @@ export async function saveRestaurant(name: string, menu: ParsedMenu, sourceUrl?:
     menu,
     capturedAt: new Date().toISOString(),
     ...(sourceUrl ? { sourceUrl } : {}),
+    ...(location ? { location } : {}),
+    ...(provenance ? { provenance } : {}),
   };
-  const filtered = list.filter((r) => r.name.toLowerCase() !== entry.name.toLowerCase());
+  const entryKey = locationKey(entry);
+  const filtered = list.filter((r) => locationKey(r) !== entryKey);
   filtered.unshift(entry);
   trySetItem(SAVED_KEY, JSON.stringify(filtered));
-  track('restaurant', 'saved', { content: { id: entry.id, name: entry.name } });
+  track('restaurant', 'saved', {
+    content: { id: entry.id, name: entry.name },
+    metadata: { location: entry.location, sourceType: provenance?.sourceType },
+  });
   const profile = await loadProfile();
   pushToCloud(profile, filtered);
   return entry;

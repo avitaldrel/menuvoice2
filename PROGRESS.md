@@ -178,3 +178,44 @@ build, commit, push. Then: REVIEW.md remaining majors (LLM category validation
 in find-menu.ts, iOS coach utterance drop in speech.ts), SMOKE-RESULTS.md
 chain-restaurant 404s (check BROWSERLESS_TOKEN), VOICEOVER-AUDIT P1s, push to
 deploy.
+
+---
+
+# Restaurant Search Reliability & Transparency — feature/restaurant-search-reliability
+
+Working branch: `feature/restaurant-search-reliability` (off `main`).
+Do NOT commit to main; do NOT open a PR into main (per operational brief).
+
+Goal: every retrieved menu tells the user which LOCATION was found, whether the
+source is OFFICIAL or third-party, whether it is CURRENT, whether it is
+COMPLETE, whether ingredient info is CONFIRMED or INFERRED, what MenuVoice is
+DOING while it searches, and what to DO on failure.
+
+Centerpiece target sentence:
+> "I found the official menu for the Cheesecake Factory at Garden State Plaza in
+> Paramus, New Jersey. I verified this location from the restaurant's website.
+> This menu was checked today, appears to be location-specific, and may be
+> incomplete because I could not find the drinks section."
+
+## Baseline at session start (2026-06-27)
+- Build (`tsc -b && vite build`) passes.
+- Search: FindScreen -> /api/find-menu (one web_search -> candidate URLs ->
+  fetch/score -> ONE extraction). Direct URLs -> /api/menu-from-url. Returns only
+  `{ menu, restaurantName, address?, sourceUrl? }`. No provenance model.
+- Loading copy = 3 vague rotating phrases; no cancel. Saved restaurants dedupe by
+  NAME ONLY (chain branches collide). Allergens not classified explicit/inferred.
+
+## Priority order (from brief)
+1 loading states · 2 location matching · 3 source/freshness/completeness/confidence
+· 4 static retrieval · 5 JS browser fallback · 6 allergen confidence ·
+7 feedback · 8 caching/refresh · 9 voice controls.
+Implementing 3 (data backbone) + 2 (storage/per-location) + 1 first.
+
+## Status log — Session 1 (2026-06-27)
+- [x] Read codebase; baseline build green.
+- [x] Branch created.
+- [ ] Provenance data model + server classification (in progress).
+
+## LEFT OFF
+Session 1 just started: branch + worklog created, implementing the provenance
+data model next.

@@ -7,6 +7,7 @@ import { SavedRestaurant } from '../types';
 import { loadSavedRestaurants, deleteRestaurant } from '../lib/storage';
 import { speak } from '../lib/speech';
 import { track } from '../lib/telemetry';
+import { provenanceForSaved } from '../lib/provenance';
 
 export default function SavedScreen({ navigate, goBack }: ScreenProps) {
   const [list, setList] = useState<SavedRestaurant[] | null>(null);
@@ -65,10 +66,13 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
               key={r.id}
               className="card"
               role="group"
-              aria-label={`${i + 1}: ${r.name}, captured ${formatDate(r.capturedAt)}`}
+              aria-label={`${i + 1}: ${r.name}${r.location ? `, ${r.location}` : ''}, captured ${formatDate(r.capturedAt)}`}
             >
               <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 700 }}>#{i + 1}</div>
               <div style={{ fontSize: 22, fontWeight: 700 }}>{r.name}</div>
+              {r.location && (
+                <div className="muted" style={{ marginTop: 2 }}>{r.location}</div>
+              )}
               <div className="muted" style={{ marginTop: 4 }}>
                 Last visit: {formatDate(r.capturedAt)}
               </div>
@@ -78,7 +82,13 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
                   hint={`Open the menu for ${r.name}`}
                   onClick={() => {
                     track('saved', 'open', { content: { restaurantName: r.name } });
-                    navigate({ name: 'conversation', menu: r.menu, restaurantName: r.name });
+                    navigate({
+                      name: 'conversation',
+                      menu: r.menu,
+                      restaurantName: r.name,
+                      source: 'saved',
+                      provenance: provenanceForSaved(r),
+                    });
                   }}
                   style={{ flex: 1 }}
                 />

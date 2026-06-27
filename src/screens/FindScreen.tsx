@@ -5,7 +5,13 @@
 // right server pipeline:
 //   - looks like a URL  -> parseMenuFromUrl (fetch + parse the page/PDF)
 //   - otherwise (a name) -> findMenuByName (web search + read their site)
-// If the menu isn't online, we say so plainly. One place to put anything.
+//
+// While searching, we explain each real stage of what MenuVoice is doing (no
+// fake percentages), let the user ask "What are you doing?" to repeat the
+// current step, and offer a clear Cancel. When a name resolves we CONFIRM the
+// branch and source with the user (official vs third-party, location-specific or
+// generic) before opening it. On failure we say specifically what went wrong and
+// offer practical next actions.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
@@ -14,12 +20,7 @@ import { findMenuByName, parseMenuFromUrl, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { speak, stopSpeaking } from '../lib/speech';
 import { track } from '../lib/telemetry';
-
-const SEARCH_PHRASES = [
-  'Still searching for their menu, hang tight.',
-  'Reading their website now, almost there.',
-  'Still working on it, one more moment.',
-];
+import { MenuProvenance } from '../types';
 
 // A single token with a dot and a real-looking ending is a link
 // (restaurant.com, site.com/menu, a .pdf). Anything with a space is a name
@@ -59,27 +60,104 @@ function normalizeRestaurantQuery(raw: string): string {
   return t;
 }
 
+/** The location half of a normalized "Name, City ST" query, for the status copy. */
+function locationPart(normalized: string): string {
+  const idx = normalized.indexOf(',');
+  return idx >= 0 ? normalized.slice(idx + 1).trim() : '';
+}
+
+// Honest, ordered descriptions of what the server pipeline is actually doing.
+// These advance on a timer and STOP at the last step until the response lands;
+// they describe what MenuVoice is attempting, never claim a step succeeded, and
+// never show fake progress percentages. The final result corrects the story.
+function nameStages(location: string): string[] {
+  return [
+    'Starting the search.',
+    location ? `Looking for the restaurant near ${location}.` : 'Looking for the restaurant.',
+    'Checking their official website for the menu.',
+    'Reading and organizing the menu items.',
+  ];
+}
+const URL_STAGES = [
+  'Opening that link.',
+  'Looking for the menu on that page.',
+  'Reading and organizing the menu items.',
+];
+
 type PendingMatch = Awaited<ReturnType<typeof findMenuByName>> & { requestedName: string };
+
+// One-line source evidence for the confirm card, e.g.
+// "Source: their website. This looks specific to this location."
+function evidenceLine(p: MenuProvenance | undefined): string {
+  if (!p) return '';
+  const src =
+    p.sourceType === 'third_party'
+      ? `Source: ${p.sourceLabel ?? 'a third-party listing'} (not the restaurant directly).`
+      : `Source: ${p.sourceLabel ?? 'an online source'}.`;
+  const scope =
+    p.locationScope === 'location_specific'
+      ? ' This looks specific to this location.'
+      : p.locationScope === 'generic'
+        ? ' This looks like the general chain menu, which may differ at this branch.'
+        : ' I could not confirm it is specific to this branch.';
+  const complete = p.completeness === 'partial' ? ' It may be incomplete.' : '';
+  return src + scope + complete;
+}
 
 export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingMatch, setPendingMatch] = useState<PendingMatch | null>(null);
-  const reassureRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [failure, setFailure] = useState<{ message: string; wasUrl: boolean } | null>(null);
+  const stageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentStatusRef = useRef('');
+  const abortRef = useRef<AbortController | null>(null);
   const inFlightRef = useRef(false);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const failureHeadingRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     speak('Find a menu. Enter a restaurant name and city, or paste a menu link. Then tap Find menu.');
     return () => {
-      if (reassureRef.current) clearInterval(reassureRef.current);
+      if (stageTimerRef.current) clearInterval(stageTimerRef.current);
+      abortRef.current?.abort();
       stopSpeaking();
     };
   }, []);
 
   const announce = (msg: string) => {
+    currentStatusRef.current = msg;
     setStatus(msg);
     speak(msg);
+  };
+
+  // Set the visible status WITHOUT speaking — used for the very first stage so we
+  // don't talk over the "searching" line we just spoke.
+  const setStatusQuiet = (msg: string) => {
+    currentStatusRef.current = msg;
+    setStatus(msg);
+  };
+
+  // Walk the honest stage list on a timer. Speaks each new stage once, spaced out
+  // so it informs without flooding the screen reader. Holds on the final stage.
+  const startStageNarration = (stages: string[]) => {
+    if (stageTimerRef.current) clearInterval(stageTimerRef.current);
+    let i = 0;
+    setStatusQuiet(stages[0]);
+    stageTimerRef.current = setInterval(() => {
+      i += 1;
+      if (i >= stages.length) {
+        if (stageTimerRef.current) clearInterval(stageTimerRef.current);
+        return;
+      }
+      announce(stages[i]);
+    }, 7000);
+  };
+
+  const stopStageNarration = () => {
+    if (stageTimerRef.current) clearInterval(stageTimerRef.current);
+    stageTimerRef.current = null;
   };
 
   const find = async () => {
@@ -87,13 +165,15 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
     const trimmed = query.trim();
     if (!trimmed) { announce('Please type a restaurant name or paste a link first.'); return; }
     setPendingMatch(null);
+    setFailure(null);
     if (!hasApiKey()) {
       announce('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
       return;
     }
 
     const isUrl = looksLikeUrl(trimmed);
-
+    const controller = new AbortController();
+    abortRef.current = controller;
     inFlightRef.current = true;
     setLoading(true);
 
@@ -102,48 +182,77 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
         let fullUrl = trimmed;
         if (!/^https?:\/\//i.test(fullUrl)) fullUrl = 'https://' + fullUrl;
         track('find', 'submit_url', { metadata: { url: fullUrl } });
-        announce('Reading the menu from that link. This may take a moment.');
-        const menu = await parseMenuFromUrl(fullUrl);
+        announce('Reading the menu from that link.');
+        startStageNarration(URL_STAGES);
+        const { menu, provenance, sourceUrl } = await parseMenuFromUrl(fullUrl, controller.signal);
+        stopStageNarration();
         const restaurantName = menu.restaurantName?.trim() || 'This restaurant';
-        await saveRestaurant(restaurantName, menu).catch(() => {});
-        navigate({ name: 'conversation', menu, restaurantName, source: 'url' });
+        await saveRestaurant(restaurantName, menu, {
+          sourceUrl: sourceUrl ?? fullUrl,
+          location: provenance?.confirmedLocation,
+          provenance,
+        }).catch(() => {});
+        navigate({ name: 'conversation', menu, restaurantName, source: 'url', provenance });
         return;
       }
 
-      // A restaurant name — web search can be slow, so reassure periodically.
+      // A restaurant name — web search can be slow, so narrate the real stages.
       const normalized = normalizeRestaurantQuery(trimmed);
+      const where = locationPart(normalized);
       track('find', 'search_start', { content: { query: normalized } });
       announce(`Searching for ${normalized} and their menu. This can take up to a minute.`);
-      let i = 0;
-      reassureRef.current = setInterval(() => {
-        announce(SEARCH_PHRASES[i % SEARCH_PHRASES.length]);
-        i++;
-      }, 9000);
+      startStageNarration(nameStages(where));
 
-      const result = await findMenuByName(normalized);
-      if (reassureRef.current) clearInterval(reassureRef.current);
+      const result = await findMenuByName(normalized, controller.signal);
+      stopStageNarration();
       const name = result.restaurantName?.trim() || normalized;
-      const where = result.address?.trim();
+      const place = result.provenance?.confirmedLocation?.trim() || result.address?.trim();
       setPendingMatch({ ...result, requestedName: normalized });
       inFlightRef.current = false;
       setLoading(false);
-      announce(`I found ${name}${where ? ` in ${where}` : ''}. Is this the restaurant you want?`);
+      const evidence = evidenceLine(result.provenance);
+      announce(
+        `I found ${name}${place ? ` in ${place}` : ''}. ${evidence} Is this the right place? ` +
+          'Tap Open this menu to continue, or Not this one to search again.',
+      );
+      // Move focus to the confirm action (a meaningful next step the user can take).
+      setTimeout(() => confirmBtnRef.current?.focus(), 60);
     } catch (e: any) {
-      if (reassureRef.current) clearInterval(reassureRef.current);
+      stopStageNarration();
       inFlightRef.current = false;
       setLoading(false);
+      if (e?.name === 'AbortError') {
+        announce('Search canceled. Edit the name or link and try again when you are ready.');
+        return;
+      }
       const fallback = isUrl
-        ? "Hey, sorry. I couldn't read the menu from that link. Try a different link, or just type the restaurant's name."
-        : "I couldn't find that restaurant's menu online. Try adding the city to the name.";
-      announce(e?.message ?? fallback);
+        ? "I couldn't read the menu from that link. Try a different link, or type the restaurant's name and city."
+        : "I couldn't find that restaurant's menu online. Try adding the city and state to the name.";
+      const message = e?.message ?? fallback;
+      setFailure({ message, wasUrl: isUrl });
+      announce(message);
+      // Land focus on the failure explanation so the next actions are reachable.
+      setTimeout(() => failureHeadingRef.current?.focus(), 60);
     }
+  };
+
+  const cancel = () => {
+    abortRef.current?.abort();
+    stopStageNarration();
+    inFlightRef.current = false;
+    setLoading(false);
   };
 
   const confirmMatch = async () => {
     if (!pendingMatch) return;
     const name = pendingMatch.restaurantName?.trim() || pendingMatch.requestedName;
-    await saveRestaurant(name, pendingMatch.menu, pendingMatch.sourceUrl).catch(() => {});
-    navigate({ name: 'conversation', menu: pendingMatch.menu, restaurantName: name, source: 'find' });
+    const provenance = pendingMatch.provenance;
+    await saveRestaurant(name, pendingMatch.menu, {
+      sourceUrl: pendingMatch.sourceUrl,
+      location: provenance?.confirmedLocation ?? pendingMatch.address ?? undefined,
+      provenance,
+    }).catch(() => {});
+    navigate({ name: 'conversation', menu: pendingMatch.menu, restaurantName: name, source: 'find', provenance });
   };
 
   const rejectMatch = () => {
@@ -178,16 +287,74 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
         {status}
       </p>
 
+      {/* While searching: let the user repeat the current step or cancel. */}
+      {loading && (
+        <div className="row" role="group" aria-label="Search controls">
+          <SecondaryButton
+            label="What are you doing?"
+            hint="Repeat the current step"
+            onClick={() => speak(currentStatusRef.current || 'Still working on it.')}
+          />
+          <SecondaryButton
+            label="Cancel search"
+            hint="Stop searching"
+            tone="danger"
+            onClick={cancel}
+          />
+        </div>
+      )}
+
       {pendingMatch ? (
         <div className="card" role="group" aria-label="Confirm restaurant match">
-          <p className="body" style={{ marginBottom: 12 }}>
-            I found {pendingMatch.restaurantName?.trim() || pendingMatch.requestedName}
-            {pendingMatch.address?.trim() ? ` in ${pendingMatch.address.trim()}` : ''}. Is this the restaurant you want?
+          <p className="body" style={{ marginBottom: 6, fontWeight: 600 }}>
+            {pendingMatch.restaurantName?.trim() || pendingMatch.requestedName}
+            {(pendingMatch.provenance?.confirmedLocation?.trim() || pendingMatch.address?.trim())
+              ? ` — ${pendingMatch.provenance?.confirmedLocation?.trim() || pendingMatch.address?.trim()}`
+              : ''}
           </p>
+          {evidenceLine(pendingMatch.provenance) && (
+            <p className="muted" style={{ marginTop: 0, marginBottom: 12 }}>
+              {evidenceLine(pendingMatch.provenance)}
+            </p>
+          )}
+          <p className="body" style={{ marginBottom: 12 }}>Is this the restaurant you want?</p>
           <div className="row">
-            <PrimaryButton label="Open this menu" onClick={confirmMatch} />
-            <SecondaryButton label="Not this one" onClick={rejectMatch} />
+            <button
+              ref={confirmBtnRef}
+              className="btn btn-primary"
+              onClick={confirmMatch}
+              aria-label="Open this menu. Use this restaurant"
+              style={{ flex: 1 }}
+            >
+              Open this menu
+            </button>
+            <SecondaryButton label="Not this one" hint="Search again" onClick={rejectMatch} style={{ flex: 1 }} />
           </div>
+        </div>
+      ) : null}
+
+      {/* Specific failure + practical next actions. */}
+      {failure ? (
+        <div className="card" role="group" aria-label="Search did not work">
+          <p
+            className="body"
+            ref={failureHeadingRef}
+            tabIndex={-1}
+            style={{ marginBottom: 12, fontWeight: 600 }}
+          >
+            {failure.message}
+          </p>
+          <div className="col">
+            <SecondaryButton label="Try again" hint="Search the same thing again" onClick={() => { setFailure(null); find(); }} />
+            <SecondaryButton
+              label="Scan the physical menu"
+              hint="Use the camera to read the printed menu"
+              onClick={() => navigate({ name: 'capture' })}
+            />
+          </div>
+          <p className="muted" style={{ marginTop: 12, marginBottom: 0 }}>
+            You can also paste a direct link to their menu page in the box above.
+          </p>
         </div>
       ) : null}
 

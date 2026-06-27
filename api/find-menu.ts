@@ -23,6 +23,8 @@ import {
   menuItemCount,
   menuLikelihood,
   extractJson,
+  classifySource,
+  classifyLocationScope,
   FriendlyError,
   type MenuSource,
 } from './_menuCore.js';
@@ -185,12 +187,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const menu = await parseMenuSource(best);
       if (menuItemCount(menu) >= 3) {
         if (!menu.restaurantName && restaurantName) menu.restaurantName = restaurantName;
+        // Build provenance so the client can honestly explain source, location
+        // scope, freshness, and completeness instead of presenting it as gospel.
+        const cls = classifySource(best.url, best.kind === 'pdf');
+        const pageText = best.kind === 'html' ? best.text : '';
+        const locationScope = classifyLocationScope(pageText, best.url, address ?? query);
+        const provenance = {
+          sourceType: cls.sourceType,
+          official: cls.official,
+          sourceLabel: cls.sourceLabel,
+          locationScope,
+          confirmedLocation: address ?? undefined,
+          sourceUrl: best.url,
+          checkedAt: new Date().toISOString(),
+          completeness: menu.incomplete ? 'partial' : 'complete',
+          warnings: menu.incompleteReason ? [menu.incompleteReason] : undefined,
+        };
         return res.status(200).json({
           menu,
           restaurantName: menu.restaurantName ?? restaurantName,
           address,
           sourceUrl: best.url,
           via: 'url',
+          provenance,
         });
       }
     }
