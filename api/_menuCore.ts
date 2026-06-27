@@ -2,15 +2,24 @@
 // Used by api/menu-from-url.ts and api/find-menu.ts.
 //
 // fetchMenuSource(url)  -> classified content: HTML text | PDF base64 | image URL.
-//                          Handles JS-shell pages (Browserless fallback) and
-//                          follows ONE "menu" link hop when a page has no menu
-//                          signal (most users paste the homepage, not /menu).
+//                          Handles JS-shell pages (free Jina reader render, with
+//                          optional Browserless fallback) and follows ONE "menu"
+//                          link hop when a page has no menu signal (most users
+//                          paste the homepage, not /menu).
 // parseMenuSource(src)  -> ParsedMenu via OpenAI (vision model; PDFs as file input).
 
 const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN ?? '';
 const JS_SHELL_THRESHOLD = 500;
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
+const TEXT_CAP = 60000;
+
+// Free JS rendering via Jina AI Reader (https://r.jina.ai). No API key required
+// for the low volumes this app generates; it renders client-side menus that a
+// plain fetch returns as an empty shell and gives back clean markdown text.
+// This is the primary render path so we don't depend on a paid headless service.
+// Set JINA_API_KEY to raise rate limits, or READER_BASE to self-host the reader.
+const READER_BASE = process.env.READER_BASE ?? 'https://r.jina.ai/';
 
 export const PARSE_MODEL = process.env.VISION_MODEL ?? 'gpt-5.4-mini';
 
@@ -107,6 +116,24 @@ export function priceSignals(text: string): number {
   return (text.match(/[$€£]\s?\d{1,3}(?:[.,]\d{2})?|\d{1,3}\.\d{2}\b/g) ?? []).length;
 }
 
+/**
+ * Heuristic score for how menu-like a page's text is, used to pick the best
+ * candidate among several found URLs. Prices are the strongest signal, but many
+ * chain menus (e.g. The Cheesecake Factory) list no prices online yet are full,
+ * valid menus — so food-word density and overall content length count too. This
+ * keeps us from rating a rich price-less menu the same as an empty JS shell.
+ */
+export function menuLikelihood(text: string): number {
+  const prices = priceSignals(text);
+  const keywords = (
+    text.match(
+      /\b(appetizers?|entr[ée]es?|desserts?|salads?|sandwich(?:es)?|burgers?|pizzas?|pasta|chicken|beef|seafood|soups?|sides?|starters?|beverages?|drinks?|breakfast|lunch|dinner|specials?)\b/gi
+    ) ?? []
+  ).length;
+  const lengthBonus = Math.min(10, Math.floor(text.length / 4000));
+  return prices * 2 + Math.min(keywords, 40) + lengthBonus;
+}
+
 /** Hrefs on the page that look like links to a menu (absolute, deduped). */
 export function findMenuLinks(html: string, baseUrl: string): string[] {
   const out: string[] = [];
@@ -150,6 +177,33 @@ async function fetchWithBrowserless(url: string): Promise<string> {
     throw new Error('credits_exhausted');
   }
   if (!res.ok) throw new Error(`Browserless error (${res.status})`);
+  return readCappedText(
+    res,
+    MAX_HTML_BYTES,
+    'That rendered menu page is too large for me to read. Try a direct link to the menu instead.'
+  );
+}
+
+/**
+ * Render a JS-heavy page to clean text via the free Jina AI Reader. Returns the
+ * page as markdown (tags already stripped), which the extractor reads as well as
+ * or better than raw HTML. No key required; JINA_API_KEY only raises rate limits.
+ */
+async function renderViaReader(url: string): Promise<string> {
+  const headers: Record<string, string> = {
+    // Ask the reader for markdown; it strips boilerplate and keeps menu text/tables.
+    'X-Return-Format': 'markdown',
+    Accept: 'text/plain',
+    'User-Agent': 'MenuVoice/1.0 (+menu reader)',
+  };
+  if (process.env.JINA_API_KEY) headers.Authorization = `Bearer ${process.env.JINA_API_KEY}`;
+  // Jina URL form is https://r.jina.ai/<full target url>. Cap at 18s so the
+  // find-menu deadline still leaves room for the extraction call afterward.
+  const res = await fetch(READER_BASE + url, {
+    headers,
+    signal: AbortSignal.timeout(18000),
+  });
+  if (!res.ok) throw new Error(`reader_error_${res.status}`);
   return readCappedText(
     res,
     MAX_HTML_BYTES,
@@ -220,16 +274,28 @@ async function fetchOne(url: string): Promise<MenuSource> {
   );
   let text = stripHtml(html);
 
-  // JS shell? Re-fetch rendered HTML through Browserless when configured.
-  if (text.length < JS_SHELL_THRESHOLD && BROWSERLESS_TOKEN) {
+  // JS shell? A plain fetch of a client-rendered menu yields almost no text.
+  // Render it: free Jina reader first, then Browserless only if a token is set.
+  if (text.length < JS_SHELL_THRESHOLD) {
+    let rendered = '';
     try {
-      const rendered = await fetchWithBrowserless(finalUrl);
-      const renderedText = stripHtml(rendered);
-      if (renderedText.length > text.length) {
-        html = rendered;
-        text = renderedText;
-      }
+      rendered = await renderViaReader(finalUrl); // markdown text, already clean
     } catch {}
+    // Browserless is a paid fallback we only touch when a token is configured
+    // and the free reader came up short. It returns raw HTML, so strip it.
+    if (rendered.length < JS_SHELL_THRESHOLD && BROWSERLESS_TOKEN) {
+      try {
+        const raw = await fetchWithBrowserless(finalUrl);
+        const stripped = stripHtml(raw);
+        if (stripped.length > rendered.length) {
+          rendered = stripped;
+          html = raw; // keep HTML so menu-link following can still work
+        }
+      } catch {}
+    }
+    if (rendered.trim().length > text.length) {
+      text = rendered.slice(0, TEXT_CAP);
+    }
   }
 
   return { kind: 'html', text, html, url: finalUrl };
