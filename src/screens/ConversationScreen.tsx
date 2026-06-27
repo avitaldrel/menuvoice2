@@ -34,7 +34,7 @@ import {
   earconThinkingStop,
 } from '../lib/earcon';
 import { mergeUnique } from '../util';
-import { analyzeItemAllergens } from '../lib/allergens';
+import { analyzeItemAllergens, allergenDisclaimer, type AllergenFinding } from '../lib/allergens';
 import {
   provenanceSummary,
   provenanceOpeningNote,
@@ -78,7 +78,7 @@ function matchProvenanceIntent(t: string): ProvenanceIntent | null {
 // the dish, never as its own stop.
 function dishLabel(
   item: ParsedMenu['categories'][number]['items'][number],
-  otherAllergens: string[] = [],
+  otherAllergens: AllergenFinding[] = [],
 ): string {
   let label = item.name;
   if (item.price) label += `, ${item.price}`;
@@ -88,7 +88,9 @@ function dishLabel(
   }
   if (otherAllergens.length > 0) {
     // Read the allergen warning last, as part of the same single rotor stop.
-    label += `. Allergen warning. This dish contains ${otherAllergens.join(', ')}. Please confirm with the restaurant.`;
+    // The wording reflects whether each allergen was declared or only inferred,
+    // so an inference is never spoken as a confirmed fact.
+    label += `. Allergen warning. ${allergenDisclaimer(otherAllergens)}`;
   }
   return label;
 }
@@ -150,7 +152,7 @@ function MenuDocument({
       </h2>
       {allergies.length > 0 && (
         <p className="body" style={{ marginTop: 0, marginBottom: 12, color: 'var(--text-secondary)' }}>
-          Dishes containing your allergens ({allergies.join(', ')}) are hidden. Always confirm with the restaurant.
+          Dishes that may contain your allergens ({allergies.join(', ')}) are hidden. This is based on the dish descriptions, not confirmed by the restaurant, so always confirm with the restaurant.
         </p>
       )}
       {categories.map((cat) => {
@@ -202,7 +204,7 @@ function MenuDocument({
                     )}
                     {info.otherAllergens.length > 0 && (
                       <p className="allergen-disclaimer" aria-hidden="true">
-                        ⚠ Contains {info.otherAllergens.join(', ')}. Known allergen. Confirm with the restaurant.
+                        {allergenDisclaimer(info.otherAllergens)}
                       </p>
                     )}
                   </article>
@@ -214,7 +216,7 @@ function MenuDocument({
       })}
       {categories.length === 0 && (
         <p className="body" role="note" style={{ marginTop: 8 }}>
-          Every dish on this menu contains one of your listed allergens, so none are shown. Please ask the restaurant about safe options.
+          Every dish on this menu may contain one of your listed allergens based on its description, so none are shown. Please ask the restaurant about safe options.
         </p>
       )}
       {menu.notes && (

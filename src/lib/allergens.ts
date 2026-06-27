@@ -117,10 +117,41 @@ function itemText(item: MenuItem): string {
     .toLowerCase();
 }
 
-// Which allergen groups are present in this dish.
-function detectGroups(item: MenuItem): AllergenGroup[] {
+// How sure we are an allergen is present:
+//   explicit  - the dish text actually DECLARES allergens ("contains milk",
+//               "allergens: soy, wheat", "made with peanuts"). The restaurant
+//               (or the menu) said so.
+//   inferred  - we recognised an ingredient from the dish name/description, but
+//               nobody confirmed it. Most matches are this. NEVER present as fact.
+export type AllergenConfidence = 'explicit' | 'inferred';
+
+export interface AllergenFinding {
+  label: string;
+  confidence: AllergenConfidence;
+}
+
+// Cues that a piece of dish text is an explicit allergen/ingredient declaration
+// rather than just a dish name. Conservative on purpose: if these are absent we
+// fall back to "inferred", because over-claiming "confirmed" is the unsafe error.
+const DECLARATION_CUES = /\b(contains?|allergens?|made with|prepared with|may contain|ingredients?)\b/i;
+
+// Is allergen group `g` an EXPLICIT declaration in this dish text? We require a
+// declaration cue AND the keyword to appear, so a plain "Shrimp scampi" stays
+// inferred while "Contains shellfish" is explicit.
+function isExplicit(text: string, g: AllergenGroup): boolean {
+  if (!DECLARATION_CUES.test(text)) return false;
+  return g.keywords.some((kw) => hasWord(text, kw));
+}
+
+// Which allergen groups are present in this dish, each with a confidence.
+function detectGroups(item: MenuItem): Array<{ group: AllergenGroup; confidence: AllergenConfidence }> {
   const text = itemText(item);
-  return ALLERGEN_GROUPS.filter((g) => g.keywords.some((kw) => hasWord(text, kw)));
+  const explicitText =
+    DECLARATION_CUES.test(text) ? text : ''; // only check declarations against declaring text
+  return ALLERGEN_GROUPS.filter((g) => g.keywords.some((kw) => hasWord(text, kw))).map((g) => ({
+    group: g,
+    confidence: explicitText && isExplicit(explicitText, g) ? 'explicit' : 'inferred',
+  }));
 }
 
 // Does the guest's profile list an allergy that refers to this group?
@@ -136,24 +167,43 @@ function groupInProfile(group: AllergenGroup, profileAllergies: string[]): boole
 export interface ItemAllergenInfo {
   // True when the dish contains an allergen the guest listed → it should be hidden.
   blocked: boolean;
-  // Labels of the guest's own allergens found in the dish (for telemetry/copy).
-  blockedBy: string[];
-  // Labels of OTHER allergens present (not in the guest's profile) → disclaimer.
-  otherAllergens: string[];
+  // The guest's own allergens found in the dish, with confidence (for copy).
+  blockedBy: AllergenFinding[];
+  // OTHER allergens present (not in the guest's profile), with confidence → disclaimer.
+  otherAllergens: AllergenFinding[];
 }
 
 /**
  * Analyze one dish against the guest's profile allergies.
  * - blocked dishes should be removed from the visible menu.
  * - non-blocked dishes with otherAllergens should show a disclaimer.
+ * Each finding carries whether the allergen was explicitly declared by the menu
+ * or merely inferred from the dish name/description, so callers never present an
+ * inference as confirmed.
  */
 export function analyzeItemAllergens(item: MenuItem, profileAllergies: string[]): ItemAllergenInfo {
   const present = detectGroups(item);
-  const blockedBy: string[] = [];
-  const otherAllergens: string[] = [];
-  for (const g of present) {
-    if (groupInProfile(g, profileAllergies)) blockedBy.push(g.label);
-    else otherAllergens.push(g.label);
+  const blockedBy: AllergenFinding[] = [];
+  const otherAllergens: AllergenFinding[] = [];
+  for (const { group, confidence } of present) {
+    const finding: AllergenFinding = { label: group.label, confidence };
+    if (groupInProfile(group, profileAllergies)) blockedBy.push(finding);
+    else otherAllergens.push(finding);
   }
   return { blocked: blockedBy.length > 0, blockedBy, otherAllergens };
+}
+
+/** Spoken/printed allergen disclaimer honoring confidence. Empty when none. */
+export function allergenDisclaimer(findings: AllergenFinding[]): string {
+  if (findings.length === 0) return '';
+  const explicit = findings.filter((f) => f.confidence === 'explicit').map((f) => f.label);
+  const inferred = findings.filter((f) => f.confidence === 'inferred').map((f) => f.label);
+  const parts: string[] = [];
+  if (explicit.length) parts.push(`The restaurant lists ${explicit.join(', ')}.`);
+  if (inferred.length)
+    parts.push(
+      `This dish may contain ${inferred.join(', ')} based on the description, but the restaurant does not confirm it.`,
+    );
+  parts.push('Please confirm with the restaurant.');
+  return parts.join(' ');
 }
