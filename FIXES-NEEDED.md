@@ -311,6 +311,22 @@ Do in one pass:
 - On materially incomplete captures or imports, the app clearly says something important is missing and offers a recovery path.
 - Users are not exposed to internal extraction diagnostics unless the omission actually affects what they can trust or do next.
 
+### B14. Known-chain menu URL shortlist [M, LOW RISK] — NOT STARTED
+**Source:** Restaurant-finder revamp, 2026-06-26
+**Problem:** National chains (Cheesecake Factory, Olive Garden, Panda Express, McAlister's)
+are the most common searches, have the most stable URLs, and were the worst failures. The
+decoupled finder (search returns ranked URLs, we scrape with the free Jina render path) now
+handles them far better, but every chain search still spends one `web_search` call.
+**Fix (preferred):** Add `api/_menuChains.ts` — a `Map<normalizedName, bestReadableMenuUrl>`
+of ~40-60 major chains, preferring a static menu/nutrition page or PDF over the JS SPA. In
+`find-menu.ts`, look up the normalized query BEFORE the search call (there's a `TODO(chains)`
+marker at the top of that file). On hit: skip `web_search` entirely, go straight to
+fetch+parse. On a 0-item result, fall through to the normal search so a stale URL self-heals.
+**Why deferred:** Map needs occasional upkeep when chains redesign sites; ship the
+architecture first, confirm it's solid, then layer the shortlist as a pure cost/latency win.
+**Acceptance:** A chain in the map returns its menu with zero `web_search` calls; a chain
+whose mapped URL has gone stale still resolves via the normal search path.
+
 ## C — Code / Security
 
 ### C1. Browserless token in URL query string [S, LOW RISK]
@@ -372,11 +388,17 @@ first; read via `response.body.getReader()` and abort once the cap is exceeded.
 
 ## D — Ops (needs human action or real device)
 
-### D1. Renew BROWSERLESS_TOKEN [BLOCKED on you]
-**Problem:** Production smoke tests show JS-rendered chain restaurants (Olive Garden, Panda Express,
-McAlister's Deli) fail fast with friendly 422s. Their menus ARE online — the Browserless
-JS-render fallback in `api/_menuCore.ts` appears inactive (token exhausted or expired).
-**Action:** Renew token in Vercel env → re-run `node scripts/smoke-restaurants.mjs` → update SMOKE-RESULTS.md.
+### D1. JS rendering — moved off paid Browserless to free Jina reader [DONE 2026-06-26]
+**Was:** Production smoke tests showed JS-rendered chain restaurants (Olive Garden, Panda
+Express, McAlister's Deli) failing fast — their menus ARE online but the paid Browserless
+JS-render fallback was inactive (token exhausted/expired).
+**Now:** `api/_menuCore.ts` renders JS shells via the free Jina AI Reader (`r.jina.ai`, no key
+required) as the primary path; Browserless is only used if `BROWSERLESS_TOKEN` is still set.
+No paid dependency required. `find-menu.ts` was also decoupled (search returns ranked URLs;
+we scrape + parse once) so chain menus actually get read.
+**Remaining action:** Re-run `node scripts/smoke-restaurants.mjs` against production after
+deploy and update SMOKE-RESULTS.md. Optional: set `JINA_API_KEY` in Vercel env to raise Jina
+rate limits if real traffic ever hits them.
 
 ### D2. Fix error copy for chain-restaurant failures [S, after D1]
 **Problem:** When `found=true` but no items extracted, the model-generated `reason` goes to
