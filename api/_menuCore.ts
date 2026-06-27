@@ -35,6 +35,127 @@ export interface ParsedMenu {
   notes?: string;
   restaurantName?: string;
   incomplete?: boolean;
+  incompleteReason?: string;
+}
+
+// ── Source classification ───────────────────────────────────────────────────
+// Decide, from a URL, whether a menu came from the restaurant itself or a
+// third-party aggregator. Pure + deterministic so it is unit-testable. We err
+// toward "third_party" / "unknown" rather than over-claiming "official", because
+// presenting an aggregator menu as the restaurant's own is exactly the failure
+// mode the product is meant to prevent.
+
+export type MenuSourceType =
+  | 'official_site'
+  | 'official_pdf'
+  | 'official_ordering'
+  | 'third_party'
+  | 'direct_link'
+  | 'photo'
+  | 'unknown';
+
+// Hosts that are listings/aggregators, never the restaurant's own site.
+const THIRD_PARTY_HOSTS = [
+  'yelp.', 'doordash.', 'ubereats.', 'grubhub.', 'seamless.', 'postmates.',
+  'tripadvisor.', 'opentable.', 'allmenus.', 'menupix.', 'zomato.', 'foursquare.',
+  'facebook.', 'instagram.', 'google.', 'goo.gl', 'maps.app', 'sluurpy.',
+  'restaurantji.', 'menuism.', 'singleplatform.', 'yellowpages.', 'mapquest.',
+  'beyondmenu.', 'slicelife.', 'eatstreet.',
+];
+
+// Hosts that host an official ordering experience FOR a restaurant. These are the
+// restaurant's own ordering page (not an aggregator marketplace), so they count
+// as official-ish first-party ordering.
+const OFFICIAL_ORDERING_HOSTS = [
+  'toasttab.', 'order.toasttab.', 'square.site', 'squareup.', 'clover.',
+  'chownow.', 'olo.com', 'popmenu.', 'bentobox', 'spoton.', 'menufy.',
+  'getbento.',
+];
+
+export interface SourceClassification {
+  sourceType: MenuSourceType;
+  official: boolean;
+  sourceLabel: string; // friendly, speakable name
+}
+
+function hostName(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/** Friendly, speakable name for a known aggregator/ordering host, else null. */
+function knownBrandLabel(host: string): string | null {
+  const map: Record<string, string> = {
+    'yelp.': 'Yelp', 'doordash.': 'DoorDash', 'ubereats.': 'Uber Eats',
+    'grubhub.': 'Grubhub', 'seamless.': 'Seamless', 'tripadvisor.': 'Tripadvisor',
+    'opentable.': 'OpenTable', 'allmenus.': 'Allmenus', 'zomato.': 'Zomato',
+    'google.': 'Google', 'facebook.': 'Facebook', 'instagram.': 'Instagram',
+    'toasttab.': 'Toast', 'square.site': 'Square', 'squareup.': 'Square',
+    'clover.': 'Clover', 'chownow.': 'ChowNow', 'olo.com': 'Olo',
+    'beyondmenu.': 'BeyondMenu', 'slicelife.': 'Slice',
+  };
+  for (const [needle, label] of Object.entries(map)) {
+    if (host.includes(needle)) return label;
+  }
+  return null;
+}
+
+/**
+ * Classify a menu source URL.
+ * @param url   the page the menu was read from
+ * @param isPdf whether the fetched content was a PDF
+ */
+export function classifySource(url: string, isPdf = false): SourceClassification {
+  const host = hostName(url);
+  if (!host) return { sourceType: 'unknown', official: false, sourceLabel: 'an unknown source' };
+
+  if (THIRD_PARTY_HOSTS.some((h) => host.includes(h))) {
+    const label = knownBrandLabel(host) ?? 'a third-party listing';
+    return { sourceType: 'third_party', official: false, sourceLabel: label };
+  }
+
+  if (OFFICIAL_ORDERING_HOSTS.some((h) => host.includes(h))) {
+    const label = knownBrandLabel(host);
+    return {
+      sourceType: 'official_ordering',
+      official: true,
+      sourceLabel: label ? `their ordering page on ${label}` : 'their online ordering page',
+    };
+  }
+
+  if (isPdf || /\.pdf(\?|$)/i.test(url)) {
+    return { sourceType: 'official_pdf', official: true, sourceLabel: 'their official menu PDF' };
+  }
+
+  // Anything else is treated as the restaurant's own website.
+  return { sourceType: 'official_site', official: true, sourceLabel: 'their website' };
+}
+
+/**
+ * Decide whether a menu read from `url` (with optional restaurant `address` and
+ * the page's own `pageText`) is specific to a requested branch, a generic chain
+ * menu, or unknown. Heuristic and deliberately conservative: we only claim
+ * "location_specific" when there is real textual evidence (a city/street token
+ * from the requested location appears in the page or the URL).
+ */
+export function classifyLocationScope(
+  pageText: string,
+  url: string,
+  requestedLocation?: string | null,
+): 'location_specific' | 'generic' | 'unknown' {
+  if (!requestedLocation || !requestedLocation.trim()) return 'unknown';
+  const tokens = requestedLocation
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .map((t) => t.replace(/[^a-z0-9]/g, ''))
+    .filter((t) => t.length >= 4 && !/^\d{2}$/.test(t)); // skip bare 2-letter states
+  if (tokens.length === 0) return 'unknown';
+  const hay = (pageText + ' ' + url).toLowerCase();
+  const hit = tokens.some((t) => hay.includes(t));
+  return hit ? 'location_specific' : 'generic';
 }
 
 export type MenuSource =
@@ -322,7 +443,7 @@ export async function fetchMenuSource(url: string): Promise<MenuSource> {
 }
 
 const MENU_JSON_SHAPE =
-  '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string,"incomplete":boolean}';
+  '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string,"incomplete":boolean,"incompleteReason":string}';
 
 const PARSE_INSTRUCTIONS =
   'Extract EVERY menu item you can find. Group items into the menu\'s natural sections ' +
@@ -333,6 +454,10 @@ const PARSE_INSTRUCTIONS =
   'Set "incomplete" to true if this looks like only PART of the menu — text cut off, ' +
   'sections referenced but missing, a page clearly continuing elsewhere, or unreadable areas. ' +
   'Set it to false if the menu appears whole. ' +
+  'When "incomplete" is true, set "incompleteReason" to a SHORT plain-language phrase a ' +
+  'person would understand, naming what is missing if you can tell — for example ' +
+  '"the drinks section is missing", "prices are not shown", or "the text was cut off". ' +
+  'Leave "incompleteReason" as an empty string when the menu appears whole. ' +
   `Respond ONLY with JSON matching: ${MENU_JSON_SHAPE}`;
 
 async function openaiChat(body: object): Promise<any> {
@@ -394,6 +519,10 @@ export function sanitizeMenu(menu: ParsedMenu): ParsedMenu {
     notes: typeof menu.notes === 'string' ? menu.notes : undefined,
     restaurantName: typeof menu.restaurantName === 'string' ? menu.restaurantName : undefined,
     incomplete: menu.incomplete === true,
+    incompleteReason:
+      menu.incomplete === true && typeof menu.incompleteReason === 'string' && menu.incompleteReason.trim()
+        ? menu.incompleteReason.trim()
+        : undefined,
   };
 }
 

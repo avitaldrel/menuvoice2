@@ -35,6 +35,13 @@ import {
 } from '../lib/earcon';
 import { mergeUnique } from '../util';
 import { analyzeItemAllergens } from '../lib/allergens';
+import {
+  provenanceSummary,
+  provenanceOpeningNote,
+  locationAnswer,
+  completenessAnswer,
+  checkedPhrase,
+} from '../lib/provenance';
 
 type Phase = 'speaking' | 'idle' | 'recording' | 'transcribing' | 'thinking' | 'error';
 
@@ -46,6 +53,24 @@ const EXIT_PHRASES = [
 const REPEAT_PHRASES = [
   'repeat that', 'say that again', 'what did you say', 'say it again', 'pardon', 'come again',
 ];
+
+type ProvenanceIntent = 'source' | 'location' | 'freshness' | 'completeness';
+
+// Map a spoken question to a provenance intent. Order matters: more specific
+// intents (location, freshness, completeness) are checked before the general
+// "where did this come from" source summary.
+function matchProvenanceIntent(t: string): ProvenanceIntent | null {
+  const has = (...needles: string[]) => needles.some((n) => t.includes(n));
+  if (has('correct location', 'right location', 'which location', 'what location', 'is this the right place', 'right branch', 'which branch'))
+    return 'location';
+  if (has('when was this menu', 'when was it checked', 'how current', 'how old', 'how recent', 'when did you check', 'up to date', 'how fresh'))
+    return 'freshness';
+  if (has('is this menu complete', 'is this complete', 'is the menu complete', 'is it complete', 'whole menu', 'full menu', 'anything missing', 'is anything missing'))
+    return 'completeness';
+  if (has('where did this menu come from', 'where did this come from', 'where is this from', 'where did you get', 'what is the source', 'is this official', 'is this the official', 'is this third party', 'is this third-party'))
+    return 'source';
+  return null;
+}
 
 // One dish heading's spoken text: name, price, description, and ingredients
 // folded into a single natural line. This is the dish's accessible name, so a
@@ -208,7 +233,7 @@ export default function ConversationScreen({
 }: ScreenProps & { route: Extract<Route, { name: 'conversation' }> }) {
   const { profile, update } = useProfile();
   const { paused, pause, resume, registerStopListening } = usePause();
-  const { menu, restaurantName } = route;
+  const { menu, restaurantName, provenance } = route;
 
   // Voice (conversation) mode is simply the inverse of the global pause state:
   // not paused = Conversation Mode (mic on, MenuVoice speaks);
@@ -241,8 +266,12 @@ export default function ConversationScreen({
     started.current = true;
     (async () => {
       const base = buildOpeningLine(menu);
-      const onlineNote =
-        route.source === 'url'
+      // Prefer the structured provenance note (source, location scope, freshness,
+      // completeness). Fall back to the older generic note only when we have no
+      // provenance, so nothing regresses for menus saved before this feature.
+      const onlineNote = provenance
+        ? provenanceOpeningNote(provenance)
+        : route.source === 'url'
           ? ' Just a heads up. This menu is from the website you shared, so it should be their current version, but details may vary.'
           : route.source === 'find'
             ? ' Just a heads up. I found this menu online, so it should be current, but details may vary.'
@@ -392,6 +421,20 @@ export default function ConversationScreen({
       track('ask', 'repeat_phrase', { content: { text: t } });
       const last = [...turns].reverse().find((x) => x.role === 'assistant');
       if (last) { await sayReply(last.text); return; }
+    }
+
+    // Provenance voice controls — answered locally from the source metadata, not
+    // the menu LLM, so the answer is grounded in what we actually verified.
+    const provIntent = matchProvenanceIntent(t);
+    if (provIntent) {
+      track('ask', 'provenance_query', { content: { text: t }, metadata: { intent: provIntent } });
+      let answer = '';
+      if (provIntent === 'source') answer = provenanceSummary(provenance, restaurantName);
+      else if (provIntent === 'location') answer = locationAnswer(provenance);
+      else if (provIntent === 'freshness') answer = `${checkedPhrase(provenance?.checkedAt)}.`;
+      else answer = completenessAnswer(provenance);
+      await sayReply(answer);
+      return;
     }
 
     const history = turns;

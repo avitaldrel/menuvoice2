@@ -4,7 +4,7 @@
 // Replaces the old client round trip of /api/scrape -> /api/chat.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { fetchMenuSource, parseMenuSource, menuItemCount, FriendlyError } from './_menuCore.js';
+import { fetchMenuSource, parseMenuSource, menuItemCount, classifySource, FriendlyError } from './_menuCore.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -32,7 +32,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Try adding /menu to the address, or just type the restaurant name instead.',
       });
     }
-    return res.status(200).json({ menu, sourceUrl: source.url });
+    // A user-pasted link: we know the source URL but not whether it is the
+    // official branch site, so officiality is reported from the host and the
+    // location scope stays "unknown" (we did not resolve a branch).
+    const cls = classifySource(source.url, source.kind === 'pdf');
+    const provenance = {
+      sourceType: source.kind === 'image' ? 'unknown' : cls.sourceType,
+      official: source.kind === 'image' ? false : cls.official,
+      sourceLabel: cls.sourceLabel,
+      locationScope: 'unknown' as const,
+      sourceUrl: source.url,
+      checkedAt: new Date().toISOString(),
+      completeness: menu.incomplete ? 'partial' : 'complete',
+      warnings: menu.incompleteReason ? [menu.incompleteReason] : undefined,
+    };
+    return res.status(200).json({ menu, sourceUrl: source.url, provenance });
   } catch (e: any) {
     if (e instanceof FriendlyError) return res.status(e.status).json({ error: e.message });
     const msg =

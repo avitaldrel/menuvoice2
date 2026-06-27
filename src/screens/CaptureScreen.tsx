@@ -364,9 +364,20 @@ export default function CaptureScreen({
       });
       const restaurantName =
         appendTo?.restaurantName || menu.restaurantName?.trim() || 'This restaurant';
-      await saveRestaurant(restaurantName, menu).catch(() => {});
+      // A camera scan is a first-party, location-specific read by definition: the
+      // user is standing at the restaurant photographing its own menu.
+      const provenance = {
+        sourceType: 'photo' as const,
+        official: true,
+        locationScope: 'location_specific' as const,
+        checkedAt: new Date().toISOString(),
+        completeness: (menu.incomplete ? 'partial' : 'complete') as 'partial' | 'complete',
+        sourceLabel: 'the photo of the physical menu',
+        warnings: menu.incompleteReason ? [menu.incompleteReason] : undefined,
+      };
+      await saveRestaurant(restaurantName, menu, { provenance }).catch(() => {});
       stopCamera(streamRef.current);
-      navigate({ name: 'conversation', menu, restaurantName });
+      navigate({ name: 'conversation', menu, restaurantName, source: 'photo', provenance });
     } catch (e: any) {
       track('capture', 'ocr_result', {
         outcome: 'failure',

@@ -6,7 +6,7 @@
 //   - In local dev, if VITE_OPENAI_API_KEY is set in .env the calls go
 //     directly to OpenAI (so you don't need a local server).
 
-import { ParsedMenu, UserProfile, ChatTurn } from '../types';
+import { ParsedMenu, UserProfile, ChatTurn, MenuProvenance } from '../types';
 import { track } from './telemetry';
 
 const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
@@ -340,13 +340,19 @@ export async function extractSessionLearnings(turns: ChatTurn[]): Promise<Sessio
 }
 
 /** Restaurant website URL -> structured menu. One server call does fetch
- * (HTML / PDF / image, menu-link follow) + GPT extraction. */
-export async function parseMenuFromUrl(url: string): Promise<ParsedMenu> {
+ * (HTML / PDF / image, menu-link follow) + GPT extraction. Returns the menu plus
+ * provenance (source type, freshness, completeness) so callers can be honest
+ * about where it came from. */
+export async function parseMenuFromUrl(
+  url: string,
+  signal?: AbortSignal,
+): Promise<{ menu: ParsedMenu; provenance?: MenuProvenance; sourceUrl?: string }> {
   const t0 = Date.now();
   const res = await fetch('/api/menu-from-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
+    signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -354,25 +360,26 @@ export async function parseMenuFromUrl(url: string): Promise<ParsedMenu> {
     track('menu', 'parse_url', { outcome: 'failure', durationMs: Date.now() - t0, metadata: { url, status: res.status } });
     throw new Error(msg);
   }
-  const data = (await res.json()) as { menu: ParsedMenu };
+  const data = (await res.json()) as { menu: ParsedMenu; provenance?: MenuProvenance; sourceUrl?: string };
   const itemCount = data.menu.categories.reduce((s, c) => s + c.items.length, 0);
   track('menu', 'parse_url', {
     outcome: 'success',
     durationMs: Date.now() - t0,
     content: { restaurantName: data.menu.restaurantName, itemCount },
-    metadata: { url },
+    metadata: { url, sourceType: data.provenance?.sourceType },
   });
-  return data.menu;
+  return { menu: data.menu, provenance: data.provenance, sourceUrl: data.sourceUrl };
 }
 
 /** Restaurant NAME (+ city) -> structured menu, via server-side web search.
  * Throws a friendly Error when the menu isn't online. */
-export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu; restaurantName: string | null; address?: string | null; sourceUrl?: string }> {
+export async function findMenuByName(query: string, signal?: AbortSignal): Promise<{ menu: ParsedMenu; restaurantName: string | null; address?: string | null; sourceUrl?: string; provenance?: MenuProvenance }> {
   const t0 = Date.now();
   const res = await fetch('/api/find-menu', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query }),
+    signal,
   });
   const data = (await res.json().catch(() => ({}))) as {
     menu?: ParsedMenu;
@@ -380,6 +387,7 @@ export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu;
     address?: string | null;
     via?: string;
     sourceUrl?: string;
+    provenance?: MenuProvenance;
     error?: string;
   };
   if (!res.ok || !data.menu) {
@@ -402,6 +410,7 @@ export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu;
     restaurantName: data.restaurantName ?? data.menu.restaurantName ?? null,
     address: data.address ?? null,
     sourceUrl: data.sourceUrl,
+    provenance: data.provenance,
   };
 }
 
