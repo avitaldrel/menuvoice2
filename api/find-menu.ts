@@ -1,82 +1,82 @@
-// POST { query: "restaurant name, city" } -> { menu, restaurantName, sourceUrl? }
+// POST { query: "restaurant name, city" } -> { menu, restaurantName, address?, sourceUrl? }
 //
-// Uses the OpenAI Responses API web_search tool to find the restaurant and its
-// current menu anywhere online (official site, PDF, Toast/Square ordering page,
-// Yelp/DoorDash/Google listing). Two-stage:
-//   1. Search-and-extract: the model browses and returns the menu JSON directly.
-//   2. If it only found a menu URL, fetch + parse that URL with the shared
-//      pipeline (handles HTML, PDF, images, JS shells).
-// If the menu genuinely is not online, returns a plain-language explanation.
+// Two clean stages, each doing the one job it is actually good at:
+//   1. FIND. One OpenAI Responses API web_search call returns ONLY the restaurant
+//      identity (name + address) and a ranked list of candidate menu URLs. It does
+//      not copy the menu — web_search is good at locating pages, weak at deeply
+//      reading JS-rendered chain menus, so we don't ask it to.
+//   2. READ. We fetch the candidates ourselves with the shared pipeline (handles
+//      HTML, PDF, images, and JS shells via the free Jina reader render path),
+//      score them by how menu-like they look, and run the expensive extraction
+//      ONCE on the richest page. Deterministic, and credit-cheap (usually 1 parse).
+//
+// If we genuinely cannot read any candidate, we say so honestly instead of
+// claiming the menu "isn't online" (it usually is) or inventing items.
+//
+// TODO(chains): a known-chain shortlist (name -> best readable menu URL) would let
+// big national chains skip the search call entirely. Tracked in FIXES-NEEDED.md.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   fetchMenuSource,
   parseMenuSource,
   menuItemCount,
+  menuLikelihood,
   extractJson,
   FriendlyError,
-  type ParsedMenu,
+  type MenuSource,
 } from './_menuCore.js';
 
 const SEARCH_MODEL = process.env.SEARCH_MODEL ?? 'gpt-5.4-mini';
 
 const FIND_JSON_SHAPE =
-  '{"found":boolean,"restaurantName":string|null,"menuUrl":string|null,' +
-  '"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],' +
-  '"notes":string,"reason":string,"incomplete":boolean}';
+  '{"found":boolean,"restaurantName":string|null,"address":string|null,"menuUrls":[string],"reason":string}';
+
+// A candidate page scoring this high is clearly a full menu — stop probing others.
+// menuLikelihood blends prices, food-word density, and length (see _menuCore).
+const STRONG_MENU_SIGNAL = 25;
 
 function buildPrompt(query: string): string {
   return [
-    `Find the restaurant "${query}" and its CURRENT food menu online.`,
-    'Search the web. Likely sources, in order of preference: the restaurant\'s own website',
-    '(menu page or PDF), their online-ordering page (Toast, Square, ChowNow, Clover),',
-    'their Google Business listing, or aggregator listings (Yelp, DoorDash, Grubhub).',
+    `Find the official, CURRENT menu page(s) for the restaurant "${query}" online.`,
     '',
-    'Extract EVERY menu item you can actually read from the pages you visit: name,',
-    'description, price as written with currency symbol, and a best-effort ingredients',
-    'list. Group items into the menu\'s natural sections. NEVER invent items you did not read.',
+    'Your ONLY job is to identify the right restaurant and return the BEST web',
+    'addresses where its full menu can actually be read. Do NOT copy menu items',
+    'into your answer.',
     '',
-    'Set "incomplete" to true if you could only read PART of the menu (some sections',
-    'unreadable or missing, or sources only show highlights). Set it to false if it appears whole.',
+    'Rank "menuUrls" best-first. Strongly prefer, in this order:',
+    '  1. The restaurant\'s OWN website menu page (a /menu page or a menu PDF).',
+    '  2. Their official online-ordering page (Toast, Square, ChowNow, Clover, Olo).',
+    '  3. A reputable listing showing the full menu (Yelp, DoorDash, Grubhub, Google).',
+    'Give 1 to 4 candidate URLs. Each MUST be a real URL you actually saw in search',
+    'results, never a guessed or constructed address.',
     '',
-    'If you can identify the restaurant but cannot read its full menu, set "categories" to []',
-    'and put the single best menu URL you found (prefer a direct menu page or PDF) in "menuUrl".',
-    'If you cannot find the restaurant or any menu at all, set found=false and explain briefly',
-    'in "reason" (e.g. "I found their website but the menu is not posted online").',
+    'Confirm the restaurant matches the requested name AND location. Put its city or',
+    'neighborhood (and street if you know it) in "address" so the user can verify it',
+    'is the right place. Prefer the specific local branch when a city was given.',
+    '',
+    'If you cannot confidently identify the restaurant at all, set found=false and',
+    'explain briefly in "reason".',
     '',
     `Respond ONLY with JSON matching: ${FIND_JSON_SHAPE}`,
   ].join('\n');
 }
 
-/**
- * Validate the LLM's categories payload. Drops anything that is not an object
- * with a string name and an items array; skips items without a string name.
- * Garbage shapes here used to reach the client and crash mid-speech.
- */
-function sanitizeCategories(raw: unknown): ParsedMenu['categories'] {
+/** Keep only well-formed, deduped public-looking http(s) URLs, ranked as given. */
+function sanitizeUrls(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  const categories: ParsedMenu['categories'] = [];
-  for (const cat of raw) {
-    if (!cat || typeof cat !== 'object' || Array.isArray(cat)) continue;
-    const { name, items } = cat as { name?: unknown; items?: unknown };
-    if (typeof name !== 'string' || !name.trim() || !Array.isArray(items)) continue;
-    const cleanItems = [];
-    for (const item of items) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-      const it = item as Record<string, unknown>;
-      if (typeof it.name !== 'string' || !it.name.trim()) continue;
-      cleanItems.push({
-        name: it.name.trim(),
-        description: typeof it.description === 'string' ? it.description : undefined,
-        price: typeof it.price === 'string' ? it.price : undefined,
-        ingredients: Array.isArray(it.ingredients)
-          ? it.ingredients.filter((x): x is string => typeof x === 'string')
-          : undefined,
-      });
-    }
-    if (cleanItems.length > 0) categories.push({ name: name.trim(), items: cleanItems });
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const u of raw) {
+    if (typeof u !== 'string') continue;
+    const url = u.trim();
+    if (!/^https?:\/\//i.test(url)) continue;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+    if (out.length >= 4) break;
   }
-  return categories;
+  return out;
 }
 
 /** Concatenate output_text items from a Responses API result. */
@@ -92,7 +92,7 @@ function responseText(data: any): string {
   return out;
 }
 
-async function searchForMenu(query: string, timeoutMs: number): Promise<any> {
+async function searchForMenuUrls(query: string, timeoutMs: number): Promise<any> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new FriendlyError('No API key configured on the server.', 500);
 
@@ -115,6 +115,34 @@ async function searchForMenu(query: string, timeoutMs: number): Promise<any> {
   return extractJson(responseText(data));
 }
 
+/**
+ * Fetch candidate pages cheaply (HTTP + render, NO model call) and return the
+ * single richest-looking menu source. PDFs/images are taken immediately. We stop
+ * early once a page clearly looks like a full menu, so we rarely fetch all of them
+ * and we only ever run ONE expensive extraction afterwards.
+ */
+async function pickBestSource(urls: string[], remaining: () => number): Promise<MenuSource | null> {
+  let best: MenuSource | null = null;
+  let bestScore = -1;
+  for (const url of urls) {
+    // Only start a candidate if there's room to fetch/render it AND parse after.
+    if (remaining() < 20_000) break;
+    try {
+      const src = await fetchMenuSource(url);
+      if (src.kind !== 'html') return src; // a PDF or image menu — strongest possible
+      const score = menuLikelihood(src.text);
+      if (score > bestScore) {
+        best = src;
+        bestScore = score;
+      }
+      if (score >= STRONG_MENU_SIGNAL) break;
+    } catch (e) {
+      console.error('[MenuVoice] find-menu candidate fetch failed:', url, e);
+    }
+  }
+  return best;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -124,58 +152,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Stage budget. Vercel kills the function at 60s (vercel.json maxDuration), so
-  // the search and the stage-2 fetch must share a total deadline. Cap the search
-  // at 35s, and only attempt the slower stage-2 fetch if enough time remains —
-  // otherwise the user hears an opaque 504 instead of the honest "menu not
-  // online" message. (REVIEW.md #7)
-  const deadline = Date.now() + 55_000;
+  // the search and the candidate fetch/parse must share one deadline (56s soft,
+  // 4s headroom). Cap the search at 24s, then only fetch+parse while enough time
+  // remains — otherwise the user hears an opaque 504 instead of the honest
+  // "couldn't read it" message.
+  const deadline = Date.now() + 56_000;
   const remaining = () => deadline - Date.now();
 
   try {
-    const result = await searchForMenu(query.trim().slice(0, 200), Math.min(35_000, remaining()));
+    const result = await searchForMenuUrls(query.trim().slice(0, 200), Math.min(24_000, remaining()));
+
     const restaurantName: string | null =
       typeof result?.restaurantName === 'string' && result.restaurantName.trim()
         ? result.restaurantName.trim()
         : null;
+    const address: string | null =
+      typeof result?.address === 'string' && result.address.trim() ? result.address.trim() : null;
+    const candidates = sanitizeUrls(result?.menuUrls);
 
-    // Stage 1: the search model read the menu directly.
-    const direct: ParsedMenu = {
-      categories: sanitizeCategories(result?.categories),
-      notes: typeof result?.notes === 'string' ? result.notes : undefined,
-      restaurantName: restaurantName ?? undefined,
-      incomplete: result?.incomplete === true,
-    };
-    if (menuItemCount(direct) >= 3) {
-      return res.status(200).json({
-        menu: direct,
-        restaurantName,
-        sourceUrl: typeof result?.menuUrl === 'string' ? result.menuUrl : undefined,
-        via: 'search',
-      });
+    // The model couldn't even identify the restaurant.
+    if (result?.found === false && candidates.length === 0) {
+      const reason =
+        typeof result?.reason === 'string' && result.reason.trim()
+          ? result.reason.trim()
+          : "I couldn't find that restaurant online. Try adding the city, like 'Luigi's, Bloomington Indiana'.";
+      return res.status(404).json({ error: reason, restaurantName });
     }
 
-    // Stage 2: it found a menu URL but couldn't read it — fetch and parse
-    // ourselves, but only if there's budget left to finish before the 60s kill.
-    if (typeof result?.menuUrl === 'string' && /^https?:\/\//i.test(result.menuUrl) && remaining() > 15_000) {
-      try {
-        const source = await fetchMenuSource(result.menuUrl);
-        const menu = await parseMenuSource(source);
-        if (menuItemCount(menu) > 0) {
-          if (!menu.restaurantName && restaurantName) menu.restaurantName = restaurantName;
-          return res.status(200).json({ menu, restaurantName: menu.restaurantName ?? restaurantName, sourceUrl: result.menuUrl, via: 'url' });
-        }
-      } catch (e) {
-        console.error('[MenuVoice] find-menu stage-2 fetch failed:', e);
+    // READ stage: scrape the best candidate and extract once.
+    const best = await pickBestSource(candidates, remaining);
+    if (best && remaining() > 9_000) {
+      const menu = await parseMenuSource(best);
+      if (menuItemCount(menu) >= 3) {
+        if (!menu.restaurantName && restaurantName) menu.restaurantName = restaurantName;
+        return res.status(200).json({
+          menu,
+          restaurantName: menu.restaurantName ?? restaurantName,
+          address,
+          sourceUrl: best.url,
+          via: 'url',
+        });
       }
     }
 
-    // Couldn't get a menu. Tell the user the truth about what we found.
-    const reason = result?.found
-      ? "I found this restaurant but couldn't read their menu online. Try scanning the physical menu."
-      : typeof result?.reason === 'string' && result.reason.trim()
-        ? result.reason.trim()
-        : "I couldn't find that restaurant online. Try adding the city, like 'Luigi's, Bloomington Indiana'.";
-    return res.status(404).json({ error: reason, restaurantName });
+    // We located the restaurant but couldn't read a usable menu. Tell the truth —
+    // never claim it "isn't posted online" (it usually is) and never invent items.
+    const reason = restaurantName
+      ? `I found ${restaurantName} but couldn't read their menu from their website. Try scanning the physical menu, or paste a direct link to their menu.`
+      : "I found the restaurant but couldn't read their menu online. Try scanning the physical menu, or paste a direct link to their menu.";
+    return res.status(404).json({ error: reason, restaurantName, address });
   } catch (e: any) {
     if (e instanceof FriendlyError) return res.status(e.status).json({ error: e.message });
     console.error('[MenuVoice] find-menu error:', e);

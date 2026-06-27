@@ -123,10 +123,11 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       const result = await findMenuByName(normalized);
       if (reassureRef.current) clearInterval(reassureRef.current);
       const name = result.restaurantName?.trim() || normalized;
+      const where = result.address?.trim();
       setPendingMatch({ ...result, requestedName: normalized });
       inFlightRef.current = false;
       setLoading(false);
-      announce(`I found ${name}. Is this the restaurant you want?`);
+      announce(`I found ${name}${where ? ` in ${where}` : ''}. Is this the restaurant you want?`);
     } catch (e: any) {
       if (reassureRef.current) clearInterval(reassureRef.current);
       inFlightRef.current = false;
@@ -180,7 +181,8 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       {pendingMatch ? (
         <div className="card" role="group" aria-label="Confirm restaurant match">
           <p className="body" style={{ marginBottom: 12 }}>
-            I found {pendingMatch.restaurantName?.trim() || pendingMatch.requestedName}. Is this the restaurant you want?
+            I found {pendingMatch.restaurantName?.trim() || pendingMatch.requestedName}
+            {pendingMatch.address?.trim() ? ` in ${pendingMatch.address.trim()}` : ''}. Is this the restaurant you want?
           </p>
           <div className="row">
             <PrimaryButton label="Open this menu" onClick={confirmMatch} />
