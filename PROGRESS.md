@@ -214,8 +214,104 @@ Implementing 3 (data backbone) + 2 (storage/per-location) + 1 first.
 ## Status log — Session 1 (2026-06-27)
 - [x] Read codebase; baseline build green.
 - [x] Branch created.
-- [ ] Provenance data model + server classification (in progress).
+- [x] **Provenance data model + server classification.** `MenuProvenance` type
+      (sourceType, official, locationScope, confirmedLocation, sourceUrl,
+      checkedAt, completeness, warnings). Server `classifySource` (official_site
+      / official_pdf / official_ordering / third_party / direct_link / photo /
+      unknown) and `classifyLocationScope` (specific/generic/unknown, evidence
+      based). `find-menu` and `menu-from-url` return provenance.
+- [x] **Feature 3 (source/freshness/completeness/confidence).** `incompleteReason`
+      added to the parse so partial menus say WHY ("the drinks section is
+      missing"). `src/lib/provenance.ts` turns provenance into honest speech:
+      `provenanceSummary`, `provenanceOpeningNote`, `freshnessOf`/`checkedPhrase`
+      (recent/aging/outdated), location/completeness answers. Conversation
+      opening line now uses the provenance note.
+- [x] **Feature 2 (location matching — first slice).** FindScreen confirm card
+      shows the branch address + source evidence (official vs third-party,
+      location-specific vs generic, may-be-incomplete) and the user confirms
+      before opening. Storage de-dups by NAME + LOCATION, so chain branches save
+      SEPARATELY (Paramus / Freehold / Hackensack no longer overwrite). Saved
+      screen shows the branch location and passes provenance on reopen. Direct
+      URL and PDF/photo flows still work and now carry provenance too.
+- [x] **Feature 1 (loading + errors).** FindScreen narrates the real ordered
+      pipeline stages (no fake %), offers "What are you doing?" (repeat current
+      step), a Cancel that aborts the request (AbortController on the API calls),
+      specific failure messages with next actions (Try again / Scan physical
+      menu / paste a direct link), and moves focus to the confirm action or the
+      failure explanation.
+- [x] **Feature 6 (allergen confidence — messaging).** Allergen findings carry
+      `explicit` vs `inferred` confidence. `allergenDisclaimer` and dish labels
+      say "The restaurant lists X" only for declared allergens, else "may
+      contain X based on the description, but the restaurant does not confirm
+      it." Hidden-dish notices reworded to "may contain". System prompt hard
+      rule: never present inferred ingredients as confirmed; say "could not find
+      official allergen information" when unknown; never call a dish safe for a
+      listed allergy without explicit confirmation.
+- [x] **Feature 9 (voice controls — first slice).** Conversation answers, from
+      metadata (not the LLM): "where did this menu come from / is this official",
+      "is this the correct location", "when was this menu checked / how current",
+      "is this menu complete". Existing Repeat / Pause / Resume / Done preserved.
+- [x] **Tests.** `npm test` (node:test + tsx), 20 passing: source +
+      location-scope classification, provenance speech, allergen confidence.
+- [x] Build (`tsc -b && vite build`) and `npm test` both green. Preserved camera
+      scan, direct URL/PDF/image, saved restaurants, voice conversation,
+      preferences/allergy profile, server-side keys.
+
+## NOT yet done (next sessions, priority order)
+- **Feature 2 full multi-candidate selection.** Today the FIND stage still
+  returns ONE best match (then user confirms). To present up to ~3 numbered
+  candidate LOCATIONS with address/phone/evidence and let the user pick the
+  branch BEFORE we read the menu, change the `find-menu` search prompt to return
+  a `locations[]` array (name, address, phone, url, confidence, evidence), have
+  FindScreen render a numbered accessible list, then call a second read step
+  keyed to the chosen branch (append the chosen address to the query). Keep the
+  current single-match path as the fallback when only one location is found.
+- **Feature 1 true streamed stages.** The stage narration is client-side and
+  timer-driven (honest about what it is *attempting*, but not event-driven). For
+  exact step reporting, stream real stage events from `find-menu` via SSE /
+  chunked response and drive the aria-live status from them.
+- **Feature 4 retrieval depth.** Use JSON-LD / Schema.org `Menu`/`Restaurant`
+  structured data in `_menuCore` before price heuristics; widen menu-link text
+  (Drinks, Brunch, Order Online, location-specific menu pages); prefer links
+  whose address/city matches the confirmed branch.
+- **Feature 6 official allergen sources.** On allergy questions, fetch official
+  allergen guides / nutrition / dietary PDFs and prefer them over menu
+  descriptions. Add must-avoid / avoid-when-possible / preference-only tiers to
+  the profile and enforce them.
+- **Feature 7 correction/feedback flow.** "This menu is wrong" -> reason
+  (wrong location / wrong menu / missing item / wrong price / outdated /
+  allergy-info problem / other) + short note; downweight repeatedly-reported
+  sources over time. New `/api/feedback` route + events table.
+- **Feature 8 caching / refresh / change detection.** Reuse recent verified
+  links, "Refresh this menu", compare to stored menu and summarize meaningful
+  changes; never replace a strong source with a weaker one on a failed refresh.
+- **Feature 5 rendered-browser fallback** (puppeteer is already a dep) — LAST,
+  only when simpler methods fail; strict public-only, no login/checkout/CAPTCHA.
+- **Feature 9 remaining controls.** Slow down / speak less / speak more detail,
+  explicit "Refresh this menu" voice command (needs Feature 8).
+
+## Manual VoiceOver test scenarios (to run on a real device)
+1. Find by name + city: confirm the spoken stage updates are informative and not
+   spammy; "What are you doing?" repeats the current step; Cancel stops cleanly
+   and focus is reachable.
+2. Confirm card: VoiceOver reads name, address, and the source-evidence line;
+   "Open this menu" receives focus; "Not this one" returns to search.
+3. Chain branches: save Cheesecake Factory in two different cities; both appear
+   as separate entries in Saved with their locations announced.
+4. Conversation voice controls: ask "where did this menu come from", "is this
+   the right location", "when was this menu checked", "is this menu complete" —
+   each answered from metadata without inventing menu facts.
+5. Allergen wording: a dish with an inferred allergen is spoken as "may contain
+   ... not confirmed"; a "Contains ..." dish is spoken as "the restaurant lists".
+6. Failure path: search a place with no online menu; verify the specific message
+   and that Try again / Scan physical menu are reachable via the rotor.
+7. Regression: camera scan, direct URL, direct PDF, saved-menu reopen, and the
+   pause/resume voice flow all still work end to end.
 
 ## LEFT OFF
-Session 1 just started: branch + worklog created, implementing the provenance
-data model next.
+Session 1 complete and pushed. Priorities 1, 3, and the storage/confirmation
+slices of 2, plus the messaging slice of 6 and first voice controls of 9, are
+implemented with tests; build + tests green. Next highest-value work is
+**Feature 2 full multi-candidate location selection** (return `locations[]` from
+find-menu and add the numbered picker), then **Feature 4 structured-data
+retrieval**. See "NOT yet done" above for the full ordered plan.
