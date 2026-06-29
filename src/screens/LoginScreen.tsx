@@ -8,8 +8,10 @@ import { Screen, Title, Heading, Body, PrimaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
 import { speak, stopSpeaking } from '../lib/speech';
 import { earconStart, earconStop } from '../lib/earcon';
-import { startRecording, stopRecording, requestMicPermission } from '../lib/recorder';
+import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
+import { watchForSilence } from '../lib/vad';
+import { unlockAudio } from '../lib/audioUnlock';
 import { restoreFromCloud } from '../lib/storage';
 import { track } from '../lib/telemetry';
 
@@ -83,50 +85,49 @@ export default function LoginScreen() {
   };
 
   const toggleMic = async () => {
-    if (rec === 'idle') {
-      const ok = await requestMicPermission();
-      if (!ok) {
-        announce('I could not access the microphone. Please type your email address.');
-        return;
-      }
-      try {
-        await startRecording();
-        earconStart();
-        setRec('recording');
-      } catch {
-        announce('Could not start the microphone. Please type your email address.');
-      }
+    if (rec !== 'idle') return;
+    // Unlock audio while we're still inside the user gesture — ensures the
+    // shared AudioContext is running before watchForSilence uses it for VAD.
+    unlockAudio();
+    const ok = await requestMicPermission();
+    if (!ok) {
+      announce('I could not access the microphone. Please type your email address.');
       return;
     }
-    if (rec === 'recording') {
-      setRec('working');
-      earconStop();
-      let blob: Blob | null = null;
-      try {
-        blob = await stopRecording();
-      } catch {
-        blob = null;
-      }
-      if (!blob) { setRec('idle'); return; }
-      try {
-        const raw = await transcribeAudio(blob);
-        const cleaned = raw
-          .trim()
-          .toLowerCase()
-          .replace(/\s+at\s+/g, '@')
-          .replace(/\s+dot\s+/g, '.')
-          .replace(/\s/g, '');
-        setEmail(cleaned);
-        announce(`I heard: ${cleaned}. Tap Login if that is correct, or edit the field to fix it.`);
-      } catch {
-        announce('Sorry, I had trouble hearing that. Please type your email address.');
-      }
-      setRec('idle');
+    try {
+      await startRecording();
+      earconStart();
+      setRec('recording');
+    } catch {
+      announce('Could not start the microphone. Please type your email address.');
+      return;
     }
+    // Auto-stop after 3s of silence (max 20s) — no second tap needed.
+    const s = getActiveStream();
+    if (s) await new Promise<void>((resolve) => { watchForSilence(s, 3000, 20000, resolve); });
+    setRec('working');
+    earconStop();
+    let blob: Blob | null = null;
+    try { blob = await stopRecording(); } catch { blob = null; }
+    if (!blob) { setRec('idle'); return; }
+    try {
+      const raw = await transcribeAudio(blob);
+      const cleaned = raw
+        .trim()
+        .toLowerCase()
+        .replace(/\s+at\s+/g, '@')
+        .replace(/\s+dot\s+/g, '.')
+        .replace(/\s/g, '');
+      setEmail(cleaned);
+      announce(`I heard: ${cleaned}. Tap Login if that is correct, or edit the field to fix it.`);
+    } catch {
+      announce('Sorry, I had trouble hearing that. Please type your email address.');
+    }
+    setRec('idle');
   };
 
   const micLabel =
-    rec === 'recording' ? 'Done speaking' : rec === 'working' ? 'One moment...' : 'Say your email';
+    rec === 'recording' ? 'Listening...' : rec === 'working' ? 'One moment...' : 'Say your email';
 
   return (
     <Screen>
