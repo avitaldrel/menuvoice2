@@ -1,6 +1,5 @@
 // Microphone recording via MediaRecorder.
-// Most voice flows auto-stop via silence detection (see lib/vad.ts).
-// Email capture on the login screen still uses manual tap-to-stop.
+// Voice flows auto-stop via silence detection (see lib/vad.ts).
 
 let mediaRecorder: MediaRecorder | null = null;
 let chunks: BlobPart[] = [];

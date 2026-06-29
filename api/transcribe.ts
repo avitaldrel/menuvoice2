@@ -33,15 +33,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const key = process.env.OPENAI_API_KEY;
   if (!key) return res.status(500).json({ error: 'No API key configured on server.' });
+  const openaiBody = bodyForOpenAiTranscription(contentType, body);
 
   const upstream = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': contentType },
-    body: body as unknown as BodyInit,
+    body: openaiBody as unknown as BodyInit,
   });
   const data = await upstream.json();
   res.setHeader('X-Voice-Provider', 'openai');
   res.status(upstream.status).json(data);
+}
+
+export function bodyForOpenAiTranscription(contentType: string, body: Buffer): Buffer {
+  if (!contentType.includes('multipart/form-data')) return body;
+  const boundary = multipartBoundary(contentType);
+  if (!boundary) return body;
+
+  const boundaryMarker = Buffer.from(`--${boundary}`);
+  const headerSeparator = Buffer.from('\r\n\r\n');
+  let partStart = body.indexOf(boundaryMarker);
+
+  while (partStart !== -1) {
+    const afterBoundary = partStart + boundaryMarker.length;
+    if (body.subarray(afterBoundary, afterBoundary + 2).toString('ascii') === '--') return body;
+
+    const contentStart = body.subarray(afterBoundary, afterBoundary + 2).toString('ascii') === '\r\n'
+      ? afterBoundary + 2
+      : afterBoundary;
+    const nextBoundary = body.indexOf(boundaryMarker, contentStart);
+    if (nextBoundary === -1) return body;
+
+    const headerEnd = body.indexOf(headerSeparator, contentStart);
+    if (headerEnd !== -1 && headerEnd < nextBoundary) {
+      const headers = body.subarray(contentStart, headerEnd).toString('latin1');
+      if (/content-disposition:\s*form-data\b/i.test(headers) && /name="model"/i.test(headers)) {
+        const valueStart = headerEnd + headerSeparator.length;
+        const valueEnd = body.subarray(nextBoundary - 2, nextBoundary).toString('ascii') === '\r\n'
+          ? nextBoundary - 2
+          : nextBoundary;
+        return Buffer.concat([
+          body.subarray(0, valueStart),
+          Buffer.from('whisper-1'),
+          body.subarray(valueEnd),
+        ]);
+      }
+    }
+
+    partStart = nextBoundary;
+  }
+
+  return body;
+}
+
+function multipartBoundary(contentType: string): string | null {
+  const match = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType);
+  return (match?.[1] ?? match?.[2] ?? '').trim() || null;
 }
 
 async function cartesiaToken(res: VercelResponse) {
