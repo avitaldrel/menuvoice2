@@ -104,7 +104,12 @@ export default function CaptureScreen({
             setPreviewAspect(`${video.videoWidth} / ${video.videoHeight}`);
           }
           const range = getZoomRange(s);
-          const initialZoom = range.native ? range.min : 1;
+          // Default to 0.5x (a wider view fits more of the menu in frame
+          // without backing away) when the device's native zoom range
+          // actually supports it; otherwise clamp to whatever the hardware
+          // allows. Software/CSS zoom (non-native) can never go below 1 —
+          // there is no way to see more than the sensor's native capture.
+          const initialZoom = range.native ? Math.min(range.max, Math.max(range.min, 0.5)) : 1;
           if (range.native) await setCameraZoom(s, initialZoom);
           setZoomRange({ ...range, value: initialZoom });
           setZoom(initialZoom);
