@@ -25,6 +25,7 @@ import {
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
 import { MenuScanner } from '../lib/scanner';
+import { assessPhotoQuality, type PhotoQualityIssue } from '../lib/photoQuality';
 import { earconTick, earconCapture } from '../lib/earcon';
 import { track, isImageLoggingOn } from '../lib/telemetry';
 
@@ -80,6 +81,11 @@ export default function CaptureScreen({
   const reassureCountRef = useRef(0);
 
   const [photos, setPhotos] = useState<string[]>([]);
+  // Parallel to `photos` — issues[i] is empty when photo i passed quality
+  // checks. Kept separate from telemetry-only tracking so the UI can gate on
+  // it (retake prompt, confirm-before-analyzing) without recomputing.
+  const [photoIssues, setPhotoIssues] = useState<PhotoQualityIssue[][]>([]);
+  const [confirmAnalyzeWithIssues, setConfirmAnalyzeWithIssues] = useState(false);
   const [status, setStatus] = useState('Starting camera...');
   const [coachStatus, setCoachStatus] = useState('');
   const [camError, setCamError] = useState('');
@@ -239,17 +245,34 @@ export default function CaptureScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoMode, cameraReady, analyzing, camError, zoom, zoomRange.native, paused]);
 
-  const addPhoto = (b64: string | null, viaAuto: boolean) => {
+  // Runs after every capture (manual or auto) — auto-capture already gets
+  // live framing/lighting coaching from MenuScanner while shooting, but
+  // nothing previously checked the STILL result, and manual shots get no
+  // live coaching at all. A blind user can't glance at a thumbnail to judge
+  // a bad photo, so this speaks up immediately if one is flagged.
+  const addPhoto = async (b64: string | null, viaAuto: boolean) => {
     if (!b64) return;
     if (viaAuto) earconCapture();
+    setConfirmAnalyzeWithIssues(false);
+    const quality = await assessPhotoQuality(b64).catch<{ ok: boolean; issues: PhotoQualityIssue[] }>(() => ({ ok: true, issues: [] }));
+    setPhotoIssues((prev) => [...prev, quality.issues]);
     setPhotos((prev) => {
       const next = [...prev, b64];
-      const msg = viaAuto
-        ? `Got it, photo ${next.length}. Line up the next page, or tap Read menu.`
-        : `Photo ${next.length} captured. Take another, or tap Read menu.`;
+      const count = next.length;
+      const base = viaAuto ? `Got it, photo ${count}.` : `Photo ${count} captured.`;
+      const msg = quality.ok
+        ? `${base} ${viaAuto ? 'Line up the next page, or tap Read menu.' : 'Take another, or tap Read menu.'}`
+        : `${base} ${quality.issues.map((i) => i.message).join(' ')} Consider retaking it, or tap Read menu to continue.`;
       setStatus(msg);
       coach(msg);
-      track('capture', 'photo_added', { metadata: { mode: viaAuto ? 'auto' : 'manual', photo_count: next.length } });
+      track('capture', 'photo_added', {
+        metadata: {
+          mode: viaAuto ? 'auto' : 'manual',
+          photo_count: count,
+          quality_ok: quality.ok,
+          issues: quality.issues.map((i) => i.code),
+        },
+      });
       return next;
     });
   };
@@ -257,6 +280,18 @@ export default function CaptureScreen({
   const manualCapture = () => {
     if (analyzing || !videoRef.current) return;
     addPhoto(captureFrame(videoRef.current, 0.6, zoomRange.native ? 1 : zoom), false);
+  };
+
+  /** Remove the most recently captured/uploaded photo so the user can redo it. */
+  const retakeLastPhoto = () => {
+    if (photos.length === 0 || analyzing) return;
+    setConfirmAnalyzeWithIssues(false);
+    setPhotos((prev) => prev.slice(0, -1));
+    setPhotoIssues((prev) => prev.slice(0, -1));
+    const msg = 'Removed the last photo. Take it again when ready.';
+    setStatus(msg);
+    coach(msg);
+    track('capture', 'photo_removed', { metadata: { photo_count: photos.length - 1 } });
   };
 
   const changeZoom = async (direction: 1 | -1) => {
@@ -290,10 +325,24 @@ export default function CaptureScreen({
       metadata: { count: files.length, added: added.length, failed: failedNames.length },
     });
     if (added.length) {
+      setConfirmAnalyzeWithIssues(false);
+      const qualityResults = await Promise.all(
+        added.map((b64) => assessPhotoQuality(b64).catch<{ ok: boolean; issues: PhotoQualityIssue[] }>(() => ({ ok: true, issues: [] })))
+      );
+      setPhotoIssues((prev) => [...prev, ...qualityResults.map((q) => q.issues)]);
       setPhotos((prev) => {
+        const startIndex = prev.length; // 0-based index of the first newly-added photo
         const next = [...prev, ...added];
+        const flaggedNumbers = qualityResults
+          .map((q, i) => (q.ok ? null : startIndex + i + 1)) // 1-based, matches spoken "photo N"
+          .filter((n): n is number => n !== null);
         let m = `Added ${added.length} photo${added.length > 1 ? 's' : ''}. ${next.length} total.`;
         if (failedNames.length) m += ` ${failedNames.length} could not be read — use JPEG or PNG.`;
+        if (flaggedNumbers.length) {
+          m += flaggedNumbers.length === 1
+            ? ` Photo ${flaggedNumbers[0]} may have quality issues — consider retaking it.`
+            : ` Photos ${flaggedNumbers.join(', ')} may have quality issues — consider retaking them.`;
+        }
         setStatus(m);
         speak(m);
         return next;
@@ -317,6 +366,14 @@ export default function CaptureScreen({
     }
     if (!hasApiKey()) {
       const m = 'No API key configured. Set OPENAI_API_KEY in Vercel environment variables.';
+      setStatus(m);
+      speak(m);
+      return;
+    }
+    const flaggedCount = photoIssues.filter((issues) => issues.length > 0).length;
+    if (flaggedCount > 0 && !confirmAnalyzeWithIssues) {
+      setConfirmAnalyzeWithIssues(true);
+      const m = `Heads up. ${flaggedCount} of your ${photos.length} photo${photos.length === 1 ? '' : 's'} may have quality problems, like blur or tilt. Tap Read menu again to continue anyway, or tap Retake last photo to redo the most recent one.`;
       setStatus(m);
       speak(m);
       return;
@@ -517,6 +574,19 @@ export default function CaptureScreen({
           disabled={analyzing || !!camError || !cameraReady}
           style={{ minHeight: 80 }}
         />
+
+        {photos.length > 0 && (
+          <SecondaryButton
+            label="Retake last photo"
+            hint={
+              photoIssues[photoIssues.length - 1]?.length
+                ? 'The last photo may have quality issues. Remove it and take it again.'
+                : 'Remove the last photo and take it again'
+            }
+            onClick={retakeLastPhoto}
+            disabled={analyzing}
+          />
+        )}
 
         <div className="row">
           <SecondaryButton
