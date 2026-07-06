@@ -34,7 +34,17 @@ export function disableTorch(stream: MediaStream): void {
 
 export async function startCamera(video: HTMLVideoElement): Promise<MediaStream> {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    // zoom: 0.5 is an "ideal" hint, not a hard requirement — unsupported
+    // browsers/devices ignore it. On devices with a native zoom capability
+    // that spans below 1x (e.g. an ultra-wide lens), requesting it at
+    // stream-start gives the best chance the browser picks that wider
+    // config, so the whole menu fits in frame without backing away.
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      ...( { zoom: { ideal: 0.5 } } as any),
+    },
     audio: false,
   });
   video.srcObject = stream;

@@ -26,6 +26,9 @@ export type ScanState =
   | 'glare'
   | 'blur'
   | 'offcenter'
+  | 'tooClose'    // content bleeds past the visible frame on opposite sides
+  | 'tooFar'      // content occupies only a small part of the frame
+  | 'skewed'      // page is tilted/rotated relative to the camera
   | 'moving'
   | 'steadying'
   | 'disarmed';   // captured; waiting for movement to re-arm for the next page
@@ -42,16 +45,24 @@ const W = 160;
 const H = 120;
 const TICK_MS = 170;
 
-// Thresholds (tuned for indoor restaurant light; metrics computed at 160x120)
-const LUM_DARK = 40;          // mean luminance below this = too dark
-const GLARE_FRAC = 0.10;      // >10% blown-out pixels = glare
+// Thresholds (tuned for indoor restaurant light; metrics computed at 160x120).
+// Exported so lib/photoQuality.ts can judge a STILL photo by the identical
+// dark/blur/glare/framing/skew bar used to coach the live camera — one
+// source of truth for "is this readable" across both live and post-capture.
+export const LUM_DARK = 40;          // mean luminance below this = too dark
+export const GLARE_FRAC = 0.10;      // >10% blown-out pixels = glare
 const GLARE_PIXEL = 248;      // a pixel >= this counts as blown out
-const EDGE_MIN = 0.035;       // edge density below this = no menu text in frame
-const SHARP_MIN = 60;         // Laplacian variance below this = blurry
+export const EDGE_MIN = 0.035;       // edge density below this = no menu text in frame
+export const SHARP_MIN = 60;         // Laplacian variance below this = blurry
 const MOTION_STEADY = 7;      // mean abs diff below this = holding steady
 const REARM_MOTION = 14;      // movement above this re-arms after a capture
 const STEADY_TICKS = 4;       // ~0.7s of steady before the shutter
 const OFFCENTER = 0.22;       // centroid offset (0..0.5) before directional hint
+
+// Framing (distance + rotation) thresholds — see computeFrameMetrics().
+const BORDER_MARGIN = 3;      // px tolerance (of 160x120) for "content touches the frame edge"
+export const TOO_FAR_BBOX = 0.42;    // content bounding box narrower than this fraction (both dims) = too far
+export const SKEW_WARN_DEG = 12;     // average edge angle offset from horizontal/vertical above this = tilted
 
 const ESCALATE_MS = 5500;     // second-stage message after this long in a state
 const BEST_SHOT_MS = 5000;    // content+light OK this long -> capture anyway
@@ -82,13 +93,25 @@ const STAGE_MSGS: Record<string, [string, string]> = {
     'The picture is blurry. Lift the phone a little higher, about a foot above the menu.',
     'Still blurry. Rest your elbows on the table to keep the phone steady, and hold it a bit further from the page.',
   ],
+  tooClose: [
+    "You're very close to the menu. Move the phone back a bit so the whole page fits in the frame.",
+    "Still too close. The menu doesn't fully fit. Hold the phone about a foot above the page.",
+  ],
+  tooFar: [
+    'The menu looks small in the frame. Move the phone a little closer.',
+    'Still far away. Bring the phone closer until the menu fills most of the frame.',
+  ],
+  skewed: [
+    'The menu looks tilted. Hold the phone flat and level with the page.',
+    'Still tilted, almost sideways. Line up the top edge of the phone with the top edge of the menu.',
+  ],
   moving: [
     'I can see the menu. Now hold still.',
     'Almost there. Rest your elbows on the table, take a breath, and hold the phone still. Or tap Take photo whenever you are ready.',
   ],
 };
 
-interface FrameMetrics {
+export interface FrameMetrics {
   luminance: number;
   glareFrac: number;
   sharpness: number;
@@ -96,6 +119,97 @@ interface FrameMetrics {
   cx: number; // 0..1 centroid of edge energy
   cy: number;
   motion: number;
+  // Framing: is the whole page in frame, and is it held level?
+  bboxWidthFrac: number;  // 0..1, width of the detected content's bounding box
+  bboxHeightFrac: number; // 0..1
+  touchesBorder: boolean; // content bbox reaches opposite frame edges — page is cropped, too close
+  skewDeg: number;        // 0..45, mean edge-angle distance from the nearest axis (0 = level)
+}
+
+/**
+ * Pure per-frame image analysis — no DOM/canvas, so it's directly unit
+ * testable with synthetic grayscale buffers. `gray` is row-major, length w*h.
+ * `prevGray` (previous frame, same size) is used for the motion/steadiness
+ * signal; pass null on the first frame.
+ */
+export function computeFrameMetrics(gray: Float32Array, w: number, h: number, prevGray: Float32Array | null): FrameMetrics {
+  let lumSum = 0;
+  let glare = 0;
+  for (let p = 0; p < gray.length; p++) {
+    lumSum += gray[p];
+    if (gray[p] >= GLARE_PIXEL) glare++;
+  }
+  const n = w * h;
+  const luminance = lumSum / n;
+  const glareFrac = glare / n;
+
+  // Laplacian variance (blur) + edge density/centroid/bbox/orientation in one pass.
+  let lapSum = 0, lapSq = 0;
+  let edgeCount = 0, exSum = 0, eySum = 0, eTotal = 0;
+  let bboxMinX = Infinity, bboxMaxX = -Infinity, bboxMinY = Infinity, bboxMaxY = -Infinity;
+  let skewSum = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w];
+      lapSum += lap;
+      lapSq += lap * lap;
+      const e = Math.abs(gray[i] - gray[i - 1]) + Math.abs(gray[i] - gray[i - w]);
+      if (e > 24) {
+        edgeCount++;
+        exSum += e * x;
+        eySum += e * y;
+        eTotal += e;
+        if (x < bboxMinX) bboxMinX = x;
+        if (x > bboxMaxX) bboxMaxX = x;
+        if (y < bboxMinY) bboxMinY = y;
+        if (y > bboxMaxY) bboxMaxY = y;
+
+        // Local gradient direction (central difference). A page held level
+        // produces edges clustered near 0deg (horizontal, e.g. text-line
+        // bands) or 90deg (vertical, e.g. letter strokes/page edges); a
+        // tilted page shifts that cluster away from both axes by roughly the
+        // tilt angle, which is what skewDeg measures.
+        const gx = gray[i + 1] - gray[i - 1];
+        const gy = gray[i + w] - gray[i - w];
+        const theta = Math.atan2(gy, gx) * (180 / Math.PI); // -180..180
+        let folded = theta;
+        if (folded > 90) folded -= 180;
+        else if (folded <= -90) folded += 180;
+        const absTheta = Math.abs(folded); // 0..90
+        const distToAxis = Math.min(absTheta, 90 - absTheta); // 0 (aligned) .. 45 (diagonal)
+        skewSum += distToAxis * e;
+      }
+    }
+  }
+  const inner = (w - 2) * (h - 2);
+  const lapMean = lapSum / inner;
+  const sharpness = lapSq / inner - lapMean * lapMean;
+  const edgeDensity = edgeCount / inner;
+  const cx = eTotal > 0 ? exSum / eTotal / w : 0.5;
+  const cy = eTotal > 0 ? eySum / eTotal / h : 0.5;
+
+  const hasContent = eTotal > 0;
+  const bboxWidthFrac = hasContent ? (bboxMaxX - bboxMinX + 1) / w : 0;
+  const bboxHeightFrac = hasContent ? (bboxMaxY - bboxMinY + 1) / h : 0;
+  const touchesLeft = hasContent && bboxMinX <= 1 + BORDER_MARGIN;
+  const touchesRight = hasContent && bboxMaxX >= w - 2 - BORDER_MARGIN;
+  const touchesTop = hasContent && bboxMinY <= 1 + BORDER_MARGIN;
+  const touchesBottom = hasContent && bboxMaxY >= h - 2 - BORDER_MARGIN;
+  const touchesBorder = (touchesLeft && touchesRight) || (touchesTop && touchesBottom);
+  const skewDeg = hasContent ? skewSum / eTotal : 0;
+
+  let motion = Infinity;
+  if (prevGray) {
+    let m = 0;
+    for (let i = 0; i < gray.length; i++) m += Math.abs(gray[i] - prevGray[i]);
+    motion = m / gray.length;
+  }
+
+  return {
+    luminance, glareFrac, sharpness, edgeDensity, cx, cy, motion,
+    bboxWidthFrac, bboxHeightFrac, touchesBorder, skewDeg,
+  };
 }
 
 export class MenuScanner {
@@ -195,52 +309,13 @@ export class MenuScanner {
     const rgba = this.ctx.getImageData(0, 0, W, H).data;
 
     const gray = new Float32Array(W * H);
-    let lumSum = 0;
-    let glare = 0;
     for (let i = 0, p = 0; i < rgba.length; i += 4, p++) {
-      const g = 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2];
-      gray[p] = g;
-      lumSum += g;
-      if (g >= GLARE_PIXEL) glare++;
+      gray[p] = 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2];
     }
-    const n = W * H;
-    const luminance = lumSum / n;
-    const glareFrac = glare / n;
 
-    // Laplacian variance (blur) + edge density/centroid in one pass.
-    let lapSum = 0, lapSq = 0;
-    let edgeCount = 0, exSum = 0, eySum = 0, eTotal = 0;
-    for (let y = 1; y < H - 1; y++) {
-      for (let x = 1; x < W - 1; x++) {
-        const i = y * W + x;
-        const lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - W] - gray[i + W];
-        lapSum += lap;
-        lapSq += lap * lap;
-        const e = Math.abs(gray[i] - gray[i - 1]) + Math.abs(gray[i] - gray[i - W]);
-        if (e > 24) {
-          edgeCount++;
-          exSum += e * x;
-          eySum += e * y;
-          eTotal += e;
-        }
-      }
-    }
-    const inner = (W - 2) * (H - 2);
-    const lapMean = lapSum / inner;
-    const sharpness = lapSq / inner - lapMean * lapMean;
-    const edgeDensity = edgeCount / inner;
-    const cx = eTotal > 0 ? exSum / eTotal / W : 0.5;
-    const cy = eTotal > 0 ? eySum / eTotal / H : 0.5;
-
-    let motion = Infinity;
-    if (this.prev) {
-      let m = 0;
-      for (let i = 0; i < gray.length; i++) m += Math.abs(gray[i] - this.prev[i]);
-      motion = m / gray.length;
-    }
+    const metrics = computeFrameMetrics(gray, W, H, this.prev);
     this.prev = gray;
-
-    return { luminance, glareFrac, sharpness, edgeDensity, cx, cy, motion };
+    return metrics;
   }
 
   private fireCapture(reason: 'steady' | 'best_shot') {
@@ -319,6 +394,37 @@ export class MenuScanner {
       this.setState('searching', `edges=${(m.edgeDensity * 100).toFixed(1)}%`);
       this.coachFor('searching', dir);
       this.cb.onProgress?.('searching', 0, STEADY_TICKS);
+      return;
+    }
+
+    // Framing: is the whole page in frame, and is it held level? These block
+    // capture the same way dark/glare/searching do — a crooked or badly
+    // cropped photo is far more likely to fail menu extraction than a
+    // slightly soft one, so there is no best-shot bypass for these states.
+    if (m.touchesBorder) {
+      this.steady = 0;
+      this.goodSince = 0;
+      this.setState('tooClose', `bbox=${(m.bboxWidthFrac * 100).toFixed(0)}x${(m.bboxHeightFrac * 100).toFixed(0)}%`);
+      this.coachFor('tooClose');
+      this.cb.onProgress?.('tooClose', 0, STEADY_TICKS);
+      return;
+    }
+
+    if (m.bboxWidthFrac < TOO_FAR_BBOX && m.bboxHeightFrac < TOO_FAR_BBOX) {
+      this.steady = 0;
+      this.goodSince = 0;
+      this.setState('tooFar', `bbox=${(m.bboxWidthFrac * 100).toFixed(0)}x${(m.bboxHeightFrac * 100).toFixed(0)}%`);
+      this.coachFor('tooFar');
+      this.cb.onProgress?.('tooFar', 0, STEADY_TICKS);
+      return;
+    }
+
+    if (m.skewDeg > SKEW_WARN_DEG) {
+      this.steady = 0;
+      this.goodSince = 0;
+      this.setState('skewed', `skew=${m.skewDeg.toFixed(0)}deg`);
+      this.coachFor('skewed');
+      this.cb.onProgress?.('skewed', 0, STEADY_TICKS);
       return;
     }
 
