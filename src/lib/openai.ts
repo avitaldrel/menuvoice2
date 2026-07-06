@@ -8,6 +8,7 @@
 
 import { ParsedMenu, UserProfile, ChatTurn, MenuProvenance } from '../types';
 import { track } from './telemetry';
+import { provenanceSummary } from './provenance';
 
 const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
 const AUDIO_PROVIDER = import.meta.env.VITE_AUDIO_PROVIDER ?? 'openai';
@@ -140,7 +141,25 @@ export async function transcribeAudio(blob: Blob): Promise<string> {
   return (json.text ?? '').trim();
 }
 
-function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
+// Ground the model in the SAME structured provenance facts the provenance
+// intent-answers use (see lib/provenance.ts), so ordinary conversation never
+// contradicts them. Without this, the model has no idea whether the menu came
+// from a photo taken in person or a live web search, and can casually claim
+// "this is the most up-to-date menu" / "since this was found online" even for
+// a menu the guest just photographed off the physical page in front of them.
+function sourceNote(menu: ParsedMenu, provenance?: MenuProvenance): string {
+  if (!provenance) {
+    return '- You do not have verified source details for this menu. Do not claim it was found online, is the most current version, or was recently checked — say you do not have that information if asked.';
+  }
+  const facts = provenanceSummary(provenance, menu.restaurantName || 'this restaurant');
+  const guard =
+    provenance.sourceType === 'photo'
+      ? ' This menu did NOT come from the internet. Never say things like "since this was found online" or "this is the most up-to-date menu" for it.'
+      : ' Do not claim more currency or completeness than these facts support.';
+  return `- Known facts about where this menu came from: ${facts}${guard}`;
+}
+
+function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile, provenance?: MenuProvenance): string {
   const allergies = profile.allergies.length ? profile.allergies.join(', ') : 'none on file';
   const dislikes = profile.dislikes.length ? profile.dislikes.join(', ') : 'none on file';
   const cuisines = profile.cuisinesLiked.length ? profile.cuisinesLiked.join(', ') : 'no strong preferences on file';
@@ -163,6 +182,9 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
       ? '- This menu capture is INCOMPLETE. Some items or sections are missing. If asked about something not listed, say it may be on a part of the menu that was not captured, and suggest adding more photos.'
       : '',
     '- End most turns with a brief, natural question that keeps the conversation moving.',
+    '',
+    'MENU SOURCE:',
+    sourceNote(menu, provenance),
     '',
     'REMEMBERING THEIR CHOICE:',
     '- Near the END of the conversation, once the guest seems to be settling on what to get, ask ONCE what they have decided to order. When they tell you, acknowledge it warmly and let them know you will remember it for next time so you can suggest things they like.',
@@ -198,9 +220,10 @@ export async function chatReply(
   menu: ParsedMenu,
   profile: UserProfile,
   history: ChatTurn[],
-  userText: string
+  userText: string,
+  provenance?: MenuProvenance,
 ): Promise<string> {
-  const messages: any[] = [{ role: 'system', content: buildSystemPrompt(menu, profile) }];
+  const messages: any[] = [{ role: 'system', content: buildSystemPrompt(menu, profile, provenance) }];
   for (const t of pruneHistory(history)) messages.push({ role: t.role, content: t.text });
   messages.push({ role: 'user', content: userText });
 
@@ -216,8 +239,9 @@ export async function chatReplyStream(
   history: ChatTurn[],
   userText: string,
   onDelta: (delta: string) => void,
+  provenance?: MenuProvenance,
 ): Promise<string> {
-  const messages: any[] = [{ role: 'system', content: buildSystemPrompt(menu, profile) }];
+  const messages: any[] = [{ role: 'system', content: buildSystemPrompt(menu, profile, provenance) }];
   for (const t of pruneHistory(history)) messages.push({ role: t.role, content: t.text });
   messages.push({ role: 'user', content: userText });
 
@@ -247,7 +271,7 @@ export async function chatReplyStream(
     track('ask', 'error', { outcome: 'failure', metadata: { error_code: status, message: errMsg } });
     throw new Error(errMsg);
   }
-  if (!res.body) return chatReply(menu, profile, history, userText);
+  if (!res.body) return chatReply(menu, profile, history, userText, provenance);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
