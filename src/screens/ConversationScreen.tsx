@@ -463,7 +463,7 @@ export default function ConversationScreen({
         fullReply = await chatReplyStream(menu, profile, history, userText, (delta) => {
           streamer.push(delta);
           setLiveText((prev) => prev + delta);
-        });
+        }, provenance);
         await streamer.finish();
       } catch (e: any) {
         earconThinkingStop();
@@ -492,7 +492,7 @@ export default function ConversationScreen({
       try {
         fullReply = await chatReplyStream(menu, profile, history, userText, (delta) => {
           setLiveText((prev) => prev + delta);
-        });
+        }, provenance);
       } catch (e: any) {
         earconThinkingStop();
         earconError();
