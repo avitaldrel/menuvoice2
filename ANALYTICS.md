@@ -125,7 +125,7 @@ https://<deployment>/api/morning?key=<REPORT_KEY>
   pre-login rows (session start / first screen / welcome TTS, fired before Google
   login attaches the email) are NOT counted as a separate "anonymous" user — they
   belong to whichever account the session resolves to. There is no anonymous metric.
-- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com`).
+- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com`). Testers who also receive the report are excluded here too, so their own testing never shows up in the numbers they read.
 - Window: `?hours=N` or `?days=N` (default 24h). Output: HTML (default), `?format=text` (cron/email friendly), or `?format=json`.
 - Same `REPORT_KEY` guard. Zero AI tokens.
 
@@ -143,6 +143,8 @@ Required env vars in Vercel (Project → Settings → Env Vars), then redeploy:
   - `RESEND_API_KEY` (+ optional `RESEND_FROM`), **or**
   - `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail account + an App Password; requires 2FA).
 - Optional: `REPORT_EMAIL_TO` (default `2firemaster27@gmail.com`),
+  `REPORT_EMAIL_EXTRA` (extra recipients merged into `REPORT_EMAIL_TO`, deduped;
+  default `anibabug@gmail.com,ik8072369@gmail.com`),
   `REPORT_EMAIL_HOURS` (default 24), `REPORT_EXCLUDE_EMAILS`.
 
 Notes: Vercel Cron only fires on **production** deployments. To test delivery on demand,

@@ -81,11 +81,40 @@ export interface MorningData {
   website: WebsiteReport;
 }
 
-// Accounts we never want to see in the report (own testing). Override with the
-// REPORT_EXCLUDE_EMAILS env var (comma-separated). Lower-cased + trimmed.
+// Accounts we never want to see in the report (own testing + known testers).
+// Override with the REPORT_EXCLUDE_EMAILS env var (comma-separated). Lower-cased
+// + trimmed. Testers below are excluded from the report body even when they are
+// also recipients (see resolveRecipients) — so their own testing never pollutes
+// the numbers they're reading.
 export function excludeList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com';
+  const raw = process.env.REPORT_EXCLUDE_EMAILS
+    ?? '2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com';
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+
+// Who receives the daily email. The primary recipient(s) come from REPORT_EMAIL_TO
+// (a Vercel env var; defaults to the owner account). Additional recipients are
+// merged in from REPORT_EMAIL_EXTRA (defaults to the testers who asked to receive
+// the report). Combining them additively means we never have to overwrite — and
+// risk dropping — whatever REPORT_EMAIL_TO already holds. Returns a de-duplicated,
+// comma-joined string suitable for both nodemailer and (after splitting) Resend.
+export function resolveRecipients(): string {
+  const primary = (process.env.REPORT_EMAIL_TO ?? '2firemaster27@gmail.com')
+    .split(',').map((e) => e.trim()).filter(Boolean);
+  // anibabug + ik8072369 are testers who want the report but are excluded from its
+  // contents (see excludeList). mibrahim.dev17 is intentionally NOT here — excluded
+  // from the report but not emailed it.
+  const extra = (process.env.REPORT_EMAIL_EXTRA ?? 'anibabug@gmail.com,ik8072369@gmail.com')
+    .split(',').map((e) => e.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const addr of [...primary, ...extra]) {
+    const key = addr.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(addr);
+  }
+  return out.join(', ');
 }
 
 const STAGE_DEFS: { key: string; label: string }[] = [
@@ -771,13 +800,15 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
 
   if (process.env.RESEND_API_KEY) {
     const from = process.env.RESEND_FROM ?? 'MenuVoice <onboarding@resend.dev>';
+    // Resend wants an array of addresses; our `to` may be a comma-joined list.
+    const toList = to.split(',').map((e) => e.trim()).filter(Boolean);
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from, to, subject, html, text }),
+      body: JSON.stringify({ from, to: toList, subject, html, text }),
     });
     if (!r.ok) throw new Error(`Resend failed: ${r.status} ${await r.text()}`);
     return 'resend';

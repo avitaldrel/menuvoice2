@@ -18,7 +18,7 @@
 //   format=json raw JSON
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { buildMorningReport, renderText, renderEmailHtml, esc, fmtTs, ago, activity, type UserRow } from './_morningData.js';
+import { buildMorningReport, renderText, renderEmailHtml, resolveRecipients, esc, fmtTs, ago, activity, type UserRow } from './_morningData.js';
 
 // Subject line shared with the email path so a Gmail filter matches both.
 function emailSubject(d: { anyoneUsed: boolean; newUsers: unknown[]; returningUsers: unknown[]; website?: { visits: number } }): string {
@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).json({
-        to: process.env.REPORT_EMAIL_TO ?? '2firemaster27@gmail.com',
+        to: resolveRecipients(),
         subject: emailSubject(d),
         html: renderEmailHtml(d, dashboardUrl),
         text: renderText(d),
