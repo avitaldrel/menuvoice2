@@ -54,7 +54,6 @@ export default function HomeScreen({ navigate }: ScreenProps) {
     <Screen>
       <div className="home-hero">
         <h1 className="title">MenuVoice</h1>
-        <p className="home-tagline">Point, ask, and order. The menu, read aloud and ready to talk.</p>
       </div>
 
       <div className="col home-actions stagger">
