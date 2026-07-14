@@ -117,6 +117,19 @@ export function resolveRecipients(): string {
   return out.join(', ');
 }
 
+// Build a keyed, one-click analytics URL for links inside the email, so a recipient
+// who already gets the report can open the dashboard without ever seeing the "enter
+// the key" page. Uses the stable production alias (override with REPORT_PUBLIC_HOST)
+// rather than the request host — a cron send's host header is a bare per-deployment
+// URL, which is ugly and tied to one deployment. Returns undefined only when
+// REPORT_KEY is unset — we omit the link rather than send one that can't work.
+export function analyticsUrl(path: string): string | undefined {
+  const key = process.env.REPORT_KEY?.trim();
+  if (!key) return undefined;
+  const base = process.env.REPORT_PUBLIC_HOST || 'menuvoice-sigma.vercel.app';
+  return `https://${base}${path}?key=${encodeURIComponent(key)}`;
+}
+
 const STAGE_DEFS: { key: string; label: string }[] = [
   { key: 'sessions', label: 'Session started' },
   { key: 'camera',   label: 'Camera opened' },
@@ -679,7 +692,7 @@ export function renderWebsiteHtml(w: WebsiteReport, ff: string): string {
   </td></tr>`;
 }
 
-export function renderEmailHtml(d: MorningData, dashboardUrl?: string): string {
+export function renderEmailHtml(d: MorningData, links?: { dashboard?: string; report?: string }): string {
   const t = d.totals;
   const ff = 'Segoe UI,system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif';
   const appUsed = t.users > 0;
@@ -776,9 +789,11 @@ export function renderEmailHtml(d: MorningData, dashboardUrl?: string): string {
             ${renderWebsiteHtml(d.website, ff)}
             ${section('New users', d.newUsers, 'new')}
             ${section('Returning users', d.returningUsers, 'returning')}
-            ${dashboardUrl ? `<tr><td style="padding-top:22px" align="center">
-              <a href="${esc(dashboardUrl)}" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-family:${ff};font-size:14px;font-weight:600;padding:11px 22px;border-radius:10px">Open full dashboard</a>
-            </td></tr>` : ''}
+            ${(links?.dashboard || links?.report) ? `<tr><td style="padding-top:22px" align="center">
+              ${links?.dashboard ? `<a href="${esc(links.dashboard)}" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-family:${ff};font-size:14px;font-weight:600;padding:11px 22px;border-radius:10px">Open live analytics dashboard</a>` : ''}
+              ${links?.report ? `<a href="${esc(links.report)}" style="display:inline-block;margin-left:8px;background:#fff;color:${C.ink};border:1px solid ${C.line};text-decoration:none;font-family:${ff};font-size:14px;font-weight:600;padding:10px 21px;border-radius:10px">View this report</a>` : ''}
+            </td></tr>
+            <tr><td style="padding-top:8px" align="center"><span style="font-family:${ff};font-size:11px;color:${C.sub}">These links include your private access key — no sign-in needed.</span></td></tr>` : ''}
             <tr><td style="padding-top:18px;font-family:${ff};font-size:11px;color:${C.sub};line-height:1.5">
               ${d.excluded.length ? `Internal/test accounts hidden: ${esc(d.excluded.join(', '))}.<br>` : ''}
               "New" = first-ever use in this window. "Returning" = used MenuVoice before and came back.

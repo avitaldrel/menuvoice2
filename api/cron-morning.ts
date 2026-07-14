@@ -12,7 +12,7 @@
 // Internal/test accounts are excluded via REPORT_EXCLUDE_EMAILS.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { buildMorningReport, renderText, renderEmailHtml, sendEmail, resolveRecipients } from './_morningData.js';
+import { buildMorningReport, renderText, renderEmailHtml, sendEmail, resolveRecipients, analyticsUrl } from './_morningData.js';
 
 function authorized(req: VercelRequest): boolean {
   const auth = (req.headers.authorization as string) ?? '';
@@ -59,15 +59,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `[MenuVoice] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website.visits} site visits`
       : `[MenuVoice] Morning report ${date} — no users in window`;
 
-    const host = req.headers.host;
-    const dashboardUrl = host && process.env.REPORT_KEY
-      ? `https://${host}/api/morning?key=${process.env.REPORT_KEY}`
-      : undefined;
+    const links = {
+      dashboard: analyticsUrl('/api/dashboard'),
+      report: analyticsUrl('/api/morning'),
+    };
 
     const via = await sendEmail({
       to,
       subject,
-      html: renderEmailHtml(d, dashboardUrl),
+      html: renderEmailHtml(d, links),
       text: renderText(d),
     });
 
