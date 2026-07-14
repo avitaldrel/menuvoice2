@@ -207,3 +207,25 @@ export function allergenDisclaimer(findings: AllergenFinding[]): string {
   parts.push('Please confirm with the restaurant.');
   return parts.join(' ');
 }
+
+/**
+ * One dish's full spoken/accessible-name text: allergen warning, name,
+ * price, description, ingredients — in that order. The allergen warning
+ * comes FIRST. This is the whole dish's single VoiceOver rotor stop, so a
+ * warning placed at the end only gets heard if the guest listens through the
+ * entire dish first; a guest with a severe allergy needs it before anything
+ * else so they can skip the dish immediately.
+ */
+export function dishSpokenLabel(item: MenuItem, otherAllergens: AllergenFinding[] = []): string {
+  let label = '';
+  if (otherAllergens.length > 0) {
+    label += `Allergen warning. ${allergenDisclaimer(otherAllergens)} `;
+  }
+  label += item.name;
+  if (item.price) label += `, ${item.price}`;
+  if (item.description) label += `. ${item.description}`;
+  if (item.ingredients && item.ingredients.length > 0) {
+    label += `. Ingredients: ${item.ingredients.join(', ')}`;
+  }
+  return label;
+}
