@@ -23,6 +23,26 @@ CREATE INDEX IF NOT EXISTS idx_events_type_ts  ON events (event_type, event_name
 CREATE INDEX IF NOT EXISTS idx_events_session  ON events (session_id, ts);
 CREATE INDEX IF NOT EXISTS idx_events_outcome  ON events (outcome) WHERE outcome = 'failure';
 
+-- Current per-user app state mirrored from /api/sync.
+-- KV/Redis remains the fast restore path; this Postgres table makes profiles,
+-- saved restaurants, and learned preferences queryable without adding one row
+-- per restaurant save.
+CREATE TABLE IF NOT EXISTS user_state_snapshots (
+  email                     TEXT PRIMARY KEY,
+  profile                   JSONB,
+  restaurants               JSONB,
+  restaurant_count          INTEGER NOT NULL DEFAULT 0,
+  dining_history_count      INTEGER NOT NULL DEFAULT 0,
+  last_saved_restaurant_at  TIMESTAMPTZ,
+  last_opened_restaurant_at TIMESTAMPTZ,
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_state_updated_at
+  ON user_state_snapshots (updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_state_last_opened_at
+  ON user_state_snapshots (last_opened_restaurant_at DESC);
+
 -- Example queries:
 
 -- Menu OCR failures last 7 days, per user
