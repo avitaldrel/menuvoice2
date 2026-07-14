@@ -6,11 +6,25 @@ export interface UserProfile {
   spiceTolerance: 'none' | 'mild' | 'medium' | 'hot';
   cuisinesLiked: string[];
   pastOrders: string[]; // dishes the guest decided on before — feeds recommendations
+  diningHistory: DiningHistoryEntry[];
   hidePrices: boolean;
   ttsVoice: string;
   onboarded: boolean;
   imageLogging: boolean;
   appVoice?: boolean; // app TTS on/off; off lets VoiceOver speak without overlap
+}
+
+export interface DiningHistoryEntry {
+  id: string;
+  learnedAt: string;
+  restaurantName?: string;
+  location?: string;
+  sourceType?: MenuSourceType;
+  orders: string[];
+  likes: string[];
+  dislikes: string[];
+  turnCount: number;
+  menuItemCount?: number;
 }
 
 export interface MenuItem {
@@ -74,6 +88,13 @@ export interface SavedRestaurant {
   name: string;
   menu: ParsedMenu;
   capturedAt: string; // ISO date
+  createdAt?: string; // first time this restaurant/location was saved
+  updatedAt?: string; // last time the saved menu data changed
+  lastOpenedAt?: string;
+  openCount?: number;
+  saveCount?: number;
+  categoryCount?: number;
+  itemCount?: number;
   sourceUrl?: string;
   location?: string; // confirmed branch address; keeps chain branches separate
   provenance?: MenuProvenance;
@@ -92,6 +113,7 @@ export const EMPTY_PROFILE: UserProfile = {
   spiceTolerance: 'medium',
   cuisinesLiked: [],
   pastOrders: [],
+  diningHistory: [],
   hidePrices: false,
   ttsVoice: 'shimmer',
   onboarded: false,

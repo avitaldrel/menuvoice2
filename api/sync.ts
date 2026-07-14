@@ -1,11 +1,119 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/postgres';
 
 // GET  /api/sync?email=x   — fetch stored data for this email
 // POST /api/sync            — save data { email, profile, restaurants }
 
 function emailKey(email: string) {
   return `user:${email.trim().toLowerCase()}`;
+}
+
+let snapshotSchemaReady = false;
+
+function hasPostgres(): boolean {
+  return !!process.env.POSTGRES_URL;
+}
+
+async function withClient<T>(fn: (client: ReturnType<typeof createClient>) => Promise<T>): Promise<T | null> {
+  if (!hasPostgres()) return null;
+  const client = createClient();
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await client.end();
+  }
+}
+
+async function ensureSnapshotSchema() {
+  if (snapshotSchemaReady || !hasPostgres()) return;
+  await withClient(async (client) => {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_state_snapshots (
+        email TEXT PRIMARY KEY,
+        profile JSONB,
+        restaurants JSONB,
+        restaurant_count INTEGER NOT NULL DEFAULT 0,
+        dining_history_count INTEGER NOT NULL DEFAULT 0,
+        last_saved_restaurant_at TIMESTAMPTZ,
+        last_opened_restaurant_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await Promise.all([
+      client.query('CREATE INDEX IF NOT EXISTS idx_user_state_updated_at ON user_state_snapshots (updated_at DESC)'),
+      client.query('CREATE INDEX IF NOT EXISTS idx_user_state_last_opened_at ON user_state_snapshots (last_opened_restaurant_at DESC)'),
+    ]);
+  });
+  snapshotSchemaReady = true;
+}
+
+function latestIso(values: unknown[]): string | null {
+  let latest = 0;
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const t = Date.parse(value);
+    if (Number.isFinite(t) && t > latest) latest = t;
+  }
+  return latest ? new Date(latest).toISOString() : null;
+}
+
+function stateStats(profile: unknown, restaurants: unknown) {
+  const list = Array.isArray(restaurants) ? restaurants as Array<Record<string, unknown>> : [];
+  const profileObj = profile && typeof profile === 'object' ? profile as Record<string, unknown> : {};
+  return {
+    restaurantCount: list.length,
+    diningHistoryCount: Array.isArray(profileObj.diningHistory) ? profileObj.diningHistory.length : 0,
+    lastSavedAt: latestIso(list.flatMap((r) => [r.updatedAt, r.createdAt, r.capturedAt])),
+    lastOpenedAt: latestIso(list.map((r) => r.lastOpenedAt)),
+  };
+}
+
+async function readSnapshot(email: string) {
+  if (!hasPostgres()) return null;
+  await ensureSnapshotSchema();
+  return withClient(async (client) => {
+    const { rows } = await client.query(
+      `SELECT profile, restaurants, updated_at AS "updatedAt"
+       FROM user_state_snapshots
+       WHERE email = $1`,
+      [email.trim().toLowerCase()],
+    );
+    return rows[0] ?? null;
+  });
+}
+
+async function writeSnapshot(email: string, profile: unknown, restaurants: unknown): Promise<boolean> {
+  if (!hasPostgres()) return false;
+  await ensureSnapshotSchema();
+  const stats = stateStats(profile, restaurants);
+  await withClient(async (client) => {
+    await client.query(
+      `INSERT INTO user_state_snapshots
+         (email, profile, restaurants, restaurant_count, dining_history_count,
+          last_saved_restaurant_at, last_opened_restaurant_at, updated_at)
+       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, now())
+       ON CONFLICT (email) DO UPDATE SET
+         profile = EXCLUDED.profile,
+         restaurants = EXCLUDED.restaurants,
+         restaurant_count = EXCLUDED.restaurant_count,
+         dining_history_count = EXCLUDED.dining_history_count,
+         last_saved_restaurant_at = EXCLUDED.last_saved_restaurant_at,
+         last_opened_restaurant_at = EXCLUDED.last_opened_restaurant_at,
+         updated_at = now()`,
+      [
+        email.trim().toLowerCase(),
+        JSON.stringify(profile ?? null),
+        JSON.stringify(Array.isArray(restaurants) ? restaurants : []),
+        stats.restaurantCount,
+        stats.diningHistoryCount,
+        stats.lastSavedAt,
+        stats.lastOpenedAt,
+      ],
+    );
+  });
+  return true;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -17,14 +125,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     const email = req.query.email as string;
     if (!email) return res.status(400).json({ error: 'email required' });
-    const data = await kv.get(emailKey(email));
+    let data: unknown = null;
+    try {
+      data = await kv.get(emailKey(email));
+    } catch (error) {
+      console.warn('[sync] KV read failed, trying Postgres snapshot:', error);
+    }
+    if (!data) {
+      data = await readSnapshot(email).catch((error) => {
+        console.warn('[sync] Postgres snapshot read failed:', error);
+        return null;
+      });
+    }
     return res.status(200).json(data ?? null);
   }
 
   if (req.method === 'POST') {
     const { email, profile, restaurants } = req.body ?? {};
     if (!email) return res.status(400).json({ error: 'email required' });
-    await kv.set(emailKey(email), { profile, restaurants, updatedAt: Date.now() });
+    const state = { profile, restaurants, updatedAt: Date.now() };
+    let saved = false;
+    try {
+      await kv.set(emailKey(email), state);
+      saved = true;
+    } catch (error) {
+      console.warn('[sync] KV write failed:', error);
+    }
+    try {
+      saved = (await writeSnapshot(email, profile, restaurants)) || saved;
+    } catch (error) {
+      console.warn('[sync] Postgres snapshot write failed:', error);
+    }
+    if (!saved) return res.status(500).json({ ok: false, error: 'sync failed' });
     return res.status(200).json({ ok: true });
   }
 

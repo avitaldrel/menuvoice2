@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Screen, SecondaryButton } from '../components';
 import { ScreenProps, Route } from '../nav';
-import { ChatTurn, ParsedMenu } from '../types';
+import { ChatTurn, DiningHistoryEntry, ParsedMenu } from '../types';
 import { useProfile } from '../state/ProfileContext';
 import { usePause } from '../state/PauseContext';
 import { speak, stopSpeaking, createStreamingSpeech, unlockAudio } from '../lib/speech';
@@ -34,6 +34,7 @@ import {
   earconThinkingStop,
 } from '../lib/earcon';
 import { mergeUnique } from '../util';
+import { menuStats } from '../lib/storage';
 import { analyzeItemAllergens, allergenDisclaimer, type AllergenFinding } from '../lib/allergens';
 import {
   provenanceSummary,
@@ -541,11 +542,47 @@ export default function ConversationScreen({
       setSaving(true);
       try {
         const learn = await extractSessionLearnings(turns);
+        const hasLearning = learn.orders.length > 0 || learn.likes.length > 0 || learn.dislikes.length > 0;
+        const stats = menuStats(menu);
+        const diningHistory: DiningHistoryEntry[] = hasLearning
+          ? [
+              {
+                id: `dh-${Date.now()}`,
+                learnedAt: new Date().toISOString(),
+                restaurantName,
+                location: provenance?.confirmedLocation,
+                sourceType: provenance?.sourceType,
+                orders: learn.orders,
+                likes: learn.likes,
+                dislikes: learn.dislikes,
+                turnCount: turns.length,
+                menuItemCount: stats.itemCount,
+              },
+              ...(profile.diningHistory ?? []),
+            ].slice(0, 100)
+          : (profile.diningHistory ?? []);
         await update({
           pastOrders: mergeUnique(profile.pastOrders, learn.orders),
           cuisinesLiked: mergeUnique(profile.cuisinesLiked, learn.likes),
           dislikes: mergeUnique(profile.dislikes, learn.dislikes),
+          diningHistory,
         });
+        if (hasLearning) {
+          track('learnings', 'dining_history_saved', {
+            content: {
+              restaurantName,
+              orders: learn.orders,
+              cuisines_liked: learn.likes,
+              dislikes: learn.dislikes,
+            },
+            metadata: {
+              location: provenance?.confirmedLocation,
+              sourceType: provenance?.sourceType,
+              turn_count: turns.length,
+              menu_item_count: stats.itemCount,
+            },
+          });
+        }
       } catch {}
     }
     navigate({ name: 'home' });
