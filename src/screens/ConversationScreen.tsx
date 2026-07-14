@@ -562,8 +562,15 @@ export default function ConversationScreen({
         'Browse Menu. Voice is paused so your screen reader can read without interruption. ' +
           'Your conversation is saved. Activate Resume Voice Conversation when you are ready.',
       );
-      // Land on the menu heading so VoiceOver starts at the content.
-      setTimeout(() => menuHeadingRef.current?.focus(), 50);
+      // Land on the menu heading so VoiceOver starts at the content, and
+      // explicitly scroll the organized menu into view — the heading sits
+      // below the conversation history and controls, so without this a
+      // sighted/low-vision user stays looking at the top of the page while
+      // focus (and VoiceOver) has already moved down.
+      setTimeout(() => {
+        menuHeadingRef.current?.focus({ preventScroll: true });
+        menuHeadingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
     } else {
       // Returning to Conversation Mode — resume() reopens the mic via the
       // paused effect and restores voice interaction with the saved session.
