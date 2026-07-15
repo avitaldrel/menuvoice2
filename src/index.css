@@ -211,6 +211,33 @@ body::before {
   flex-direction: column;
 }
 
+/* Every non-home route is a real modal navigation layer. On iOS, VoiceOver's
+   two-finger scrub has native dismissal support for <dialog>; App.tsx maps
+   that dismissal back onto MenuVoice's browser-history entry. */
+.app-route-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(100%, 560px);
+  height: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.app-route-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-route-dialog::backdrop {
+  background: var(--bg);
+}
+
 /* Quiet, refined scrollbar — part of the surface, not a default gray slab */
 * {
   scrollbar-width: thin;
