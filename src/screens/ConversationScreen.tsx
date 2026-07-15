@@ -34,8 +34,12 @@ import {
   earconThinkingStop,
 } from '../lib/earcon';
 import { mergeUnique } from '../util';
+<<<<<<< Updated upstream
 import { menuStats } from '../lib/storage';
 import { analyzeItemAllergens, allergenDisclaimer, type AllergenFinding } from '../lib/allergens';
+=======
+import { analyzeItemAllergens, allergenAlertText, type AllergenFinding } from '../lib/allergens';
+>>>>>>> Stashed changes
 import {
   provenanceSummary,
   provenanceOpeningNote,
@@ -79,19 +83,17 @@ function matchProvenanceIntent(t: string): ProvenanceIntent | null {
 // the dish, never as its own stop.
 function dishLabel(
   item: ParsedMenu['categories'][number]['items'][number],
-  otherAllergens: AllergenFinding[] = [],
+  ownAllergens: AllergenFinding[] = [],
 ): string {
-  let label = item.name;
+  // If this dish hits one of the guest's OWN allergens, the alert is read FIRST
+  // so a VoiceOver user hears the safety warning before the dish name.
+  let label = '';
+  if (ownAllergens.length > 0) label += `${allergenAlertText(ownAllergens)} `;
+  label += item.name;
   if (item.price) label += `, ${item.price}`;
   if (item.description) label += `. ${item.description}`;
   if (item.ingredients && item.ingredients.length > 0) {
     label += `. Ingredients: ${item.ingredients.join(', ')}`;
-  }
-  if (otherAllergens.length > 0) {
-    // Read the allergen warning last, as part of the same single rotor stop.
-    // The wording reflects whether each allergen was declared or only inferred,
-    // so an inference is never spoken as a confirmed fact.
-    label += `. Allergen warning. ${allergenDisclaimer(otherAllergens)}`;
   }
   return label;
 }
@@ -130,17 +132,18 @@ function MenuDocument({
     });
   };
 
-  // Filter each category against the guest's allergies: dishes containing one of
-  // their allergens are removed entirely. Surviving dishes keep any OTHER
-  // allergens for the disclaimer. Categories left with no safe dishes are hidden.
-  const categories = menu.categories
-    .map((cat) => ({
-      name: cat.name,
-      items: cat.items
-        .map((item) => ({ item, info: analyzeItemAllergens(item, allergies) }))
-        .filter(({ info }) => !info.blocked),
-    }))
-    .filter((cat) => cat.items.length > 0);
+  // Every dish is shown. We do NOT hide anything. For each dish we only look for
+  // the guest's OWN listed allergens (blockedBy); a match becomes a prominent
+  // alert at the top of the dish. Allergens the guest did not list are ignored,
+  // so dishes are not cluttered with warnings that are not relevant to them.
+  const categories = menu.categories.map((cat) => ({
+    name: cat.name,
+    items: cat.items.map((item) => ({ item, own: analyzeItemAllergens(item, allergies).blockedBy })),
+  }));
+  const alertCount = categories.reduce(
+    (n, cat) => n + cat.items.filter(({ own }) => own.length > 0).length,
+    0,
+  );
 
   return (
     <section aria-label="Menu by category. Open a category to read its dishes." style={{ marginTop: 24 }}>
@@ -153,13 +156,16 @@ function MenuDocument({
       </h2>
       {allergies.length > 0 && (
         <p className="body" style={{ marginTop: 0, marginBottom: 12, color: 'var(--text-secondary)' }}>
-          Dishes that may contain your allergens ({allergies.join(', ')}) are hidden. This is based on the dish descriptions, not confirmed by the restaurant, so always confirm with the restaurant.
+          {alertCount > 0
+            ? `${alertCount} dish${alertCount === 1 ? '' : 'es'} may contain your allergens (${allergies.join(', ')}). Each is shown with an alert. Always confirm with the restaurant.`
+            : `Watching for your allergens: ${allergies.join(', ')}. Nothing on this menu appears to contain them, but always confirm with the restaurant.`}
         </p>
       )}
       {categories.map((cat) => {
         const open = !!openCategories[cat.name];
         const panelId = `category-panel-${cat.name.replace(/\s+/g, '-').toLowerCase()}`;
         const count = `${cat.items.length} item${cat.items.length === 1 ? '' : 's'}`;
+        const catAlerts = cat.items.filter(({ own }) => own.length > 0).length;
         return (
           <section key={cat.name} style={{ marginBottom: 12 }}>
             <button
@@ -167,11 +173,12 @@ function MenuDocument({
               onClick={() => toggleCategory(cat.name)}
               aria-expanded={open}
               aria-controls={panelId}
-              aria-label={`${cat.name}, ${count}. ${open ? 'Open. Activate to hide dishes.' : 'Activate to show dishes.'}`}
+              aria-label={`${cat.name}, ${count}${catAlerts > 0 ? `, ${catAlerts} with an allergy alert` : ''}. ${open ? 'Open. Activate to hide dishes.' : 'Activate to show dishes.'}`}
               style={{ minHeight: 64, width: '100%', justifyContent: 'space-between', textAlign: 'left' }}
             >
               <span aria-hidden="true">{cat.name}</span>
-              <span aria-hidden="true" style={{ fontWeight: 400, fontSize: '0.8em' }}>
+              <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 400, fontSize: '0.8em' }}>
+                {catAlerts > 0 && <span className="browse-alert-count">{catAlerts} alert{catAlerts === 1 ? '' : 's'}</span>}
                 {count} {open ? '▾' : '▸'}
               </span>
             </button>
@@ -180,15 +187,21 @@ function MenuDocument({
                 id={panelId}
                 style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10, marginBottom: 8 }}
               >
-                {cat.items.map(({ item, info }) => (
+                {cat.items.map(({ item, own }) => (
                   <article
                     key={item.name}
-                    className={`browse-item${info.otherAllergens.length > 0 ? ' browse-item-allergen' : ''}`}
+                    className={`browse-item${own.length > 0 ? ' browse-item-alert' : ''}`}
                   >
-                    {/* Single rotor stop: the whole dish, spoken from aria-label.
-                        Visible content below is aria-hidden so nothing is read
-                        twice and nothing extra lands in the heading rotor. */}
-                    <h3 className="browse-item-name" aria-label={dishLabel(item, info.otherAllergens)}>
+                    {/* Single rotor stop: the whole dish, spoken from aria-label,
+                        with the allergy alert (if any) read first. Visible content
+                        below is aria-hidden so nothing is read twice. */}
+                    {own.length > 0 && (
+                      <p className="allergen-alert" aria-hidden="true">
+                        <span className="allergen-alert__badge">⚠ Alert</span>
+                        Contains {own.map((f) => f.label).join(', ')}, on your allergy list. Confirm with the restaurant.
+                      </p>
+                    )}
+                    <h3 className="browse-item-name" aria-label={dishLabel(item, own)}>
                       <span aria-hidden="true">{item.name}</span>
                       {item.price && (
                         <span className="browse-item-price" aria-hidden="true">{' '}{item.price}</span>
@@ -203,11 +216,6 @@ function MenuDocument({
                         {item.ingredients.join(', ')}
                       </p>
                     )}
-                    {info.otherAllergens.length > 0 && (
-                      <p className="allergen-disclaimer" aria-hidden="true">
-                        {allergenDisclaimer(info.otherAllergens)}
-                      </p>
-                    )}
                   </article>
                 ))}
               </div>
@@ -215,11 +223,6 @@ function MenuDocument({
           </section>
         );
       })}
-      {categories.length === 0 && (
-        <p className="body" role="note" style={{ marginTop: 8 }}>
-          Every dish on this menu may contain one of your listed allergens based on its description, so none are shown. Please ask the restaurant about safe options.
-        </p>
-      )}
       {menu.notes && (
         <section>
           <h2 className="browse-category">Notes</h2>

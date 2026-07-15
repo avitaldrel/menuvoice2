@@ -9,14 +9,65 @@ import { useProfile } from '../state/ProfileContext';
 import { splitList, normalizeAllergens } from '../util';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
-import { speak, setAppVoice } from '../lib/speech';
+import { speak, setAppVoice, setSpeechRate } from '../lib/speech';
 import { watchForSilence } from '../lib/vad';
 import { track } from '../lib/telemetry';
+import type { AppTheme, TextScale } from '../types';
 
 const VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'fable', 'onyx'];
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
 type SpiceLevel = typeof SPICE_LEVELS[number];
 type RecState = 'idle' | 'recording' | 'working';
+
+const THEME_OPTIONS: { value: AppTheme; label: string; hint: string }[] = [
+  { value: 'dark', label: 'Dark', hint: 'Light text on a near-black background. Easiest on the eyes in low light.' },
+  { value: 'light', label: 'Light', hint: 'Dark text on a white background. Highest edge contrast.' },
+  { value: 'high-contrast', label: 'High contrast', hint: 'Bright yellow on pure black. Maximum contrast.' },
+];
+const TEXT_SIZES: { value: TextScale; label: string }[] = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'large', label: 'Large' },
+  { value: 'xlarge', label: 'Extra large' },
+];
+const SPEECH_RATES: { value: number; label: string }[] = [
+  { value: 0.8, label: 'Slow' },
+  { value: 1, label: 'Normal' },
+  { value: 1.25, label: 'Fast' },
+];
+
+// A large, accessible segmented control (radiogroup). Each option is a 64px+
+// button; the selected one is announced and highlighted with the accent color.
+function Segmented<T extends string | number>({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="row" role="radiogroup" aria-label={legend} style={{ flexWrap: 'wrap', gap: 8 }}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={String(opt.value)}
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            aria-label={`${opt.label}${active ? ', selected' : ''}`}
+            className={`seg-btn${active ? ' seg-btn--active' : ''}`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const { profile, update, reset } = useProfile();
@@ -142,9 +193,65 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
   const anyMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
 
+  const currentTheme: AppTheme = profile.theme ?? 'dark';
+  const currentScale: TextScale = profile.textScale ?? 'normal';
+  const currentRate = profile.speechRate ?? 1;
+  const themeHint = THEME_OPTIONS.find((t) => t.value === currentTheme)?.hint ?? '';
+
   return (
     <Screen>
       <Title>Settings</Title>
+
+      <SecondaryButton
+        label="How MenuVoice works"
+        hint="Open the step by step tutorial"
+        onClick={() => navigate({ name: 'tutorial' })}
+      />
+
+      <Heading>Accessibility</Heading>
+
+      <div className="setting-block">
+        <span className="setting-label" id="setting-textsize">Text size</span>
+        <Segmented
+          legend="Text size"
+          options={TEXT_SIZES}
+          value={currentScale}
+          onChange={(v) => {
+            update({ textScale: v });
+            announce(`Text size ${TEXT_SIZES.find((t) => t.value === v)?.label}.`);
+          }}
+        />
+      </div>
+
+      <div className="setting-block">
+        <span className="setting-label">Color scheme</span>
+        <Segmented
+          legend="Color scheme"
+          options={THEME_OPTIONS.map(({ value, label }) => ({ value, label }))}
+          value={currentTheme}
+          onChange={(v) => {
+            update({ theme: v });
+            announce(`${THEME_OPTIONS.find((t) => t.value === v)?.label} theme. ${THEME_OPTIONS.find((t) => t.value === v)?.hint ?? ''}`);
+          }}
+        />
+        <p className="body" style={{ margin: '4px 0 0', fontSize: 'calc(14px * var(--text-scale))' }}>{themeHint}</p>
+      </div>
+
+      <div className="setting-block">
+        <span className="setting-label">Talking speed</span>
+        <Segmented
+          legend="Talking speed"
+          options={SPEECH_RATES}
+          value={currentRate}
+          onChange={(v) => {
+            // Apply immediately so the preview line uses the new speed, then persist.
+            setSpeechRate(v);
+            update({ speechRate: v });
+            setSrStatus(`Talking speed ${SPEECH_RATES.find((r) => r.value === v)?.label}.`);
+            speak('This is how fast I will talk.');
+          }}
+        />
+      </div>
 
       <Heading>Your name</Heading>
       <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
