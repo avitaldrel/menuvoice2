@@ -1,5 +1,12 @@
 // Text-to-speech playback. Prefers OpenAI TTS (warm voice); falls back to the
 // browser's built-in speechSynthesis when there's no key or the call fails.
+//
+// App TTS speaks ONLY on the conversation screen (Conversation Mode). Every
+// other screen stays silent and announces through visible text and aria-live
+// regions instead, so the app never talks over VoiceOver outside the one
+// surface where speaking is the point. The global Pause Voice button is the
+// single switch that silences conversation speech; resuming the conversation
+// always brings it back.
 
 import { synthesizeSpeech, hasApiKey } from './openai';
 import { track } from './telemetry';
@@ -68,26 +75,6 @@ export function unlockAudio() {
       }
     } catch {}
   }
-}
-
-// Global app-voice gate. When off, the app's own TTS stays silent so it does
-// not talk over VoiceOver. Initialized from the saved profile.
-let _appVoiceOn = true;
-try {
-  const raw = localStorage.getItem('menuvoice.profile.v1');
-  if (raw) {
-    const p = JSON.parse(raw);
-    if (p && p.appVoice === false) _appVoiceOn = false;
-  }
-} catch {}
-
-export function setAppVoice(on: boolean) {
-  _appVoiceOn = on;
-  if (!on) stopSpeaking();
-}
-
-export function isAppVoiceOn(): boolean {
-  return _appVoiceOn;
 }
 
 export function isSpeaking(): boolean {
@@ -236,42 +223,9 @@ async function playUtterance(text: string, voice: string | undefined, epoch: num
 
 export async function speak(text: string, voice?: string): Promise<void> {
   stopSpeaking();
-  if (!_appVoiceOn) return;
   if (!text.trim()) return;
   const myEpoch = speechEpoch;
   await playUtterance(text, voice, myEpoch);
-}
-
-// Instant, free, local speech for real-time coaching (capture screen).
-// Silenced if the main TTS (speak()) is active.
-// iOS Safari silently drops an utterance queued in the same tick as cancel(),
-// so the speak is deferred one beat after the cancel.
-let _coachTimer: ReturnType<typeof setTimeout> | null = null;
-export function coach(text: string) {
-  if (!_appVoiceOn) return;
-  if (_speaking) return;
-  track('speech', 'coach', { content: { text } });
-  try {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    if (_coachTimer) clearTimeout(_coachTimer);
-    _coachTimer = setTimeout(() => {
-      _coachTimer = null;
-      if (_speaking) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.05;
-      applyBestVoice(u);
-      window.speechSynthesis.speak(u);
-    }, 60);
-  } catch {}
-}
-
-export function stopCoach() {
-  if (_coachTimer) {
-    clearTimeout(_coachTimer);
-    _coachTimer = null;
-  }
-  try { window.speechSynthesis?.cancel(); } catch {}
 }
 
 // A2 — streaming speech

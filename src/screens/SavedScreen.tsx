@@ -1,11 +1,12 @@
 // Saved restaurants. Load a captured menu without re-capturing.
+// This screen never speaks — feedback goes through the role="status" live
+// region so VoiceOver reads it. App TTS is reserved for Conversation Mode.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { SavedRestaurant } from '../types';
 import { loadSavedRestaurants, deleteRestaurant, markRestaurantOpened } from '../lib/storage';
-import { speak } from '../lib/speech';
 import { track } from '../lib/telemetry';
 import { provenanceForSaved } from '../lib/provenance';
 
@@ -15,18 +16,19 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
   const [armedId, setArmedId] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  const announce = (msg: string) => { setSrStatus(msg); speak(msg); };
+  const announce = (msg: string) => { setSrStatus(msg); };
 
   const refresh = () => loadSavedRestaurants().then(setList);
   useEffect(() => { refresh(); }, []);
 
-  // Announce the list once it loads.
+  // Announce the list once it loads (status region; the visible list itself
+  // carries the same information for sighted users).
   useEffect(() => {
     if (list === null) return;
     if (list.length === 0) {
-      speak('No saved restaurants yet. Capture a menu and it will appear here.');
+      announce('No saved restaurants yet. Capture a menu and it will appear here.');
     } else {
-      speak(`You have ${list.length} saved restaurant${list.length === 1 ? '' : 's'}.`);
+      announce(`You have ${list.length} saved restaurant${list.length === 1 ? '' : 's'}.`);
     }
   }, [list]);
 

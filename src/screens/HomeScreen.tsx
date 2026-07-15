@@ -106,7 +106,7 @@ export default function HomeScreen({ navigate }: ScreenProps) {
 
       <Tile
         title="Settings"
-        sub="Name, allergies, voice, and preferences"
+        sub="Name, allergies, and preferences"
         onClick={go({ name: 'settings' })}
         icon={
           <svg width="26" height="26" viewBox="0 0 24 24" {...stroke}>

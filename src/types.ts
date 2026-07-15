@@ -11,7 +11,6 @@ export interface UserProfile {
   ttsVoice: string;
   onboarded: boolean;
   imageLogging: boolean;
-  appVoice?: boolean; // app TTS on/off; off lets VoiceOver speak without overlap
 }
 
 export interface DiningHistoryEntry {

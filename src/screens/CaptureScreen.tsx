@@ -1,15 +1,16 @@
-// Menu capture (web). Live camera preview with AUTO-SHUTTER + audio coaching,
+// Menu capture (web). Live camera preview with AUTO-SHUTTER + live coaching,
 // plus a manual shutter, multi-photo library upload, then AI analysis.
 //
-// All capture coaching goes through browser speechSynthesis (coach()) on a
-// single channel — no OpenAI TTS during capture so there's no double-talk.
-// Analysis wait: periodic speak() reassurance while parseMenuFromImages runs.
+// This screen never speaks — all coaching and status lands in the two
+// aria-live regions below the preview, so the user's screen reader is the
+// only voice and nothing talks over it. Earcons (ticks, shutter) remain as
+// non-speech cues. App TTS is reserved for Conversation Mode.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps, Route } from '../nav';
 import { ParsedMenu } from '../types';
-import { speak, coach, stopCoach, stopSpeaking, isAppVoiceOn } from '../lib/speech';
+import { stopSpeaking } from '../lib/speech';
 import { usePause } from '../state/PauseContext';
 import {
   startCamera,
@@ -138,7 +139,6 @@ export default function CaptureScreen({
         const msg =
           'Camera unavailable. On iPhone, open this site over HTTPS and allow camera access. You can still upload photos using the Upload from Library button.';
         setCamError(msg);
-        speak(msg);
         track('capture', 'camera_start', { outcome: 'failure', metadata: { error: msg } });
         track('error', 'camera', { metadata: { error: msg } });
       }
@@ -146,21 +146,19 @@ export default function CaptureScreen({
     return () => {
       cancelled = true;
       autoRef.current?.stop();
-      stopCoach();
       if (streamRef.current) disableTorch(streamRef.current);
       stopCamera(streamRef.current);
       streamRef.current = null;
     };
   }, []);
 
-  // Pause Voice must instantly silence the capture screen too. pause() calls
-  // this handler synchronously, so the auto-capture scanner and all coaching
-  // stop the moment the button is pressed — before any React re-render. The
-  // paused-gated effects below then keep them stopped until Resume Voice.
+  // Pause Voice stops the auto-capture scanner here too. pause() calls this
+  // handler synchronously, so the scanner stops the moment the button is
+  // pressed — before any React re-render. The paused-gated effects below then
+  // keep it stopped until Resume Voice.
   useEffect(() => {
     return registerStopListening(() => {
       autoRef.current?.stop();
-      stopCoach();
       stopSpeaking();
       if (reassureIdRef.current) {
         clearInterval(reassureIdRef.current);
@@ -173,9 +171,8 @@ export default function CaptureScreen({
   useEffect(() => {
     if (!paused) return;
     autoRef.current?.stop();
-    stopCoach();
     stopSpeaking();
-    setStatus('Voice paused. Tap Resume Voice to continue capture guidance.');
+    setStatus('Paused. Tap Resume Voice to continue capture guidance.');
     setCoachStatus('');
   }, [paused]);
 
@@ -194,7 +191,6 @@ export default function CaptureScreen({
       const msg = ANALYSIS_PHRASES[reassureCountRef.current % ANALYSIS_PHRASES.length];
       reassureCountRef.current++;
       setStatus(msg);
-      speak(msg);
     }, 5000);
     reassureIdRef.current = id;
     return () => clearInterval(id);
@@ -205,25 +201,19 @@ export default function CaptureScreen({
     const active = autoMode && cameraReady && !analyzing && !camError && !paused;
     if (!active) {
       autoRef.current?.stop();
-      stopCoach();
       return;
     }
     if (!autoRef.current) autoRef.current = new MenuScanner();
 
-    let cancelled = false;
-    const intro =
+    setCoachStatus(
       'Auto capture is on. Hold your phone flat, about a foot above the menu. ' +
-      'I will guide you and take the photo automatically. If I take too long, ' +
-      'find the Take photo button below the camera.';
-    setCoachStatus('Auto capture on. Hold your phone flat over the menu.');
-
-    (async () => {
-      await speak(intro);
-      if (cancelled || !videoRef.current) return;
-      autoRef.current!.start(videoRef.current, {
+        'I will guide you and take the photo automatically. If I take too long, ' +
+        'find the Take photo button below the camera.',
+    );
+    if (videoRef.current) {
+      autoRef.current.start(videoRef.current, {
         onCoach: (msg) => {
           setCoachStatus(msg);
-          coach(msg);
         },
         onCapture: () => {
           addPhoto(captureFrame(videoRef.current!, 0.6, zoomRange.native ? 1 : zoom), true);
@@ -232,9 +222,7 @@ export default function CaptureScreen({
         onStruggle: () => {
           setAutoMode(false);
           track('capture', 'scanner_struggle', { metadata: { fallback: 'manual' } });
-          const msg = 'Auto capture is having trouble. Switching to manual. Find the Take photo button and tap it when you are ready.';
-          setCoachStatus('Switched to manual. Tap "Take photo" to take the shot.');
-          coach(msg);
+          setCoachStatus('Auto capture is having trouble. Switched to manual. Tap "Take photo" when you are ready.');
         },
         onState: (state, detail) => {
           track('capture', 'guidance', { metadata: { state, ...(detail ? { detail } : {}) } });
@@ -246,12 +234,10 @@ export default function CaptureScreen({
           prevSteadyRef.current = state === 'steadying' ? steady : 0;
         },
       });
-    })();
+    }
 
     return () => {
-      cancelled = true;
       autoRef.current?.stop();
-      stopCoach();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoMode, cameraReady, analyzing, camError, zoom, zoomRange.native, paused]);
@@ -276,7 +262,6 @@ export default function CaptureScreen({
     if (!quality.ok) {
       const msg = `Photo ${index + 1}. ${quality.issues.map((i) => i.message).join(' ')} Consider retaking it, or tap Read menu to continue.`;
       setStatus(msg);
-      coach(msg);
     }
   };
 
@@ -295,7 +280,6 @@ export default function CaptureScreen({
         ? `Got it, photo ${count}. Checking quality. Line up the next page, or tap Read menu.`
         : `Photo ${count} captured. Checking quality. Take another, or tap Read menu.`;
       setStatus(msg);
-      coach(msg);
       track('capture', 'photo_added', {
         metadata: {
           mode: viaAuto ? 'auto' : 'manual',
@@ -321,7 +305,6 @@ export default function CaptureScreen({
     setPhotos((prev) => prev.slice(0, -1));
     const msg = 'Removed the last photo. Take it again when ready.';
     setStatus(msg);
-    coach(msg);
     track('capture', 'photo_removed', { metadata: { photo_count: photos.length - 1 } });
   };
 
@@ -333,7 +316,6 @@ export default function CaptureScreen({
     setZoom(next);
     const msg = `Zoom ${next.toFixed(next % 1 === 0 ? 0 : 1)}x.`;
     setStatus(msg);
-    speak(msg);
   };
 
   const onPickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -369,7 +351,6 @@ export default function CaptureScreen({
         if (failedNames.length) m += ` ${failedNames.length} could not be read — use JPEG or PNG.`;
         m += ' Checking photo quality.';
         setStatus(m);
-        speak(m);
         return next;
       });
       const qualityResults = await Promise.all(
@@ -407,7 +388,6 @@ export default function CaptureScreen({
           ? `Photo ${flaggedNumbers[0]} may have quality issues. Consider retaking it.`
           : `Photos ${flaggedNumbers.join(', ')} may have quality issues. Consider retaking them.`;
         setStatus(m);
-        speak(m);
       }
     } else {
       const errMsg =
@@ -415,45 +395,34 @@ export default function CaptureScreen({
           ? `Could not read "${failedNames[0]}". Use a JPEG or PNG photo.`
           : `Could not read ${failedNames.length} files. Use JPEG or PNG photos.`;
       setStatus(errMsg);
-      speak(errMsg);
     }
   };
 
   const analyze = async () => {
     if (photos.length === 0) {
-      const m = 'Capture at least one photo of the menu first.';
-      setStatus(m);
-      speak(m);
+      setStatus('Capture at least one photo of the menu first.');
       return;
     }
     if (!hasApiKey()) {
-      const m = 'No API key configured. Set OPENAI_API_KEY in Vercel environment variables.';
-      setStatus(m);
-      speak(m);
+      setStatus('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
       return;
     }
     const pendingCount = photos.filter((photo) => photo.checkingQuality).length;
     if (pendingCount > 0) {
       const m = 'Still checking photo quality. Try Read menu again in a moment.';
       setStatus(m);
-      speak(m);
       return;
     }
     const flaggedCount = photos.filter((photo) => photo.issues.length > 0).length;
     if (flaggedCount > 0 && !confirmAnalyzeWithIssues) {
       setConfirmAnalyzeWithIssues(true);
-      const m = `Heads up. ${flaggedCount} of your ${photos.length} photo${photos.length === 1 ? '' : 's'} may have quality problems, like blur or tilt. Tap Read menu again to continue anyway, or tap Retake last photo to redo the most recent one.`;
-      setStatus(m);
-      speak(m);
+      setStatus(`Heads up. ${flaggedCount} of your ${photos.length} photo${photos.length === 1 ? '' : 's'} may have quality problems, like blur or tilt. Tap Read menu again to continue anyway, or tap Retake last photo to redo the most recent one.`);
       return;
     }
     analyzingRef.current = true;
     setAnalyzing(true);
     autoRef.current?.stop();
-    stopCoach();
-    const startMsg = 'Reading the menu. This takes a few seconds.';
-    setStatus(startMsg);
-    speak(startMsg);
+    setStatus('Reading the menu. This takes a few seconds.');
 
     track('capture', 'analyze_start', { metadata: { photo_count: photos.length } });
     const t0 = Date.now();
@@ -518,7 +487,6 @@ export default function CaptureScreen({
       });
       const errMsg = e?.message ?? 'I could not read the menu. Try retaking the photos with more light.';
       setStatus(errMsg);
-      speak(errMsg);
       setAnalyzing(false);
       analyzingRef.current = false;
     }
@@ -604,8 +572,9 @@ export default function CaptureScreen({
       {camError ? (
         <p role="alert" className="body" style={{ color: 'var(--danger)' }}>{camError}</p>
       ) : null}
-      {/* Scanner coaching — silenced for VoiceOver when app voice is on (coach() already speaks it) */}
-      <p role="status" className="body" aria-live={isAppVoiceOn() ? 'off' : 'polite'} style={{ textAlign: 'center', minHeight: 24 }}>
+      {/* Scanner coaching — always announced; nothing on this screen speaks,
+          so the screen reader is the only voice and there is no double-talk. */}
+      <p role="status" className="body" aria-live="polite" style={{ textAlign: 'center', minHeight: 24 }}>
         {coachStatus}
       </p>
       {/* Analysis and photo-count feedback — always announced */}

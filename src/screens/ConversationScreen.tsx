@@ -828,6 +828,15 @@ export default function ConversationScreen({
         </span>
       </button>
 
+      {/* Short guidance so screen-reader users know their options here: this is
+          the ONE screen where MenuVoice speaks, VoiceOver is optional in it,
+          and the Pause Voice button is the global off switch. */}
+      <p role="note" className="body" style={{ fontSize: 15, color: 'var(--text-secondary)', margin: 0 }}>
+        In Conversation Mode you can turn your screen reader off and talk naturally, if you
+        prefer. You do not have to. If voices talk over each other, tap Pause Voice at the top
+        to silence MenuVoice. Tap it again to resume.
+      </p>
+
       <SecondaryButton
         label={saving ? 'Saving...' : 'Done'}
         hint="Return to the home screen"
