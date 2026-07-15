@@ -35,7 +35,7 @@ import {
 } from '../lib/earcon';
 import { mergeUnique } from '../util';
 import { menuStats } from '../lib/storage';
-import { analyzeItemAllergens, allergenDisclaimer, type AllergenFinding } from '../lib/allergens';
+import { analyzeItemAllergens, allergenDisclaimer, dishSpokenLabel } from '../lib/allergens';
 import {
   provenanceSummary,
   provenanceOpeningNote,
@@ -71,29 +71,6 @@ function matchProvenanceIntent(t: string): ProvenanceIntent | null {
   if (has('where did this menu come from', 'where did this come from', 'where is this from', 'where did you get', 'what is the source', 'is this official', 'is this the official', 'is this third party', 'is this third-party'))
     return 'source';
   return null;
-}
-
-// One dish heading's spoken text: name, price, description, and ingredients
-// folded into a single natural line. This is the dish's accessible name, so a
-// VoiceOver user gets the whole dish in ONE rotor stop. Price is read as part of
-// the dish, never as its own stop.
-function dishLabel(
-  item: ParsedMenu['categories'][number]['items'][number],
-  otherAllergens: AllergenFinding[] = [],
-): string {
-  let label = item.name;
-  if (item.price) label += `, ${item.price}`;
-  if (item.description) label += `. ${item.description}`;
-  if (item.ingredients && item.ingredients.length > 0) {
-    label += `. Ingredients: ${item.ingredients.join(', ')}`;
-  }
-  if (otherAllergens.length > 0) {
-    // Read the allergen warning last, as part of the same single rotor stop.
-    // The wording reflects whether each allergen was declared or only inferred,
-    // so an inference is never spoken as a confirmed fact.
-    label += `. Allergen warning. ${allergenDisclaimer(otherAllergens)}`;
-  }
-  return label;
 }
 
 // Semantic menu document — categories are COLLAPSED by default so VoiceOver does
@@ -188,7 +165,7 @@ function MenuDocument({
                     {/* Single rotor stop: the whole dish, spoken from aria-label.
                         Visible content below is aria-hidden so nothing is read
                         twice and nothing extra lands in the heading rotor. */}
-                    <h3 className="browse-item-name" aria-label={dishLabel(item, info.otherAllergens)}>
+                    <h3 className="browse-item-name" aria-label={dishSpokenLabel(item, info.otherAllergens)}>
                       <span aria-hidden="true">{item.name}</span>
                       {item.price && (
                         <span className="browse-item-price" aria-hidden="true">{' '}{item.price}</span>
@@ -622,8 +599,16 @@ export default function ConversationScreen({
         'Browse Menu. Voice is paused so your screen reader can read without interruption. ' +
           'Your conversation is saved. Activate Resume Voice Conversation when you are ready.',
       );
-      // Land on the menu heading so VoiceOver starts at the content.
-      setTimeout(() => menuHeadingRef.current?.focus(), 50);
+      // Land on the menu heading so VoiceOver starts at the content and make
+      // the same destination visible for low-vision users. Respect reduced
+      // motion instead of forcing a smooth animated scroll.
+      setTimeout(() => {
+        const heading = menuHeadingRef.current;
+        if (!heading) return;
+        heading.focus({ preventScroll: true });
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        heading.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      }, 50);
     } else {
       // Returning to Conversation Mode — resume() reopens the mic via the
       // paused effect and restores voice interaction with the saved session.

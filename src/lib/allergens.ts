@@ -12,7 +12,7 @@
 // are word-boundary based to avoid obvious false positives, but when in doubt we
 // would rather warn or hide than stay silent.
 
-import { MenuItem } from '../types';
+import type { MenuItem } from '../types';
 
 interface AllergenGroup {
   key: string;
@@ -206,4 +206,22 @@ export function allergenDisclaimer(findings: AllergenFinding[]): string {
     );
   parts.push('Please confirm with the restaurant.');
   return parts.join(' ');
+}
+
+/**
+ * One dish's accessible spoken label. Keep the dish name first so users know
+ * which item the warning belongs to, then announce the warning before price,
+ * description, or ingredients.
+ */
+export function dishSpokenLabel(item: MenuItem, otherAllergens: AllergenFinding[] = []): string {
+  let label = item.name;
+  if (otherAllergens.length > 0) {
+    label += `. Allergen warning. ${allergenDisclaimer(otherAllergens)}`;
+  }
+  if (item.price) label += `. Price ${item.price}`;
+  if (item.description) label += `. ${item.description}`;
+  if (item.ingredients && item.ingredients.length > 0) {
+    label += `. Ingredients: ${item.ingredients.join(', ')}`;
+  }
+  return label;
 }
