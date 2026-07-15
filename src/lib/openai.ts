@@ -444,13 +444,17 @@ export async function findMenuByName(query: string, signal?: AbortSignal): Promi
  * Vercel serverless function that can time out, and we'd rather take a second
  * attempt at the good voice than drop the opening line onto the robotic browser
  * fallback. */
-export async function synthesizeSpeech(text: string, voice?: string): Promise<Blob> {
-  const body = {
+export async function synthesizeSpeech(text: string, voice?: string, speed?: number): Promise<Blob> {
+  const body: Record<string, unknown> = {
     model: TTS_MODEL,
     voice: voice || TTS_VOICE_DEFAULT,
     input: text,
     response_format: 'mp3',
   };
+  // OpenAI TTS accepts speed 0.25–4.0. Only send it when it differs from normal.
+  if (typeof speed === 'number' && speed !== 1) {
+    body.speed = Math.max(0.25, Math.min(4, speed));
+  }
   try {
     return await audioSpeech(body);
   } catch (e) {

@@ -90,6 +90,26 @@ export function isAppVoiceOn(): boolean {
   return _appVoiceOn;
 }
 
+// Global speaking-speed multiplier. Applied to both OpenAI TTS (via the `speed`
+// param) and the browser speechSynthesis fallback (via utterance.rate).
+// Initialized from the saved profile so the very first line honors the setting.
+let _speechRate = 1;
+try {
+  const raw = localStorage.getItem('menuvoice.profile.v1');
+  if (raw) {
+    const p = JSON.parse(raw);
+    if (p && typeof p.speechRate === 'number') _speechRate = p.speechRate;
+  }
+} catch {}
+
+export function setSpeechRate(rate: number) {
+  _speechRate = Math.max(0.5, Math.min(2, rate));
+}
+
+export function getSpeechRate(): number {
+  return _speechRate;
+}
+
 export function isSpeaking(): boolean {
   return _speaking;
 }
@@ -202,7 +222,7 @@ async function playBrowser(text: string, epoch: number): Promise<void> {
   return new Promise<void>((resolve) => {
     if (!('speechSynthesis' in window)) return resolve();
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.0;
+    u.rate = Math.max(0.5, Math.min(2, _speechRate));
     applyBestVoice(u);
     _win._mvUtterance = u;
     _speaking = true;
@@ -218,7 +238,7 @@ async function playUtterance(text: string, voice: string | undefined, epoch: num
   track('speech', 'tts_start', { metadata: { text_len: text.length, voice: voice ?? 'default' } });
   if (hasApiKey()) {
     try {
-      const blob = await synthesizeSpeech(text, voice);
+      const blob = await synthesizeSpeech(text, voice, _speechRate);
       if (epoch !== speechEpoch) return;
       await playBlob(blob, epoch);
       track('speech', 'tts_end', { outcome: 'success', durationMs: Date.now() - t0 });
@@ -259,7 +279,7 @@ export function coach(text: string) {
       _coachTimer = null;
       if (_speaking) return;
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.05;
+      u.rate = Math.max(0.5, Math.min(2, 1.05 * _speechRate));
       applyBestVoice(u);
       window.speechSynthesis.speak(u);
     }, 60);
@@ -331,7 +351,7 @@ export function createStreamingSpeech(
   function startPrefetch(text: string) {
     if (!hasApiKey() || prefetchedFor === text) return;
     prefetchedFor = text;
-    prefetchedBlob = synthesizeSpeech(text, voice);
+    prefetchedBlob = synthesizeSpeech(text, voice, _speechRate);
   }
 
   async function drain() {
@@ -357,7 +377,7 @@ export function createStreamingSpeech(
             prefetchedBlob = null;
             prefetchedFor = null;
           } else {
-            blob = await synthesizeSpeech(sentence, voice);
+            blob = await synthesizeSpeech(sentence, voice, _speechRate);
           }
           if (myEpoch !== speechEpoch) { cancelled = true; break; }
           await playBlob(blob, myEpoch);

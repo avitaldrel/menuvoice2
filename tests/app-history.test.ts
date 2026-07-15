@@ -11,6 +11,11 @@ test('creates and reads a MenuVoice browser-history entry', () => {
   assert.deepEqual(readAppHistoryEntry(entry), entry);
 });
 
+test('preserves the tutorial route in browser history', () => {
+  const entry = createAppHistoryEntry({ name: 'tutorial' }, 3);
+  assert.deepEqual(readAppHistoryEntry(entry), entry);
+});
+
 test('rejects unrelated or malformed browser-history state', () => {
   assert.equal(readAppHistoryEntry(null), null);
   assert.equal(readAppHistoryEntry({ key: 'another-app', version: 1, position: 0 }), null);
