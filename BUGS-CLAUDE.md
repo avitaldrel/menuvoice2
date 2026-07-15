@@ -228,6 +228,29 @@ while working the other three bugs in this batch. Let me know if a fuller
 pass across all screens is wanted.
 **Verified:** `npx tsc --noEmit` clean, all 42 tests pass.
 
+### 12. Onboarding used voice/mic for name and allergies, and had an extra welcome screen
+**Reported:** turn off voice mode for allergies and name during onboarding — just have
+them type it; also remove the screen that says "Start Menu Voice" shown right after
+entering an email, before the app starts.
+**Fix:** `src/screens/OnboardingScreen.tsx` — rewritten:
+  - Removed the `'intro'` step (the "Welcome to MenuVoice... Start setup" screen).
+    Onboarding now goes straight from Login into the name question.
+  - Replaced `VoiceStep` (mic recording + Whisper transcription) with a plain
+    `TypeStep` (text input only) for both the name and allergies questions. Name and
+    allergies are the two fields where a mishearing is costliest (a wrong allergen is
+    a safety issue, see bug 8 and `FIXES-NEEDED.md` B8), so voice input on these two
+    specific fields is removed — screen readers can still use the device's own
+    dictation keyboard, this only removes the app's separate in-app recording flow.
+  - `finish()` still runs the typed input through the existing `cleanName()` /
+    `parseList()` / `normalizeAllergens()` safety pipeline, unchanged.
+**Verified:** `npx tsc --noEmit` clean, all 42 tests pass (no test changes needed —
+this is a UI-only removal, no new pure logic). Walked the full flow in a live
+Chromium session against the local dev server: fresh login → lands directly on
+"What should I call you?" (no intro screen, no mic button) → typed "Sarah" → Next →
+"Any food allergies?" (no mic button) → typed "peanuts" → Finish → landed on Home →
+confirmed in Settings that name "Sarah" and allergy "peanuts" both persisted
+correctly.
+
 ---
 
 ## How to verify a fix locally
