@@ -1,6 +1,6 @@
-// Settings: hide prices, edit allergies/preferences, choose TTS voice.
-// Voice nav removed — VoiceOver reads all controls.
-// Inline mics (name, dislike) still use MediaRecorder for field-level input.
+// Settings: hide prices, edit allergies/preferences.
+// This screen never speaks — VoiceOver reads all controls and the status
+// region. Inline mics (name, dislike) still use MediaRecorder for field input.
 
 import { useEffect, useState } from 'react';
 import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton } from '../components';
@@ -9,7 +9,6 @@ import { useProfile } from '../state/ProfileContext';
 import { splitList, normalizeAllergens } from '../util';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
-import { speak, setAppVoice } from '../lib/speech';
 import { watchForSilence } from '../lib/vad';
 import { track } from '../lib/telemetry';
 
@@ -31,9 +30,10 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
   const [srStatus, setSrStatus] = useState('');
 
+  // Status region only — Settings never speaks. VoiceOver reads the update
+  // from the role="status" live region; app TTS is reserved for Conversation Mode.
   const announce = (msg: string) => {
     setSrStatus(msg);
-    speak(msg);
   };
 
   const persist = async () => {
@@ -268,29 +268,6 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
           {dislikeRec !== 'idle' ? '...' : 'Mic'}
         </button>
       </div>
-
-      <label
-        className="card"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: 16 }}
-      >
-        <div>
-          <span style={{ fontSize: 18 }}>App voice</span>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-            Turn this off if it talks over VoiceOver.
-          </p>
-        </div>
-        <input
-          type="checkbox"
-          checked={profile.appVoice !== false}
-          onChange={(e) => {
-            const on = e.target.checked;
-            setAppVoice(on);
-            update({ appVoice: on });
-          }}
-          aria-label="App voice. Turn off if you use VoiceOver and the app voice talks over it"
-          style={{ width: 28, height: 28, flexShrink: 0 }}
-        />
-      </label>
 
       <label
         className="card"

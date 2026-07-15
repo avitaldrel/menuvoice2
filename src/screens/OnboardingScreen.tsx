@@ -1,13 +1,13 @@
-// First-use setup — type-only. Voice input on name/allergies was unreliable
-// (mishearing, misspelling) for two fields where accuracy matters most, so
-// setup goes straight to a typed question, no separate welcome/start screen
-// and no mic step. Screen readers can still use the device's own dictation
-// keyboard; this only removes the app's in-app recording flow here.
+// First-use setup — type-only and silent. Voice input on name/allergies was
+// unreliable (mishearing, misspelling) for two fields where accuracy matters
+// most, so setup goes straight to a typed question, no separate welcome/start
+// screen and no mic step. This screen never speaks either: the question text
+// is visible and the focused heading gives VoiceOver the prompt. App TTS is
+// reserved for Conversation Mode.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
-import { speak, stopSpeaking } from '../lib/speech';
 import { cleanName, parseList, normalizeAllergens } from '../util';
 
 type Step = 'name' | 'allergies';
@@ -18,38 +18,17 @@ export default function OnboardingScreen() {
   const [name, setName] = useState('');
   const [allergiesText, setAllergiesText] = useState('');
 
-  const promptFor = (s: Step): string => {
-    switch (s) {
-      case 'name':
-        return 'Welcome to MenuVoice. What should I call you? Type your first name below.';
-      case 'allergies':
-        return 'Do you have any food allergies or things you cannot eat? Type them, or type none.';
-    }
-  };
-
-  const spoken = useRef<Set<Step>>(new Set());
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (!spoken.current.has(step)) {
-      spoken.current.add(step);
-      speak(promptFor(step));
-    }
     // Move focus to the new step heading so VoiceOver users land on the question
     // instead of stranding on <body> after the previous button unmounts.
     stepHeadingRef.current?.focus();
-    return () => stopSpeaking();
   }, [step]);
 
   const finish = async () => {
     // Correct misheard/misspelled allergens on the way in — safety path.
     const { list: allergies } = normalizeAllergens(parseList(allergiesText));
     await update({ name: cleanName(name), allergies, onboarded: true });
-    await speak(
-      `Thanks${name.trim() ? ', ' + cleanName(name) : ''}. You're all set. ` +
-        (allergies.length
-          ? `I'll always warn you about ${allergies.join(' and ')} before describing any dish.`
-          : 'You can add allergies any time in Settings.')
-    );
   };
 
   return (

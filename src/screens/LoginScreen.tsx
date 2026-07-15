@@ -1,12 +1,13 @@
-// Login — VOICE FIRST. Speaks instructions aloud, remembers the user's email
-// in localStorage so blind users never have to type it twice.
+// Login. Remembers the user's email in localStorage so blind users never have
+// to type it twice. This screen never speaks — instructions are visible text
+// and feedback goes through the role="status" live region, so VoiceOver is the
+// only voice here. App TTS is reserved for Conversation Mode.
 
 import { useEffect, useRef, useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { Screen, Title, Heading, Body, PrimaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
-import { speak, stopSpeaking } from '../lib/speech';
 import { earconStart, earconStop } from '../lib/earcon';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
@@ -30,30 +31,13 @@ export default function LoginScreen() {
   const [rec, setRec] = useState<RecState>('idle');
   const [showEmail, setShowEmail] = useState(!googleAvailable);
   const [srStatus, setSrStatus] = useState('');
-  const didSpeak = useRef(false);
 
-  const announce = (msg: string) => { setSrStatus(msg); speak(msg); };
-
-  useEffect(() => {
-    if (didSpeak.current) return;
-    didSpeak.current = true;
-    if (profile.email) {
-      speak(
-        `Login to MenuVoice. Your saved email is ${profile.email}. ` +
-          'Tap Login to continue, or sign in with a different account.'
-      );
-    } else if (googleAvailable) {
-      speak('Login to MenuVoice. Tap Sign in with Google, or enter your email address below.');
-    } else {
-      speak('Login to MenuVoice. Say or type your email address, then tap Login.');
-    }
-    return () => stopSpeaking();
-  }, []);
+  const announce = (msg: string) => { setSrStatus(msg); };
 
   const loginWithEmail = async (emailToUse: string, name?: string, method: 'email' | 'google' = 'email') => {
     const trimmed = emailToUse.trim();
     if (!trimmed) {
-      speak('Please enter your email address first.');
+      announce('Please enter your email address first.');
       return;
     }
     const restored = await restoreFromCloud(trimmed);
@@ -69,17 +53,17 @@ export default function LoginScreen() {
     if (!credentialResponse.credential) return;
     try {
       const decoded = jwtDecode<GoogleJwt>(credentialResponse.credential);
-      speak(`Welcome, ${decoded.name ?? decoded.email}. Signing you in.`);
+      announce(`Welcome, ${decoded.name ?? decoded.email}. Signing you in.`);
       await loginWithEmail(decoded.email, decoded.name, 'google');
     } catch {
-      speak('Google sign-in failed. Please enter your email instead.');
+      announce('Google sign-in failed. Please enter your email instead.');
       track('auth', 'login', { outcome: 'failure', metadata: { method: 'google' } });
       setShowEmail(true);
     }
   };
 
   const handleGoogleError = () => {
-    speak('Google sign-in failed. Please enter your email instead.');
+    announce('Google sign-in failed. Please enter your email instead.');
     track('auth', 'login', { outcome: 'failure', metadata: { method: 'google' } });
     setShowEmail(true);
   };
@@ -148,7 +132,7 @@ export default function LoginScreen() {
               className="btn-ghost"
               onClick={() => {
                 setShowEmail(true);
-                speak('You can now enter your email address manually.');
+                announce('You can now enter your email address manually.');
               }}
               aria-label="Sign in with email instead of Google"
             >
