@@ -12,13 +12,15 @@
 // branch and source with the user (official vs third-party, location-specific or
 // generic) before opening it. On failure we say specifically what went wrong and
 // offer practical next actions.
+//
+// This screen never speaks — every stage lands in the role="status" live
+// region so VoiceOver announces it. App TTS is reserved for Conversation Mode.
 
 import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { findMenuByName, parseMenuFromUrl, hasApiKey } from '../lib/openai';
 import { saveRestaurant } from '../lib/storage';
-import { speak, stopSpeaking } from '../lib/speech';
 import { track } from '../lib/telemetry';
 import { MenuProvenance } from '../types';
 
@@ -118,33 +120,24 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const failureHeadingRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    speak('Find a menu. Enter a restaurant name and city, or paste a menu link. Then tap Find menu.');
     return () => {
       if (stageTimerRef.current) clearInterval(stageTimerRef.current);
       abortRef.current?.abort();
-      stopSpeaking();
     };
   }, []);
 
   const announce = (msg: string) => {
     currentStatusRef.current = msg;
     setStatus(msg);
-    speak(msg);
   };
 
-  // Set the visible status WITHOUT speaking — used for the very first stage so we
-  // don't talk over the "searching" line we just spoke.
-  const setStatusQuiet = (msg: string) => {
-    currentStatusRef.current = msg;
-    setStatus(msg);
-  };
-
-  // Walk the honest stage list on a timer. Speaks each new stage once, spaced out
-  // so it informs without flooding the screen reader. Holds on the final stage.
+  // Walk the honest stage list on a timer. Surfaces each new stage once in the
+  // live region, spaced out so it informs without flooding the screen reader.
+  // Holds on the final stage.
   const startStageNarration = (stages: string[]) => {
     if (stageTimerRef.current) clearInterval(stageTimerRef.current);
     let i = 0;
-    setStatusQuiet(stages[0]);
+    announce(stages[0]);
     stageTimerRef.current = setInterval(() => {
       i += 1;
       if (i >= stages.length) {
@@ -293,7 +286,13 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
           <SecondaryButton
             label="What are you doing?"
             hint="Repeat the current step"
-            onClick={() => speak(currentStatusRef.current || 'Still working on it.')}
+            onClick={() => {
+              // Clear then re-set the live region: aria-live only fires on a
+              // CHANGE, so re-setting identical text would stay silent.
+              const msg = currentStatusRef.current || 'Still working on it.';
+              setStatus('');
+              setTimeout(() => setStatus(msg), 60);
+            }}
           />
           <SecondaryButton
             label="Cancel search"

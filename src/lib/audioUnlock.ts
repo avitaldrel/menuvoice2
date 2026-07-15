@@ -10,8 +10,8 @@
 // What it does, all inside the gesture:
 //   1. Creates/resumes a shared AudioContext (earcons reuse it).
 //   2. Plays a 1-sample silent buffer to satisfy the autoplay gate.
-//   3. Primes SpeechSynthesis with an empty utterance so later coach() calls
-//      (which fire from timers, NOT gestures) are allowed to speak.
+//   3. Primes SpeechSynthesis with an empty utterance so later browser-voice
+//      fallback speech (fired from timers, NOT gestures) is allowed to speak.
 //   4. Plays + pauses a muted <audio> so later `new Audio(blobUrl).play()`
 //      (OpenAI TTS, also fired outside a gesture) is permitted.
 
@@ -46,7 +46,7 @@ export function unlockAudio(): void {
   } catch {}
 
   try {
-    // Prime SpeechSynthesis so timer-driven coach() can speak later.
+    // Prime SpeechSynthesis so timer-driven fallback speech can play later.
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance('');
