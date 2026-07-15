@@ -29,48 +29,31 @@ const ALLERGEN_GROUPS: AllergenGroup[] = [
     label: 'dairy',
     profileTerms: ['dairy', 'milk', 'lactose', 'cheese'],
     keywords: [
-      'milk', 'cream', 'creamy', 'creme', 'crème', 'buttermilk', 'butter',
-      'cheese', 'cheddar', 'parmesan', 'parmigiano', 'mozzarella', 'feta',
-      'ricotta', 'provolone', 'gouda', 'brie', 'blue cheese', 'goat cheese',
-      'gruyere', 'gruyère', 'mascarpone', 'burrata', 'queso', 'paneer',
-      'yogurt', 'yoghurt', 'ghee', 'custard', 'gelato', 'ice cream', 'whey',
-      'casein', 'curd', 'bechamel', 'béchamel', 'alfredo', 'sour cream',
-      'half and half', 'condensed milk', 'clotted cream', 'panna',
+      'milk', 'cream', 'butter', 'buttermilk', 'cheese', 'cheddar', 'parmesan',
+      'mozzarella', 'goat cheese', 'yogurt', 'ghee', 'custard', 'gelato',
     ],
   },
   {
     key: 'egg',
     label: 'egg',
     profileTerms: ['egg', 'eggs'],
-    keywords: [
-      'egg', 'eggs', 'mayonnaise', 'mayo', 'aioli', 'aïoli', 'meringue',
-      'custard', 'hollandaise', 'frittata', 'omelet', 'omelette', 'quiche',
-      'carbonara', 'egg wash', 'albumen', 'caesar dressing', 'tempura',
-      'brioche',
-    ],
+    keywords: ['egg', 'eggs', 'mayonnaise', 'mayo', 'aioli', 'meringue', 'custard'],
   },
   {
     key: 'gluten',
     label: 'gluten (wheat)',
     profileTerms: ['gluten', 'wheat', 'celiac'],
     keywords: [
-      'wheat', 'flour', 'bread', 'breaded', 'breadcrumb', 'breadcrumbs',
-      'panko', 'bun', 'brioche', 'sourdough', 'baguette', 'ciabatta',
-      'focaccia', 'pita', 'naan', 'tortilla', 'pasta', 'linguine',
-      'spaghetti', 'penne', 'fettuccine', 'macaroni', 'rigatoni', 'orzo',
-      'gnocchi', 'noodle', 'noodles', 'ramen', 'udon', 'dumpling', 'wonton',
-      'ravioli', 'lasagna', 'crouton', 'croutons', 'barley', 'rye', 'farro',
-      'bulgur', 'couscous', 'semolina', 'seitan', 'malt', 'beer', 'soy sauce',
-      'teriyaki', 'pancake', 'waffle', 'batter', 'tempura', 'roux', 'cracker',
-      'crackers', 'pretzel', 'biscuit', 'pastry', 'pie crust', 'phyllo',
-      'puff pastry', 'toast', 'crostini', 'bruschetta',
+      'wheat', 'flour', 'bread', 'breaded', 'bun', 'brioche', 'sourdough',
+      'pasta', 'linguine', 'spaghetti', 'noodle', 'crouton', 'croutons',
+      'barley', 'rye', 'farro', 'panko', 'soy sauce', 'beer',
     ],
   },
   {
     key: 'peanut',
     label: 'peanuts',
     profileTerms: ['peanut', 'peanuts', 'groundnut'],
-    keywords: ['peanut', 'peanuts', 'groundnut', 'groundnuts', 'satay', 'peanut butter'],
+    keywords: ['peanut', 'peanuts', 'groundnut'],
   },
   {
     key: 'treenut',
@@ -81,21 +64,15 @@ const ALLERGEN_GROUPS: AllergenGroup[] = [
       'hazelnut', 'hazelnuts',
     ],
     keywords: [
-      'almond', 'almonds', 'walnut', 'walnuts', 'cashew', 'cashews', 'pecan',
-      'pecans', 'pistachio', 'pistachios', 'hazelnut', 'hazelnuts',
-      'macadamia', 'pine nut', 'pine nuts', 'praline', 'brazil nut',
-      'chestnut', 'marzipan', 'nutella', 'pesto', 'frangipane', 'amaretto',
-      'nougat',
+      'almond', 'walnut', 'cashew', 'pecan', 'pistachio', 'hazelnut',
+      'macadamia', 'pine nut', 'praline',
     ],
   },
   {
     key: 'soy',
     label: 'soy',
     profileTerms: ['soy', 'soya', 'soybean'],
-    keywords: [
-      'soy', 'soya', 'soybean', 'soybeans', 'tofu', 'edamame', 'miso',
-      'tempeh', 'tamari', 'soy sauce', 'teriyaki', 'hoisin',
-    ],
+    keywords: ['soy', 'soya', 'tofu', 'edamame', 'miso', 'tempeh'],
   },
   {
     key: 'fish',
@@ -103,9 +80,7 @@ const ALLERGEN_GROUPS: AllergenGroup[] = [
     profileTerms: ['fish'],
     keywords: [
       'salmon', 'tuna', 'cod', 'anchovy', 'anchovies', 'halibut', 'trout',
-      'sea bass', 'tilapia', 'sardine', 'sardines', 'mackerel', 'herring',
-      'snapper', 'haddock', 'catfish', 'swordfish', 'mahi', 'branzino',
-      'fish sauce', 'worcestershire', 'nam pla', 'caesar dressing',
+      'bass', 'tilapia', 'sardine',
     ],
   },
   {
@@ -116,41 +91,15 @@ const ALLERGEN_GROUPS: AllergenGroup[] = [
       'mussel', 'scallop', 'oyster', 'squid', 'calamari', 'octopus',
     ],
     keywords: [
-      'shrimp', 'prawn', 'prawns', 'crab', 'lobster', 'clam', 'clams',
-      'mussel', 'mussels', 'scallop', 'scallops', 'oyster', 'oysters',
-      'squid', 'calamari', 'octopus', 'crawfish', 'crayfish', 'langoustine',
-      'shellfish',
+      'shrimp', 'prawn', 'crab', 'lobster', 'clam', 'mussel', 'scallop',
+      'oyster', 'squid', 'calamari', 'octopus', 'crawfish',
     ],
   },
   {
     key: 'sesame',
     label: 'sesame',
     profileTerms: ['sesame', 'tahini'],
-    keywords: ['sesame', 'tahini', 'hummus', 'halva', "za'atar", 'benne'],
-  },
-  {
-    key: 'mustard',
-    label: 'mustard',
-    profileTerms: ['mustard'],
-    keywords: ['mustard', 'dijon'],
-  },
-  {
-    key: 'celery',
-    label: 'celery',
-    profileTerms: ['celery', 'celeriac'],
-    keywords: ['celery', 'celeriac'],
-  },
-  {
-    key: 'sulfites',
-    label: 'sulfites',
-    profileTerms: ['sulfite', 'sulfites', 'sulphite', 'sulphites'],
-    keywords: ['wine', 'sulfite', 'sulfites', 'sulphite', 'balsamic'],
-  },
-  {
-    key: 'coconut',
-    label: 'coconut',
-    profileTerms: ['coconut'],
-    keywords: ['coconut'],
+    keywords: ['sesame', 'tahini'],
   },
 ];
 
@@ -242,26 +191,6 @@ export function analyzeItemAllergens(item: MenuItem, profileAllergies: string[])
     else otherAllergens.push(finding);
   }
   return { blocked: blockedBy.length > 0, blockedBy, otherAllergens };
-}
-
-/**
- * A prominent ALERT for allergens the guest personally listed. Unlike the
- * general disclaimer, this always fires (even for inferred matches) because it
- * concerns the guest's own safety, but it stays honest about confidence.
- */
-export function allergenAlertText(findings: AllergenFinding[]): string {
-  if (findings.length === 0) return '';
-  const labels = findings.map((f) => f.label);
-  const list =
-    labels.length === 1
-      ? labels[0]
-      : labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1];
-  const verb = labels.length === 1 ? 'is one of your allergens' : 'are among your allergens';
-  const allExplicit = findings.every((f) => f.confidence === 'explicit');
-  const basis = allExplicit
-    ? 'The restaurant lists this.'
-    : 'This is based on the dish description, so please confirm with the restaurant.';
-  return `Alert. This dish contains ${list}, which ${verb}. ${basis}`;
 }
 
 /** Spoken/printed allergen disclaimer honoring confidence. Empty when none. */

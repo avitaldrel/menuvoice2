@@ -19,7 +19,6 @@ import ConversationScreen from './screens/ConversationScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import FindScreen from './screens/FindScreen';
-import TutorialScreen from './screens/TutorialScreen';
 
 function Root() {
   const { profile, loaded } = useProfile();
@@ -134,9 +133,6 @@ function Root() {
     case 'settings':
       screen = <SettingsScreen navigate={navigate} goBack={goBack} />;
       break;
-    case 'tutorial':
-      screen = <TutorialScreen navigate={navigate} goBack={goBack} />;
-      break;
     default:
       screen = <HomeScreen navigate={navigate} goBack={goBack} />;
   }
@@ -213,7 +209,6 @@ function pageStatusFor(name: Route['name']): string {
     case 'conversation': return 'Conversation screen. MenuVoice can speak with you or let you browse the menu.';
     case 'saved': return 'Saved restaurants screen. Open or delete saved menus.';
     case 'settings': return 'Settings screen. Update profile, allergies, voice, and app preferences.';
-    case 'tutorial': return 'Tutorial screen. Learn how to use MenuVoice step by step.';
   }
 }
 
