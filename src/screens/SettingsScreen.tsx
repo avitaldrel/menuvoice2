@@ -1,4 +1,4 @@
-// Settings: hide prices, edit allergies/preferences, choose TTS voice.
+// Settings: hide prices and edit allergies/preferences.
 // Voice nav removed — VoiceOver reads all controls.
 // Inline mics (name, dislike) still use MediaRecorder for field-level input.
 
@@ -13,7 +13,6 @@ import { speak, setAppVoice } from '../lib/speech';
 import { watchForSilence } from '../lib/vad';
 import { track } from '../lib/telemetry';
 
-const VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'fable', 'onyx'];
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
 type SpiceLevel = typeof SPICE_LEVELS[number];
 type RecState = 'idle' | 'recording' | 'working';
@@ -346,36 +345,6 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
         placeholder="e.g. Thai, spicy, seafood"
         aria-label="Favorite foods, comma separated"
       />
-
-      <Heading>Voice</Heading>
-      <div className="row" role="radiogroup" aria-label="App voice choice" style={{ flexWrap: 'wrap' }}>
-        {VOICES.map((v) => {
-          const active = profile.ttsVoice === v;
-          return (
-            <button
-              key={v}
-              role="radio"
-              aria-checked={active}
-              onClick={() => update({ ttsVoice: v })}
-              aria-label={`Voice ${v}${active ? ', selected' : ''}`}
-              style={{
-                minHeight: 64,
-                minWidth: 80,
-                padding: '0 16px',
-                borderRadius: 'var(--r-md)',
-                border: `2px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                background: active ? 'var(--surface-high)' : 'var(--surface)',
-                color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                fontSize: 18,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              {v}
-            </button>
-          );
-        })}
-      </div>
 
       <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} />
       <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0, textAlign: 'center' }}>

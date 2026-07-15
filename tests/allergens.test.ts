@@ -1,7 +1,7 @@
 // Allergen detection + explicit/inferred confidence (pure functions).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeItemAllergens, allergenDisclaimer } from '../src/lib/allergens.ts';
+import { analyzeItemAllergens, allergenDisclaimer, dishSpokenLabel } from '../src/lib/allergens.ts';
 import type { MenuItem } from '../src/types.ts';
 
 test('blocks a dish containing a profile allergen', () => {
@@ -42,4 +42,30 @@ test('allergenDisclaimer reports explicit declarations as listed', () => {
 
 test('empty findings produce empty disclaimer', () => {
   assert.equal(allergenDisclaimer([]), '');
+});
+
+test('dishSpokenLabel puts the dish name first and the warning before other details', () => {
+  const item: MenuItem = {
+    name: 'Caesar Salad',
+    price: '$12',
+    description: 'romaine, parmesan, croutons',
+  };
+  const label = dishSpokenLabel(item, [{ label: 'dairy', confidence: 'inferred' }]);
+
+  assert.ok(label.startsWith('Caesar Salad. Allergen warning.'), label);
+  assert.ok(label.indexOf('Allergen warning') < label.indexOf('Price $12'));
+  assert.ok(label.indexOf('Allergen warning') < label.indexOf('romaine, parmesan, croutons'));
+});
+
+test('dishSpokenLabel keeps the normal compact order when there is no warning', () => {
+  const item: MenuItem = { name: 'House Fries', price: '$6' };
+  assert.equal(dishSpokenLabel(item), 'House Fries. Price $6');
+});
+
+test('dishSpokenLabel includes ingredients after the warning', () => {
+  const item: MenuItem = { name: 'Pad Thai', ingredients: ['peanuts', 'rice noodles', 'egg'] };
+  const label = dishSpokenLabel(item, [{ label: 'peanuts', confidence: 'explicit' }]);
+
+  assert.ok(label.startsWith('Pad Thai. Allergen warning.'), label);
+  assert.ok(label.indexOf('Allergen warning') < label.indexOf('Ingredients:'));
 });
