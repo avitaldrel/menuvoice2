@@ -12,6 +12,7 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
+const BASE_URL = process.argv[2] ?? process.env.A11Y_BASE_URL ?? 'http://localhost:4173';
 
 const PROFILE = JSON.stringify({
   email: 'audit@menuvoice.app',
@@ -69,7 +70,7 @@ async function auditScreen(browser, screen) {
     }
   }, screen.ls);
 
-  await page.goto('http://localhost:4173', { waitUntil: 'networkidle' });
+  await page.goto(BASE_URL, { waitUntil: 'networkidle' });
 
   try {
     await page.waitForSelector('main.screen', { timeout: 10000 });

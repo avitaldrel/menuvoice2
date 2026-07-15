@@ -1,11 +1,10 @@
-import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { ProfileProvider, useProfile } from './state/ProfileContext';
 import { PauseProvider, usePause } from './state/PauseContext';
 import { Route, Navigate } from './nav';
 import { track, setCurrentScreen } from './lib/telemetry';
 import {
   createAppHistoryEntry,
-  isBackNavigationKey,
   readAppHistoryEntry,
   type AppHistoryEntry,
   type StoredAppHistoryEntry,
@@ -71,17 +70,9 @@ function Root() {
       showHistoryEntry({ ...stored, route });
     };
 
-    const handleEscape = (event: KeyboardEvent) => {
-      if (!isBackNavigationKey(event) || historyEntryRef.current.position === 0) return;
-      event.preventDefault();
-      window.history.back();
-    };
-
     window.addEventListener('popstate', handlePopState);
-    window.addEventListener('keydown', handleEscape);
     return () => {
       window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('keydown', handleEscape);
     };
   }, [showHistoryEntry]);
 
@@ -137,7 +128,7 @@ function Root() {
       screen = <HomeScreen navigate={navigate} goBack={goBack} />;
   }
 
-  return (
+  const page = (
     <>
       <div
         role="status"
@@ -173,6 +164,59 @@ function Root() {
       </button>
       {screen}
     </>
+  );
+
+  if (historyEntry.position === 0) return page;
+
+  return (
+    <BackNavigationDialog
+      key={historyEntry.position}
+      label={pageStatusFor(current.name)}
+      onDismiss={goBack}
+    >
+      {page}
+    </BackNavigationDialog>
+  );
+}
+
+function BackNavigationDialog({
+  children,
+  label,
+  onDismiss,
+}: {
+  children: ReactNode;
+  label: string;
+  onDismiss: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="app-route-dialog"
+      aria-label={label}
+      onCancel={(event) => {
+        // A VoiceOver two-finger scrub dismisses a modal dialog through this
+        // native path on iOS. Keep the dialog mounted until browser history has
+        // moved so the previous MenuVoice screen is restored atomically.
+        event.preventDefault();
+        track('nav', 'back_gesture', { metadata: { source: 'dialog_cancel' } });
+        onDismiss();
+      }}
+      onClose={() => {
+        // WebKit normally fires `cancel` first. This covers versions that close
+        // the dialog directly for an accessibility dismiss action.
+        track('nav', 'back_gesture', { metadata: { source: 'dialog_close' } });
+        onDismiss();
+      }}
+    >
+      {children}
+    </dialog>
   );
 }
 

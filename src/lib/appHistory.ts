@@ -44,10 +44,6 @@ export function readAppHistoryEntry(value: unknown): StoredAppHistoryEntry | nul
   return candidate as StoredAppHistoryEntry;
 }
 
-export function isBackNavigationKey(event: Pick<KeyboardEvent, 'key' | 'defaultPrevented' | 'repeat' | 'isComposing'>): boolean {
-  return event.key === 'Escape' && !event.defaultPrevented && !event.repeat && !event.isComposing;
-}
-
 function isRoute(value: unknown): value is Route {
   if (!value || typeof value !== 'object') return false;
   const name = (value as { name?: unknown }).name;
