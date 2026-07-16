@@ -313,6 +313,9 @@ function shell(key: string): string {
   .chart .axis { stroke: var(--muted); stroke-width: 1; }
   .chart text { fill: currentColor; font-size: 10px; opacity: .7; }
   .empty { opacity: .65; font-style: italic; padding: .5rem 0; }
+  .table-scroll { overflow-x: auto; }
+  .credit-note { max-width: 75ch; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   #err { color: var(--bad); font-weight: 600; }
 </style>
 </head>
@@ -336,9 +339,6 @@ function shell(key: string): string {
 <p id="err"></p>
 
 <div class="cards" id="cards"></div>
-
-<h2>Cartesia API keys</h2>
-<div id="cartesia" aria-live="polite"></div>
 
 <h2>Activity over time</h2>
 <div id="chart" role="img" aria-label="Activity over time"></div>
@@ -370,6 +370,9 @@ function shell(key: string): string {
     <div id="failures"></div>
   </div>
 </div>
+
+<h2>Cartesia API keys</h2>
+<div id="cartesia" aria-live="polite"></div>
 
 <script>
 const KEY = ${JSON.stringify(key)};
@@ -424,13 +427,24 @@ function renderCartesia(d){
   if(!c.configured){ box.innerHTML='<p class="empty">No Cartesia keys configured.</p>'; return; }
   const headline=c.allExhausted
     ? '<p class="bad">All Cartesia keys are exhausted. OpenAI fallback is active.</p>'
-    : '<p><strong>Active:</strong> '+esc(c.activeLabel||'not observed yet')+(c.activeSince?' since '+esc(fmtTs(c.activeSince)):'')+'</p>';
+    : '<p><strong>Active account:</strong> '+esc(c.activeEmail||c.activeLabel||'not observed yet')+
+      (c.activeEmail&&c.activeLabel?' ('+esc(c.activeLabel)+')':'')+
+      (c.activeSince?' since '+esc(fmtTs(c.activeSince)):'')+'</p>';
   const summary='<p><strong>Remaining after active:</strong> '+num(c.remainingAfterActive)+
     (c.lastSwitchedAt?' &middot; <strong>Last switched:</strong> '+esc(fmtTs(c.lastSwitchedAt))+' ('+esc(ago(c.lastSwitchedAt))+')':'')+
     (c.firstReturnsAt?' &middot; <strong>First estimated return:</strong> '+esc(fmtTs(c.firstReturnsAt)):'')+'</p>';
-  const rows=(c.keys||[]).map(k=>'<tr><td>'+esc(k.label)+'</td><td class="'+(k.status==='exhausted'?'bad':k.status==='active'?'good':'')+'">'+esc(k.status)+'</td><td>'+esc(fmtTs(k.exhaustedAt))+'</td><td>'+esc(fmtTs(k.availableAt))+'</td></tr>').join('');
+  const creditReady=(c.keys||[]).some(k=>k.credits&&k.credits.state==='live');
+  const creditNote=creditReady
+    ? '<p class="small credit-note">Credits left are calculated from Cartesia\'s live usage totals, the configured monthly allowance, and each account\'s configured reset day. Updated values are cached for five minutes.</p>'
+    : '<p class="small credit-note"><strong>Credit totals need setup.</strong> Cartesia requires an admin API key for usage reporting. Add each account\'s admin key, monthly allowance, and reset day to show live credits used and calculated credits left.</p>';
+  const creditCell=(k,field)=>{
+    const cr=k.credits||{};
+    if(cr.state==='live') return num(cr[field]);
+    return '<span class="small">'+esc(cr.message||'Unavailable')+'</span>';
+  };
+  const rows=(c.keys||[]).map(k=>'<tr><td>'+esc(k.email||'Email not stored')+'</td><td>'+esc(k.label)+'</td><td class="'+(k.status==='exhausted'?'bad':k.status==='active'?'good':'')+'">'+esc(k.status)+'</td><td class="r">'+creditCell(k,'remaining')+'</td><td class="r">'+creditCell(k,'used')+'</td><td class="r">'+(k.credits&&k.credits.limit!=null?num(k.credits.limit):'')+'</td><td>'+esc(k.credits&&k.credits.periodStart?fmtTs(k.credits.periodStart):'')+'</td><td>'+esc(fmtTs(k.lastSuccessAt))+'</td><td>'+esc(fmtTs(k.exhaustedAt))+'</td><td>'+esc(fmtTs(k.availableAt))+'</td></tr>').join('');
   const prediction=c.projectedRunOutAt?'<p><strong>At the recent rate, '+esc(c.activeLabel)+' might run out on '+esc(c.projectedRunOutAt.slice(0,10))+'.</strong></p>':'';
-  box.innerHTML=headline+summary+prediction+'<table><thead><tr><th>Key slot</th><th>Status</th><th>Used at</th><th>Estimated return</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  box.innerHTML=headline+summary+prediction+creditNote+'<div class="table-scroll"><table><caption class="sr-only">Cartesia account credits and key rotation breakdown</caption><thead><tr><th>Account email</th><th>Key slot</th><th>Rotation status</th><th class="r">Credits left</th><th class="r">Credits used</th><th class="r">Monthly allowance</th><th>Current period started</th><th>Last successful use</th><th>Exhausted at</th><th>Estimated return</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
 function renderChart(d){
