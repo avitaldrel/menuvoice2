@@ -1,16 +1,18 @@
 // Shared accessible web UI primitives. Buttons/inputs are >= 64px,
 // have roles/labels, and a visible focus ring (see index.css :focus-visible).
 
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 
-export function Screen({ children }: { children: React.ReactNode }) {
+export function Screen({ children, label }: { children: React.ReactNode; label?: string }) {
   const ref = useRef<HTMLElement>(null);
-  useEffect(() => {
-    // Move focus to screen top on every mount so keyboard/SR users land at content
+  useLayoutEffect(() => {
+    // Move focus before paint so screen readers do not first announce a stale
+    // control from the previous route. A concise label prevents VoiceOver from
+    // treating a newly focused main landmark as a request to read every child.
     ref.current?.focus();
   }, []);
   return (
-    <main id="main-content" className="screen" tabIndex={-1} ref={ref}>
+    <main id="main-content" className="screen" tabIndex={-1} ref={ref} aria-label={label}>
       {children}
     </main>
   );

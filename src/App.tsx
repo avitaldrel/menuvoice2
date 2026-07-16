@@ -26,7 +26,6 @@ function Root() {
   const [historyEntry, setHistoryEntry] = useState<AppHistoryEntry>(initializeAppHistory);
   const historyEntryRef = useRef(historyEntry);
   const routesByPositionRef = useRef(new Map<number, Route>([[historyEntry.position, historyEntry.route]]));
-  const [pageStatus, setPageStatus] = useState('');
   const prevScreenRef = useRef<string>('');
   const screenEnterRef = useRef<number>(Date.now());
 
@@ -88,7 +87,6 @@ function Root() {
     }
     setCurrentScreen(name);
     track('nav', 'screen_enter', { screen: name });
-    setPageStatus(pageStatusFor(name));
     screenEnterRef.current = Date.now();
     prevScreenRef.current = name;
   }, [historyEntry]);
@@ -140,7 +138,7 @@ function Root() {
         aria-atomic="true"
         style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', borderWidth: 0 }}
       >
-        {[pageStatus, status].filter(Boolean).join(' ')}
+        {status}
       </div>
       <button
         className="btn btn-secondary voice-toggle"
@@ -203,6 +201,11 @@ function BackNavigationDialog({
       if (typeof dialog.showModal === 'function') dialog.showModal();
       else dialog.setAttribute('open', '');
     }
+
+    // showModal() normally focuses the first button, which is the global Pause
+    // Voice control. Put focus on the route landmark in the same layout pass so
+    // VoiceOver hears the new screen instead of queueing that unrelated button.
+    dialog.querySelector<HTMLElement>('main.screen')?.focus();
   }, []);
 
   const dismiss = (source: 'dialog_cancel' | 'dialog_close') => {
@@ -266,7 +269,7 @@ function pushAppHistoryEntry(entry: AppHistoryEntry): void {
 function pageStatusFor(name: Route['name']): string {
   switch (name) {
     case 'home': return 'Home screen. Choose scan, find, saved restaurants, demo menu, tutorial, or settings.';
-    case 'capture': return 'Capture menu screen. Point the camera at the menu, take photos, then analyze.';
+    case 'capture': return 'Capture menu';
     case 'find': return 'Find menu screen. Enter a restaurant name and city, or paste a menu link.';
     case 'conversation': return 'Conversation screen. MenuVoice can speak with you or let you browse the menu.';
     case 'saved': return 'Saved restaurants screen. Open or delete saved menus.';

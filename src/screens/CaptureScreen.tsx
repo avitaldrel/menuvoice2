@@ -92,7 +92,7 @@ export default function CaptureScreen({
 
   const [photos, setPhotosState] = useState<CapturedPhoto[]>([]);
   const [confirmAnalyzeWithIssues, setConfirmAnalyzeWithIssues] = useState(false);
-  const [status, setStatus] = useState('Starting camera...');
+  const [status, setStatus] = useState('');
   const [coachStatus, setCoachStatus] = useState('');
   const [camError, setCamError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
@@ -205,11 +205,6 @@ export default function CaptureScreen({
     }
     if (!autoRef.current) autoRef.current = new MenuScanner();
 
-    setCoachStatus(
-      'Auto capture is on. Hold your phone flat, about a foot above the menu. ' +
-        'I will guide you and take the photo automatically. If I take too long, ' +
-        'find the Take photo button below the camera.',
-    );
     if (videoRef.current) {
       autoRef.current.start(videoRef.current, {
         onCoach: (msg) => {
@@ -493,7 +488,7 @@ export default function CaptureScreen({
   };
 
   return (
-    <Screen>
+    <Screen label="Hold your phone flat over the menu.">
       <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Title>Capture menu</Title>
         <div
