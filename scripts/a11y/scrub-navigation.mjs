@@ -16,6 +16,12 @@ async function verifyBackNavigation(browserType, browserName) {
   try {
     await page.addInitScript((profile) => {
       localStorage.setItem('menuvoice.profile.v1', profile);
+      // Keep capture startup pending so the arrival assertions are not changed
+      // by a headless browser's missing-camera recovery message.
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia: () => new Promise(() => {}) },
+      });
     }, PROFILE);
 
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
@@ -66,6 +72,20 @@ async function verifyBackNavigation(browserType, browserName) {
     await dialog.evaluate((element) => element.close());
     await dialog.waitFor({ state: 'detached' });
     assert.equal(await page.evaluate(() => history.state?.position), 0);
+
+    // Capture arrival must not queue the previous Home instructions, every
+    // camera control, or a second explanatory paragraph. The focused landmark
+    // gives VoiceOver one action and then waits for live camera coaching.
+    await page.getByRole('button', { name: 'Scan a Menu' }).click();
+    await dialog.waitFor({ state: 'visible' });
+    assert.equal(await dialog.getAttribute('aria-label'), 'Capture menu');
+    const captureMain = page.getByRole('main', { name: 'Hold your phone flat over the menu.' });
+    await captureMain.waitFor();
+    assert.equal(await captureMain.evaluate((element) => element === document.activeElement), true);
+    assert.deepEqual(
+      (await page.getByRole('status').allTextContents()).filter((text) => text.trim()),
+      [],
+    );
 
     console.log(`VoiceOver scrub navigation smoke test passed in ${browserName}.`);
   } finally {
