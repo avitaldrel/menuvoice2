@@ -12,6 +12,7 @@ import { transcribeAudio } from '../lib/openai';
 import { setSpeechRate } from '../lib/speech';
 import { watchForSilence } from '../lib/vad';
 import { track } from '../lib/telemetry';
+import { configuredAppleShortcutUrl, isAppleMobileDevice } from '../lib/appleShortcut';
 import type { AppTheme, TextScale } from '../types';
 
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
@@ -70,6 +71,8 @@ function Segmented<T extends string | number>({
 
 export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const { profile, update, reset } = useProfile();
+  const shortcutUrl = configuredAppleShortcutUrl();
+  const showAppleShortcut = !!shortcutUrl && isAppleMobileDevice();
   const [allergies, setAllergies] = useState(profile.allergies.join(', '));
   const [cuisines, setCuisines] = useState(profile.cuisinesLiked.join(', '));
   const [saved, setSaved] = useState(false);
@@ -375,6 +378,24 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
           {dislikeRec !== 'idle' ? '...' : 'Mic'}
         </button>
       </div>
+
+      {showAppleShortcut && (
+        <section className="card" aria-labelledby="apple-shortcut-heading">
+          <Heading><span id="apple-shortcut-heading">Open MenuVoice with Siri</span></Heading>
+          <Body>Create a Shortcut so saying “Siri, launch MenuVoice” opens this app.</Body>
+          <a
+            className="btn btn-secondary"
+            href={shortcutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none' }}
+            aria-label="Create Siri Shortcut. Opens Apple's Shortcut page in a new tab"
+            onClick={() => track('settings', 'shortcut_open', {})}
+          >
+            Create Siri Shortcut
+          </a>
+        </section>
+      )}
 
       <label
         className="card"
