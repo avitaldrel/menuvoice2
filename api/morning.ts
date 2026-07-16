@@ -18,12 +18,14 @@
 //   format=json raw JSON
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { buildMorningReport, renderText, renderEmailHtml, resolveRecipients, analyticsUrl, esc, fmtTs, ago, activity, type UserRow } from './_morningData.js';
+import { buildMorningReport, renderText, renderEmailHtml, renderCartesiaText, resolveRecipients, analyticsUrl, esc, fmtTs, ago, activity, type UserRow } from './_morningData.js';
 
 // Subject line shared with the email path so a Gmail filter matches both.
-function emailSubject(d: { anyoneUsed: boolean; newUsers: unknown[]; returningUsers: unknown[]; website?: { visits: number } }): string {
+function emailSubject(d: { anyoneUsed: boolean; newUsers: unknown[]; returningUsers: unknown[]; website?: { visits: number }; cartesia: { allExhausted: boolean } }): string {
   const date = new Date().toISOString().slice(0, 10);
-  return d.anyoneUsed
+  return d.cartesia.allExhausted
+    ? `[MenuVoice] Morning report ${date} — Cartesia keys exhausted`
+    : d.anyoneUsed
     ? `[MenuVoice] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website?.visits ?? 0} site visits`
     : `[MenuVoice] Morning report ${date} — no users in window`;
 }
@@ -200,6 +202,9 @@ ${returningTable}
 ${funnelSection}
 
 ${d.excluded.length ? `<p class="meta">Excluded internal accounts: ${esc(d.excluded.join(', '))}</p>` : ''}
+
+<h2>Cartesia API keys</h2>
+<pre style="white-space:pre-wrap;font:inherit">${esc(renderCartesiaText(d.cartesia).replace(/^CARTESIA API KEYS:\n/, ''))}</pre>
 </body>
 </html>`;
 

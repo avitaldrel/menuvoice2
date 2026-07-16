@@ -102,6 +102,8 @@ What it shows:
 - **People** — per-user table: sessions, events, photos, questions, failures, lifetime
   sessions, last-seen, and a NEW badge for first-time users.
 - **Live event stream** and a **failures** panel, both auto-updating.
+- **Cartesia key status** — active slot, used/exhausted slots, last switch, keys
+  remaining, estimated first return, and a run-out projection once rotation history exists.
 - Window switcher (1h / 6h / 24h / 7d / 30d / all) with no reload.
 
 Same `REPORT_KEY` guard, same `events` table, zero AI tokens. `?format=json` returns the
@@ -128,6 +130,13 @@ https://<deployment>/api/morning?key=<REPORT_KEY>
 - **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com`). Testers who also receive the report are excluded here too, so their own testing never shows up in the numbers they read.
 - Window: `?hours=N` or `?days=N` (default 24h). Output: HTML (default), `?format=text` (cron/email friendly), or `?format=json`.
 - Same `REPORT_KEY` guard. Zero AI tokens.
+- The bottom of every report shows Cartesia key rotation status. A full Cartesia
+  exhaustion sends the report even on a quiet usage day so the OpenAI fallback is visible.
+
+Cartesia status stores slot numbers only, never secret key values. It uses the existing
+Upstash/Vercel KV connection for durable history. `CARTESIA_KEY_RECOVERY_HOURS` controls
+the estimated return/retry interval (default 720 hours, or 30 days); this is explicitly
+shown as an estimate because Cartesia's credit-usage API does not expose plan reset dates.
 
 #### Automated daily email (`/api/cron-morning`)
 

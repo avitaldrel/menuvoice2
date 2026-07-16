@@ -11,6 +11,18 @@
 //   CARTESIA_API_KEY_1..CARTESIA_API_KEY_10 — numbered keys
 
 import { looksLikeCartesiaCreditIssue, maybeNotifyCartesiaCreditIssue } from './_providerAlerts.js';
+import {
+  getCartesiaStatus,
+  recordAllCartesiaExhausted,
+  recordCartesiaExhausted,
+  recordCartesiaSuccess,
+} from './_cartesiaStatus.js';
+
+interface CartesiaKeyEntry { key: string; slot: number }
+
+function cartesiaKeyEntries(): CartesiaKeyEntry[] {
+  return cartesiaApiKeys().map((key, index) => ({ key, slot: index + 1 }));
+}
 
 export function cartesiaApiKeys(): string[] {
   const out: string[] = [];
@@ -27,23 +39,6 @@ export function cartesiaApiKeys(): string[] {
   return Array.from(new Set(out));
 }
 
-// Keys we've seen hit a credit/quota wall, with when we saw it. Lets us skip a
-// dead key on the next request instead of paying its failure latency again.
-// In-memory only: persists within a warm serverless instance, resets on cold
-// start (which also gives an exhausted key a fresh chance after a refill).
-const exhaustedAt = new Map<string, number>();
-const EXHAUSTED_TTL_MS = 6 * 60 * 60 * 1000;
-
-function isExhausted(key: string): boolean {
-  const at = exhaustedAt.get(key);
-  if (at === undefined) return false;
-  if (Date.now() - at > EXHAUSTED_TTL_MS) {
-    exhaustedAt.delete(key);
-    return false;
-  }
-  return true;
-}
-
 /**
  * Calls `attempt` once per Cartesia key, rotating to the next key whenever the
  * current one fails with a credit/quota error. Returns:
@@ -57,20 +52,21 @@ export async function withCartesiaKey(
   service: 'tts' | 'stt' | 'realtime-stt-token',
   attempt: (key: string) => Promise<Response>,
 ): Promise<Response | null> {
-  const keys = cartesiaApiKeys();
+  const keys = cartesiaKeyEntries();
   if (keys.length === 0) return null;
+  const status = await getCartesiaStatus(keys.length);
+  const exhaustedSlots = new Set(status.keys.filter((k) => k.status === 'exhausted').map((k) => k.slot));
+  const ordered = keys.filter((entry) => !exhaustedSlots.has(entry.slot));
 
-  // Healthy keys first; previously-exhausted keys last (their credits may have
-  // refilled since we marked them).
-  const ordered = [
-    ...keys.filter((k) => !isExhausted(k)),
-    ...keys.filter((k) => isExhausted(k)),
-  ];
+  if (ordered.length === 0) {
+    await recordAllCartesiaExhausted();
+    return null;
+  }
 
   let lastCreditStatus = 0;
   let lastCreditDetail: string | undefined;
 
-  for (const key of ordered) {
+  for (const { key, slot } of ordered) {
     let res: Response;
     try {
       res = await attempt(key);
@@ -81,13 +77,13 @@ export async function withCartesiaKey(
     }
 
     if (res.ok) {
-      exhaustedAt.delete(key);
+      await recordCartesiaSuccess(slot);
       return res;
     }
 
     const detail = await res.clone().text().catch(() => '');
     if (looksLikeCartesiaCreditIssue(res.status, detail)) {
-      exhaustedAt.set(key, Date.now());
+      await recordCartesiaExhausted(slot);
       lastCreditStatus = res.status;
       lastCreditDetail = detail;
       continue; // rotate to the next key
@@ -100,6 +96,8 @@ export async function withCartesiaKey(
 
   // Every key is out of credits/quota. Alert once, then signal "fall back".
   if (lastCreditStatus) {
+    const after = await getCartesiaStatus(keys.length);
+    if (after.allExhausted) await recordAllCartesiaExhausted();
     await maybeNotifyCartesiaCreditIssue({ service, status: lastCreditStatus, detail: lastCreditDetail });
   }
   return null;

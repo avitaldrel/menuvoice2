@@ -14,6 +14,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { buildMorningReport, renderText, renderEmailHtml, sendEmail, resolveRecipients, analyticsUrl } from './_morningData.js';
 
+export function shouldSendMorningReport(
+  data: { anyoneUsed: boolean; cartesia: { allExhausted: boolean } },
+  force = false,
+): boolean {
+  return force || data.anyoneUsed || data.cartesia.allExhausted;
+}
+
 function authorized(req: VercelRequest): boolean {
   const auth = (req.headers.authorization as string) ?? '';
   if (process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`) return true;
@@ -49,13 +56,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // window there is nothing new to say, so we skip the send entirely (a clean
     // 200 no-op). Append ?force=1 to override (useful for manual test sends).
     const force = req.query.force === '1' || req.query.force === 'true';
-    if (!d.anyoneUsed && !force) {
+    if (!shouldSendMorningReport(d, force)) {
       return res.status(200).json({ ok: true, sent: false, reason: 'no activity in window — nothing new to report' });
     }
 
     const date = new Date().toISOString().slice(0, 10);
     // Stable, unique tag so a Gmail filter can label every report reliably.
-    const subject = d.anyoneUsed
+    const subject = d.cartesia.allExhausted
+      ? `[MenuVoice] Morning report ${date} — Cartesia keys exhausted`
+      : d.anyoneUsed
       ? `[MenuVoice] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website.visits} site visits`
       : `[MenuVoice] Morning report ${date} — no users in window`;
 

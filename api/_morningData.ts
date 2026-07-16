@@ -4,6 +4,7 @@
 
 import { Redis } from '@upstash/redis';
 import { createClient } from '@vercel/postgres';
+import { cartesiaConfiguredKeyCount, getCartesiaStatus, type CartesiaStatus } from './_cartesiaStatus.js';
 // nodemailer is imported lazily inside sendEmail() (its only use). A top-level
 // import pulls it into module load for EVERY consumer of this file — including the
 // /api/morning and /api/dashboard view endpoints — and nodemailer failing to load
@@ -79,6 +80,7 @@ export interface MorningData {
   deltas: { users: number; sessions: number; events: number; newUsers: number };
   funnel: Funnel;
   website: WebsiteReport;
+  cartesia: CartesiaStatus;
 }
 
 // Accounts we never want to see in the report (own testing + known testers).
@@ -343,6 +345,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
   // the rows that DO carry the email, so a logged-in user is counted once — there
   // is no separate "anonymous session" double-count.
   const notExcluded = `lower(user_email) <> ALL($1::text[])`;
+  const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());
 
   return withClient(async (client) => {
     const websitePromise = getWebsiteReport(hours);
@@ -456,6 +459,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       stages, failures, biggestLeak,
     };
     const website = await websitePromise;
+    const cartesia = await cartesiaPromise;
 
     return {
       windowLabel,
@@ -470,6 +474,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       deltas,
       funnel,
       website,
+      cartesia,
     };
   });
 }
@@ -567,7 +572,64 @@ export function renderText(d: MorningData): string {
   }
   lines.push('');
   if (d.excluded.length) lines.push(`(excluded internal accounts: ${d.excluded.join(', ')})`);
+  lines.push('');
+  lines.push(renderCartesiaText(d.cartesia));
   return lines.join('\n');
+}
+
+function dateOnly(ts: string | null): string {
+  return ts ? ts.slice(0, 10) : 'unknown';
+}
+
+export function renderCartesiaText(status: CartesiaStatus): string {
+  const lines = ['CARTESIA API KEYS:'];
+  if (!status.configured) {
+    lines.push('  No Cartesia API keys are configured.');
+    return lines.join('\n');
+  }
+  if (status.allExhausted) {
+    lines.push(`  OUT OF CARTESIA KEYS${status.allExhaustedAt ? ` since ${fmtTs(status.allExhaustedAt)}` : ''}. OpenAI fallback is active.`);
+  } else {
+    lines.push(`  Active: ${status.activeLabel ?? 'not observed yet'}${status.activeSince ? ` since ${fmtTs(status.activeSince)}` : ''}`);
+  }
+  lines.push(`  Remaining after active key: ${status.remainingAfterActive}`);
+  if (status.lastSwitchedAt) lines.push(`  Last switched: ${fmtTs(status.lastSwitchedAt)} (${ago(status.lastSwitchedAt)})`);
+  for (const key of status.keys.filter((k) => k.status === 'exhausted')) {
+    lines.push(`  Used: ${key.label} — exhausted ${fmtTs(key.exhaustedAt)}; estimated return ${fmtTs(key.availableAt)}`);
+  }
+  if (status.firstReturnsAt) lines.push(`  First key estimated back: ${fmtTs(status.firstReturnsAt)}`);
+  if (status.projectedRunOutAt) {
+    lines.push(`  At the recent rate, ${status.activeLabel} might run out on ${dateOnly(status.projectedRunOutAt)} (${status.projectionBasis}).`);
+  }
+  if (status.storage === 'memory') lines.push('  Status history is temporary until Redis/KV is configured.');
+  return lines.join('\n');
+}
+
+function renderCartesiaEmailHtml(status: CartesiaStatus, ff: string): string {
+  const tone = status.allExhausted ? C.red : status.activeSlot ? C.greenDk : C.amber;
+  const heading = status.allExhausted
+    ? 'All Cartesia keys are exhausted'
+    : status.activeLabel
+      ? `${status.activeLabel} is active`
+      : 'No Cartesia key use observed yet';
+  const used = status.keys.filter((k) => k.status === 'exhausted');
+  return `<tr><td style="padding-top:26px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:2px solid ${tone};border-radius:12px">
+      <tr><td style="padding:15px 17px;font-family:${ff}">
+        <div style="font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:${tone}">Cartesia API keys</div>
+        <div style="font-size:18px;font-weight:800;color:${C.ink};margin-top:3px">${esc(heading)}</div>
+        <div style="font-size:13px;color:${C.sub};line-height:1.6;margin-top:6px">
+          ${status.activeSince ? `Active since ${esc(fmtTs(status.activeSince))}.<br>` : ''}
+          ${status.lastSwitchedAt ? `Last switched ${esc(fmtTs(status.lastSwitchedAt))} (${esc(ago(status.lastSwitchedAt))}).<br>` : ''}
+          ${status.remainingAfterActive} key${status.remainingAfterActive === 1 ? '' : 's'} remaining after the active key.<br>
+          ${used.map((k) => `${esc(k.label)} used — exhausted ${esc(fmtTs(k.exhaustedAt))}; estimated return ${esc(fmtTs(k.availableAt))}.<br>`).join('')}
+          ${status.firstReturnsAt ? `First key estimated back: ${esc(fmtTs(status.firstReturnsAt))}.<br>` : ''}
+          ${status.projectedRunOutAt ? `<strong>At the recent rate, ${esc(status.activeLabel)} might run out on ${esc(dateOnly(status.projectedRunOutAt))}.</strong><br>` : ''}
+          ${status.allExhausted ? '<strong>OpenAI fallback is active.</strong>' : ''}
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>`;
 }
 
 // Palette
@@ -798,6 +860,7 @@ export function renderEmailHtml(d: MorningData, links?: { dashboard?: string; re
               ${d.excluded.length ? `Internal/test accounts hidden: ${esc(d.excluded.join(', '))}.<br>` : ''}
               "New" = first-ever use in this window. "Returning" = used MenuVoice before and came back.
             </td></tr>
+            ${renderCartesiaEmailHtml(d.cartesia, ff)}
           </table>
         </td></tr>
 
