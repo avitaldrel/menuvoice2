@@ -173,9 +173,21 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The PAGE is the scroll container (not the centered column), so scrolling
+   works from anywhere in the viewport — including the side gutters on wide
+   screens — not just over the middle content. */
 html, body, #root {
-  height: 100%;
   margin: 0;
+}
+html {
+  height: 100%;
+}
+body {
+  min-height: 100%;
+}
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 body {
@@ -258,9 +270,6 @@ body::before {
 /* ── Screen ─────────────────────────────────────── */
 .screen {
   flex: 1;
-  min-height: 0;        /* allows flex child to scroll rather than overflow */
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 16px;
