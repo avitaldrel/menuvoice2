@@ -9,7 +9,8 @@ export type Route =
   | { name: 'find' }
   | { name: 'conversation'; menu: ParsedMenu; restaurantName: string; source?: 'url' | 'find' | 'photo' | 'saved'; provenance?: MenuProvenance }
   | { name: 'saved' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'tutorial' };
 
 export type Navigate = (route: Route) => void;
 

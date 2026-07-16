@@ -1,7 +1,12 @@
 // Allergen detection + explicit/inferred confidence (pure functions).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeItemAllergens, allergenDisclaimer, dishSpokenLabel } from '../src/lib/allergens.ts';
+import {
+  analyzeItemAllergens,
+  allergenAlertText,
+  allergenDisclaimer,
+  dishSpokenLabel,
+} from '../src/lib/allergens.ts';
 import type { MenuItem } from '../src/types.ts';
 
 test('blocks a dish containing a profile allergen', () => {
@@ -40,8 +45,22 @@ test('allergenDisclaimer reports explicit declarations as listed', () => {
   assert.match(d, /The restaurant lists soy/);
 });
 
+test('personal allergen alert keeps inferred matches uncertain', () => {
+  const alert = allergenAlertText([{ label: 'shellfish', confidence: 'inferred' }]);
+  assert.match(alert, /may contain shellfish/);
+  assert.match(alert, /does not confirm it/);
+  assert.ok(!/restaurant lists shellfish/.test(alert));
+});
+
+test('personal allergen alert identifies explicit restaurant listings', () => {
+  const alert = allergenAlertText([{ label: 'soy', confidence: 'explicit' }]);
+  assert.match(alert, /restaurant lists soy/);
+  assert.match(alert, /confirm with the restaurant/);
+});
+
 test('empty findings produce empty disclaimer', () => {
   assert.equal(allergenDisclaimer([]), '');
+  assert.equal(allergenAlertText([]), '');
 });
 
 test('dishSpokenLabel puts the dish name first and the warning before other details', () => {

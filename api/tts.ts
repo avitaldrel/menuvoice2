@@ -46,7 +46,7 @@ async function synthesizeWithCartesia(body: any): Promise<Buffer | null> {
     voice: { mode: 'id', id: voiceId },
     language: 'en',
     output_format: { container: 'mp3', sample_rate: 44100, bit_rate: 128000 },
-    generation_config: { speed: Number(process.env.CARTESIA_TTS_SPEED || 1) },
+    generation_config: { speed: resolveSpeechSpeed(body) },
   });
 
   // Rotate across Cartesia keys; null means every key is out of credits.
@@ -64,4 +64,17 @@ async function synthesizeWithCartesia(body: any): Promise<Buffer | null> {
   // Null (all keys exhausted) or any non-OK response -> fall back to OpenAI.
   if (!upstream || !upstream.ok) return null;
   return Buffer.from(await upstream.arrayBuffer());
+}
+
+export function resolveSpeechSpeed(
+  body: unknown,
+  configuredSpeed: string | undefined = process.env.CARTESIA_TTS_SPEED,
+): number {
+  const requested =
+    typeof body === 'object' && body !== null && typeof (body as { speed?: unknown }).speed === 'number'
+      ? (body as { speed: number }).speed
+      : Number.NaN;
+  const configured = Number(configuredSpeed);
+  const speed = Number.isFinite(requested) ? requested : Number.isFinite(configured) ? configured : 1;
+  return Math.max(0.5, Math.min(2, speed));
 }

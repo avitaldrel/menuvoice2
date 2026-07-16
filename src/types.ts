@@ -11,6 +11,10 @@ export interface UserProfile {
   ttsVoice: string;
   onboarded: boolean;
   imageLogging: boolean;
+  // Accessibility preferences.
+  theme?: AppTheme; // color scheme (default 'dark')
+  textScale?: TextScale; // global text size (default 'normal')
+  speechRate?: number; // Conversation Mode speaking speed multiplier (default 1)
 }
 
 export interface DiningHistoryEntry {
@@ -25,6 +29,12 @@ export interface DiningHistoryEntry {
   turnCount: number;
   menuItemCount?: number;
 }
+// Color schemes tuned for different low-vision needs:
+//   dark          – light text on near-black (glare/photophobia friendly)
+//   light         – near-black text on white (maximum edge contrast)
+//   high-contrast – bright yellow on pure black (classic low-vision high contrast)
+export type AppTheme = 'dark' | 'light' | 'high-contrast';
+export type TextScale = 'normal' | 'large' | 'xlarge';
 
 export interface MenuItem {
   name: string;
@@ -117,4 +127,7 @@ export const EMPTY_PROFILE: UserProfile = {
   ttsVoice: 'shimmer',
   onboarded: false,
   imageLogging: false,
+  theme: 'dark',
+  textScale: 'normal',
+  speechRate: 1,
 };
