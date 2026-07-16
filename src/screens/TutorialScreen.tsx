@@ -16,44 +16,48 @@ interface Step {
 const STEPS: Step[] = [
   {
     title: 'Get a menu',
-    body: 'From the home screen, choose Scan a Menu to read a paper menu with your camera, Find a Menu to search by restaurant name or paste a link, or open one from Saved Restaurants. To explore without a real menu, choose Demo Menu.',
+    body: 'Scan a paper menu with your camera, search for one online, or open a saved menu. Demo Menu is for practice.',
   },
   {
     title: 'Talk with MenuVoice',
-    body: 'Once a menu is open you start in Conversation Mode. The microphone is on and MenuVoice talks back. Ask anything, like "What is in the carbonara?" or "What do you recommend without shellfish?" Tap the big button to talk, and tap it again when you are done.',
+    body: 'When a menu opens, the mic is on. Ask anything, like "What is in the carbonara?" Tap the big button to talk.',
   },
   {
-    title: 'Browse the menu quietly',
-    body: 'Switch to Browse Menu to read on your own with your screen reader while MenuVoice stays silent. The menu is grouped into categories like Starters and Mains. Open a category to hear or read only its dishes, so you are not read the whole menu at once.',
+    title: 'Browse quietly',
+    body: 'Browse Menu is silent. Read category by category with your screen reader.',
   },
   {
     title: 'Allergy alerts',
-    body: 'Add your allergies in Settings. Any dish that may contain one of them shows an Allergy alert. MenuVoice reads the dish name, then the warning immediately, before the price and description. Dishes are never hidden, and warnings only appear for allergens you listed. Always confirm with the restaurant, since an alert may be based only on the dish description.',
+    body: 'Add allergies in Settings. Risky dishes get an alert, read first. Nothing is hidden. Always confirm with staff.',
   },
   {
     title: 'Pause anytime',
-    body: 'The Pause Voice button in the corner stops all talking and turns off the microphone at once. Tap Resume Voice to pick up right where you left off. Entering Browse Menu pauses the voice the same way.',
+    body: 'Pause Voice stops all talking and listening. Resume Voice picks up where you left off.',
   },
   {
     title: 'Make it comfortable',
-    body: 'In Settings under Accessibility you can change the text size, switch the color scheme between Dark, Light, and High contrast, and set the talking speed to Slow, Normal, or Fast. Pick whatever is easiest for you to see and hear.',
+    body: 'Set text size, color scheme, and talking speed in Settings.',
   },
 ];
 
-export default function TutorialScreen({ navigate, goBack }: ScreenProps) {
+export default function TutorialScreen({
+  navigate,
+  goBack,
+  firstRun,
+}: ScreenProps & { firstRun?: boolean }) {
   const startedRef = useRef(false);
 
   useEffect(() => {
     if (!startedRef.current) {
       startedRef.current = true;
-      track('tutorial', 'open', {});
+      track('tutorial', 'open', { metadata: { firstRun: !!firstRun } });
     }
-  }, []);
+  }, [firstRun]);
 
   return (
     <Screen>
-      <Title>How MenuVoice works</Title>
-      <Body>Six quick steps. Read them with your screen reader, then try the demo menu.</Body>
+      <Title>{firstRun ? 'Welcome to MenuVoice' : 'How MenuVoice works'}</Title>
+      <Body>Six quick steps.</Body>
 
       <ol className="tutorial-list">
         {STEPS.map((step, i) => (
@@ -67,16 +71,37 @@ export default function TutorialScreen({ navigate, goBack }: ScreenProps) {
         ))}
       </ol>
 
-      <PrimaryButton
-        label="Try the Demo Menu"
-        hint="Open a sample menu to practice, no camera needed"
-        onClick={() => {
-          import('../lib/demoMenu').then(({ DEMO_MENU, DEMO_RESTAURANT_NAME }) => {
-            navigate({ name: 'conversation', menu: DEMO_MENU, restaurantName: DEMO_RESTAURANT_NAME, source: 'photo' });
-          });
-        }}
-      />
-      <SecondaryButton label="Back" hint="Return to the previous screen" onClick={goBack} />
+      {firstRun ? (
+        <>
+          <PrimaryButton
+            label="Get started"
+            hint="Go to the home screen"
+            onClick={goBack}
+          />
+          <SecondaryButton
+            label="Try the Demo Menu"
+            hint="Open a sample menu to practice, no camera needed"
+            onClick={() => {
+              import('../lib/demoMenu').then(({ DEMO_MENU, DEMO_RESTAURANT_NAME }) => {
+                navigate({ name: 'conversation', menu: DEMO_MENU, restaurantName: DEMO_RESTAURANT_NAME, source: 'photo' });
+              });
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <PrimaryButton
+            label="Try the Demo Menu"
+            hint="Open a sample menu to practice, no camera needed"
+            onClick={() => {
+              import('../lib/demoMenu').then(({ DEMO_MENU, DEMO_RESTAURANT_NAME }) => {
+                navigate({ name: 'conversation', menu: DEMO_MENU, restaurantName: DEMO_RESTAURANT_NAME, source: 'photo' });
+              });
+            }}
+          />
+          <SecondaryButton label="Back" hint="Return to the previous screen" onClick={goBack} />
+        </>
+      )}
     </Screen>
   );
 }

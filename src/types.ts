@@ -12,9 +12,10 @@ export interface UserProfile {
   onboarded: boolean;
   imageLogging: boolean;
   // Accessibility preferences.
-  theme?: AppTheme; // color scheme (default 'dark')
-  textScale?: TextScale; // global text size (default 'normal')
+  theme?: AppTheme; // color scheme (default 'light': black-on-white for low vision)
+  textScale?: TextScale; // global text size (default 'large')
   speechRate?: number; // Conversation Mode speaking speed multiplier (default 1)
+  tutorialSeen?: boolean; // first-run tutorial shown once, then never auto-shown
 }
 
 export interface DiningHistoryEntry {
@@ -127,7 +128,9 @@ export const EMPTY_PROFILE: UserProfile = {
   ttsVoice: 'shimmer',
   onboarded: false,
   imageLogging: false,
-  theme: 'dark',
-  textScale: 'normal',
+  // Research-backed low-vision defaults: black text on white, large type.
+  // Dark and High-contrast schemes stay one tap away in Settings.
+  theme: 'light',
+  textScale: 'large',
   speechRate: 1,
 };
