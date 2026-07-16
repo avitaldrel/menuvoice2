@@ -1,7 +1,7 @@
 const CARTESIA_VERSION = '2026-03-01';
 const CACHE_MS = 5 * 60 * 1000;
 
-export type CartesiaCreditState = 'live' | 'missing-admin-key' | 'missing-billing-settings' | 'error';
+export type CartesiaCreditState = 'live' | 'tracked' | 'missing-admin-key' | 'missing-billing-settings' | 'error';
 
 export interface CartesiaCreditStatus {
   state: CartesiaCreditState;

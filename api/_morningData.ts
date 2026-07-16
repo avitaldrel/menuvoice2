@@ -591,7 +591,10 @@ export function renderCartesiaText(status: CartesiaStatus): string {
   if (status.allExhausted) {
     lines.push(`  OUT OF CARTESIA KEYS${status.allExhaustedAt ? ` since ${fmtTs(status.allExhaustedAt)}` : ''}. OpenAI fallback is active.`);
   } else {
-    lines.push(`  Active: ${status.activeLabel ?? 'not observed yet'}${status.activeSince ? ` since ${fmtTs(status.activeSince)}` : ''}`);
+    const active = status.activeEmail
+      ? `${status.activeEmail}${status.activeLabel ? ` (${status.activeLabel})` : ''}`
+      : status.activeLabel ?? 'not observed yet';
+    lines.push(`  Active: ${active}${status.activeSince ? ` since ${fmtTs(status.activeSince)}` : ''}`);
   }
   lines.push(`  Remaining after active key: ${status.remainingAfterActive}`);
   if (status.lastSwitchedAt) lines.push(`  Last switched: ${fmtTs(status.lastSwitchedAt)} (${ago(status.lastSwitchedAt)})`);
@@ -602,18 +605,41 @@ export function renderCartesiaText(status: CartesiaStatus): string {
   if (status.projectedRunOutAt) {
     lines.push(`  At the recent rate, ${status.activeLabel} might run out on ${dateOnly(status.projectedRunOutAt)} (${status.projectionBasis}).`);
   }
+  lines.push('  Full account breakdown:');
+  for (const key of status.keys) {
+    const account = key.email ? `${key.email} (${key.label})` : key.label;
+    const approximate = key.credits.state === 'tracked' ? 'estimated ' : '';
+    const remaining = key.credits.remaining == null ? 'unknown' : key.credits.remaining.toLocaleString('en-US');
+    const used = key.credits.used == null ? 'unknown' : key.credits.used.toLocaleString('en-US');
+    const limit = key.credits.limit == null ? 'unknown' : key.credits.limit.toLocaleString('en-US');
+    lines.push(`    ${account} | ${key.status} | ${approximate}${remaining} credits left of ${limit} | ${approximate}${used} used`);
+  }
   if (status.storage === 'memory') lines.push('  Status history is temporary until Redis/KV is configured.');
   return lines.join('\n');
 }
 
-function renderCartesiaEmailHtml(status: CartesiaStatus, ff: string): string {
+export function renderCartesiaEmailHtml(status: CartesiaStatus, ff: string): string {
   const tone = status.allExhausted ? C.red : status.activeSlot ? C.greenDk : C.amber;
+  const active = status.activeEmail
+    ? `${status.activeEmail}${status.activeLabel ? ` (${status.activeLabel})` : ''}`
+    : status.activeLabel;
   const heading = status.allExhausted
     ? 'All Cartesia keys are exhausted'
-    : status.activeLabel
-      ? `${status.activeLabel} is active`
+    : active
+      ? `${active} is active`
       : 'No Cartesia key use observed yet';
   const used = status.keys.filter((k) => k.status === 'exhausted');
+  const breakdown = status.keys.map((key) => {
+    const account = key.email ? `${key.email} (${key.label})` : key.label;
+    const source = key.credits.state === 'tracked' ? 'MenuVoice tracked estimate' : 'Cartesia usage API';
+    const remaining = key.credits.remaining == null ? 'unknown' : key.credits.remaining.toLocaleString('en-US');
+    const usedCredits = key.credits.used == null ? 'unknown' : key.credits.used.toLocaleString('en-US');
+    const limit = key.credits.limit == null ? 'unknown' : key.credits.limit.toLocaleString('en-US');
+    return `<div style="border-top:1px solid ${C.line};padding:9px 0 7px">
+      <strong style="color:${C.ink}">${esc(account)}</strong><br>
+      <span style="color:${C.sub}">${esc(key.status)} &middot; ${esc(remaining)} credits left of ${esc(limit)} &middot; ${esc(usedCredits)} used<br>${esc(source)}</span>
+    </div>`;
+  }).join('');
   return `<tr><td style="padding-top:26px">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:2px solid ${tone};border-radius:12px">
       <tr><td style="padding:15px 17px;font-family:${ff}">
@@ -628,6 +654,8 @@ function renderCartesiaEmailHtml(status: CartesiaStatus, ff: string): string {
           ${status.projectedRunOutAt ? `<strong>At the recent rate, ${esc(status.activeLabel)} might run out on ${esc(dateOnly(status.projectedRunOutAt))}.</strong><br>` : ''}
           ${status.allExhausted ? '<strong>OpenAI fallback is active.</strong>' : ''}
         </div>
+        <div style="font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:${C.sub};margin-top:14px">Full account breakdown</div>
+        <div style="font-size:13px;line-height:1.5">${breakdown}</div>
       </td></tr>
     </table>
   </td></tr>`;
