@@ -3,12 +3,15 @@ import { getCartesiaCreditStatus, type CartesiaCreditStatus } from './_cartesiaC
 
 const STATE_KEY = 'menuvoice:cartesia:key-rotation:v1';
 const DEFAULT_RECOVERY_HOURS = 30 * 24;
+const DEFAULT_FREE_CREDITS = 20_000;
 
 export interface CartesiaSlotState {
   activeSince?: string;
   lastSuccessAt?: string;
   exhaustedAt?: string;
   availableAt?: string;
+  trackedCreditsUsed?: number;
+  creditTrackingStartedAt?: string;
 }
 
 export interface CartesiaRotationState {
@@ -111,7 +114,11 @@ async function writeState(state: CartesiaRotationState, redis: Redis | null): Pr
   catch (error) { console.warn('[MenuVoice] Cartesia rotation state write failed:', error); }
 }
 
-export async function recordCartesiaSuccess(slot: number, now = new Date()): Promise<void> {
+export async function recordCartesiaSuccess(
+  slot: number,
+  now = new Date(),
+  estimatedCredits = 0,
+): Promise<void> {
   const { state, redis } = await readState();
   const at = now.toISOString();
   const changed = state.activeSlot !== slot;
@@ -126,9 +133,17 @@ export async function recordCartesiaSuccess(slot: number, now = new Date()): Pro
     slotState.activeSince = at;
   }
 
-  slotState.lastSuccessAt = at;
-  if (slotState.availableAt && Date.parse(slotState.availableAt) <= now.getTime()) {
+  const recovered = !!slotState.availableAt && Date.parse(slotState.availableAt) <= now.getTime();
+  if (recovered) {
     delete slotState.availableAt;
+    delete slotState.exhaustedAt;
+    slotState.trackedCreditsUsed = 0;
+    slotState.creditTrackingStartedAt = at;
+  }
+  slotState.lastSuccessAt = at;
+  if (estimatedCredits > 0) {
+    slotState.creditTrackingStartedAt ??= at;
+    slotState.trackedCreditsUsed = Math.max(0, slotState.trackedCreditsUsed ?? 0) + estimatedCredits;
   }
   state.slots[String(slot)] = slotState;
   state.activeSlot = slot;
@@ -159,6 +174,7 @@ export function summarizeCartesiaState(
   storage: 'redis' | 'memory' = 'memory',
   emails: Array<string | null> = [],
   credits: CartesiaCreditStatus[] = [],
+  creditLimits: number[] = [],
 ): CartesiaStatus {
   const nowMs = now.getTime();
   const keys: CartesiaKeyStatus[] = [];
@@ -166,20 +182,32 @@ export function summarizeCartesiaState(
     const s = state.slots[String(slot)] ?? {};
     const unavailable = !!s.availableAt && Date.parse(s.availableAt) > nowMs;
     const active = state.activeSlot === slot && !unavailable;
+    const rotationStatus = active ? 'active' : unavailable ? 'exhausted' : 'available';
+    const configuredCredits = credits[slot - 1];
+    const limit = Number.isFinite(creditLimits[slot - 1]) && creditLimits[slot - 1] > 0
+      ? creditLimits[slot - 1]
+      : DEFAULT_FREE_CREDITS;
+    const trackedUsed = Math.max(0, s.trackedCreditsUsed ?? 0);
+    const trackedCredits: CartesiaCreditStatus = {
+      state: 'tracked',
+      used: trackedUsed,
+      limit,
+      remaining: unavailable ? 0 : Math.max(0, limit - trackedUsed),
+      periodStart: s.creditTrackingStartedAt ?? null,
+      periodEnd: null,
+      checkedAt: s.lastSuccessAt ?? null,
+      message: 'Estimated from successful MenuVoice TTS requests. Cartesia may vary slightly.',
+    };
     keys.push({
       slot,
       label: `Key ${slot}`,
       email: emails[slot - 1] ?? null,
-      status: active ? 'active' : unavailable ? 'exhausted' : 'available',
+      status: rotationStatus,
       activeSince: s.activeSince ?? null,
       lastSuccessAt: s.lastSuccessAt ?? null,
       exhaustedAt: s.exhaustedAt ?? null,
       availableAt: unavailable ? s.availableAt ?? null : null,
-      credits: credits[slot - 1] ?? {
-        state: 'missing-admin-key', used: null, limit: null, remaining: null,
-        periodStart: null, periodEnd: null, checkedAt: null,
-        message: 'Add the Cartesia admin API key for this account.',
-      },
+      credits: configuredCredits?.state === 'live' ? configuredCredits : trackedCredits,
     });
   }
 
@@ -231,6 +259,10 @@ export async function getCartesiaStatus(configured: number): Promise<CartesiaSta
   const credits = await Promise.all(
     Array.from({ length: configured }, (_, index) => getCartesiaCreditStatus(index + 1, now)),
   );
+  const creditLimits = Array.from({ length: configured }, (_, index) => {
+    const configuredLimit = Number(process.env[`CARTESIA_MONTHLY_CREDITS_${index + 1}`]);
+    return Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : DEFAULT_FREE_CREDITS;
+  });
   return summarizeCartesiaState(
     state,
     configured,
@@ -239,5 +271,6 @@ export async function getCartesiaStatus(configured: number): Promise<CartesiaSta
     redis ? 'redis' : 'memory',
     emails,
     credits,
+    creditLimits,
   );
 }

@@ -51,6 +51,7 @@ export function cartesiaApiKeys(): string[] {
 export async function withCartesiaKey(
   service: 'tts' | 'stt' | 'realtime-stt-token',
   attempt: (key: string) => Promise<Response>,
+  estimatedCreditsOnSuccess = 0,
 ): Promise<Response | null> {
   const keys = cartesiaKeyEntries();
   if (keys.length === 0) return null;
@@ -77,7 +78,7 @@ export async function withCartesiaKey(
     }
 
     if (res.ok) {
-      await recordCartesiaSuccess(slot);
+      await recordCartesiaSuccess(slot, new Date(), estimatedCreditsOnSuccess);
       return res;
     }
 

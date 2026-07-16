@@ -50,8 +50,9 @@ async function synthesizeWithCartesia(body: any): Promise<Buffer | null> {
   });
 
   // Rotate across Cartesia keys; null means every key is out of credits.
-  const upstream = await withCartesiaKey('tts', (key) =>
-    fetch('https://api.cartesia.ai/tts/bytes', {
+  const upstream = await withCartesiaKey(
+    'tts',
+    (key) => fetch('https://api.cartesia.ai/tts/bytes', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${key}`,
@@ -60,6 +61,7 @@ async function synthesizeWithCartesia(body: any): Promise<Buffer | null> {
       },
       body: payload,
     }),
+    transcript.length,
   );
   // Null (all keys exhausted) or any non-OK response -> fall back to OpenAI.
   if (!upstream || !upstream.ok) return null;

@@ -138,19 +138,23 @@ Upstash/Vercel KV connection for durable history. `CARTESIA_KEY_RECOVERY_HOURS` 
 the estimated return/retry interval (default 720 hours, or 30 days); this is explicitly
 shown as an estimate because Cartesia's credit-usage API does not expose plan reset dates.
 
-The protected dashboard can also show the account email, live credits used, and calculated
-credits left for every numbered key. Configure matching numbered variables for each slot:
+The protected dashboard and morning email show the account email, active key, credits used,
+and credits left for every numbered key. Each free key defaults to a 20,000-credit allowance.
+Without an admin key, MenuVoice tracks an estimate by subtracting successful TTS requests at
+approximately one credit per input character. Tracking starts when this version is deployed,
+does not include use outside MenuVoice, and may vary slightly from Cartesia's final count.
+
+Configure matching numbered variables for each slot:
 
 - `CARTESIA_API_KEY_EMAIL_1` - account label shown in the protected dashboard.
-- `CARTESIA_ADMIN_API_KEY_1` - Cartesia admin key used server-side for `/usage/credits`.
-- `CARTESIA_MONTHLY_CREDITS_1` - the account's monthly credit allowance.
+- `CARTESIA_ADMIN_API_KEY_1` - optional Cartesia admin key for authoritative `/usage/credits` data.
+- `CARTESIA_MONTHLY_CREDITS_1` - optional override for the default 20,000-credit allowance.
 - `CARTESIA_CREDIT_RESET_DAY_1` - UTC day of month when that allowance resets (`1`-`31`).
 
 Repeat through the highest configured key slot. Standard `sk_car_...` keys cannot read the
-usage endpoint. Cartesia reports usage rather than a direct remaining-balance field, so the
-dashboard labels credits left as a calculation from live usage and these billing settings.
-Values are cached for five minutes to keep the auto-refreshing page from repeatedly hitting
-Cartesia. No API or admin key value is returned to the browser.
+usage endpoint. If admin keys are supplied, the dashboard labels those balances as Cartesia
+usage API data and caches them for five minutes. Otherwise it labels them as MenuVoice tracked
+estimates. No API or admin key value is returned to the browser or email.
 
 #### Automated daily email (`/api/cron-morning`)
 

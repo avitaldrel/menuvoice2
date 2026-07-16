@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { summarizeCartesiaState, type CartesiaRotationState } from '../api/_cartesiaStatus.ts';
 import { creditPeriod, getCartesiaCreditStatus, sumCreditUsage } from '../api/_cartesiaCredits.ts';
-import { renderCartesiaText } from '../api/_morningData.ts';
+import { renderCartesiaEmailHtml, renderCartesiaText } from '../api/_morningData.ts';
 import { shouldSendMorningReport } from '../api/cron-morning.ts';
 import dashboardHandler from '../api/dashboard.ts';
 
@@ -14,7 +14,12 @@ test('Cartesia status exposes slots without exposing API key values', () => {
     allExhaustedAt: null,
     slots: {
       '1': { activeSince: '2026-07-01T12:00:00.000Z', exhaustedAt: '2026-07-14T12:00:00.000Z', availableAt: '2026-08-13T12:00:00.000Z' },
-      '2': { activeSince: '2026-07-14T12:00:00.000Z', lastSuccessAt: '2026-07-16T12:00:00.000Z' },
+      '2': {
+        activeSince: '2026-07-14T12:00:00.000Z',
+        lastSuccessAt: '2026-07-16T12:00:00.000Z',
+        trackedCreditsUsed: 1250,
+        creditTrackingStartedAt: '2026-07-14T12:00:00.000Z',
+      },
     },
   };
   const result = summarizeCartesiaState(
@@ -31,7 +36,18 @@ test('Cartesia status exposes slots without exposing API key values', () => {
   assert.equal(result.remainingAfterActive, 1);
   assert.equal(result.keys[0].status, 'exhausted');
   assert.equal(result.keys[2].status, 'available');
+  assert.equal(result.keys[1].credits.state, 'tracked');
+  assert.equal(result.keys[1].credits.used, 1250);
+  assert.equal(result.keys[1].credits.remaining, 18750);
+  assert.equal(result.keys[2].credits.remaining, 20000);
   assert.equal(result.projectedRunOutAt, '2026-07-27T12:00:00.000Z');
+  const report = renderCartesiaText(result);
+  assert.match(report, /Active: second@example.com \(Key 2\)/);
+  assert.match(report, /second@example.com \(Key 2\) \| active \| estimated 18,750 credits left of 20,000/);
+  const email = renderCartesiaEmailHtml(result, 'Arial,sans-serif');
+  assert.match(email, /second@example.com \(Key 2\) is active/);
+  assert.match(email, /18,750 credits left of 20,000/);
+  assert.match(email, /MenuVoice tracked estimate/);
   assert.equal(JSON.stringify(result).includes('sk_car'), false);
 });
 
@@ -138,5 +154,7 @@ test('analytics dashboard shell includes the accessible Cartesia status section'
   assert.match(body, /renderCartesia\(d\)/);
   assert.match(body, /Account email/);
   assert.match(body, /Credits left/);
+  assert.match(body, /Balance source/);
+  assert.match(body, /Each free key starts at 20,000 credits/);
   assert.ok(body.indexOf('<h2>Cartesia API keys</h2>') > body.indexOf('<h2>Failures</h2>'));
 });
