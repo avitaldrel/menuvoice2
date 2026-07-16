@@ -5,6 +5,7 @@
 import { Redis } from '@upstash/redis';
 import { createClient } from '@vercel/postgres';
 import { cartesiaConfiguredKeyCount, getCartesiaStatus, type CartesiaStatus } from './_cartesiaStatus.js';
+import { excludeList, excludePrefixList } from './_reportExclusions.js';
 // nodemailer is imported lazily inside sendEmail() (its only use). A top-level
 // import pulls it into module load for EVERY consumer of this file — including the
 // /api/morning and /api/dashboard view endpoints — and nodemailer failing to load
@@ -83,17 +84,8 @@ export interface MorningData {
   cartesia: CartesiaStatus;
 }
 
-// Accounts we never want to see in the report (own testing + known testers).
-// Override with the REPORT_EXCLUDE_EMAILS env var (comma-separated). Lower-cased
-// + trimmed. Testers below are excluded from the report body even when they are
-// also recipients (see resolveRecipients) — so their own testing never pollutes
-// the numbers they're reading.
-export function excludeList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAILS
-    ?? '2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com';
-  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-}
-
+// Exact accounts and account-prefix rules live in _reportExclusions so the morning
+// report and dashboard always hide the same internal/test identities.
 // Who receives the daily email. The primary recipient(s) come from REPORT_EMAIL_TO
 // (a Vercel env var; defaults to the owner account). Additional recipients are
 // merged in from REPORT_EMAIL_EXTRA (defaults to the testers who asked to receive
@@ -152,12 +144,16 @@ const FAIL_DEFS: { key: string; label: string }[] = [
 async function queryFunnelRow(
   client: ReturnType<typeof createClient>,
   exclude: string[],
+  excludePrefixes: string[],
   windowSql: string,
 ): Promise<Record<string, number>> {
   const q = await client.query(
     `WITH sess AS (
        SELECT session_id,
-              bool_or(lower(user_email) = ANY($1::text[]))                       AS internal,
+              bool_or(lower(user_email) = ANY($1::text[]) OR EXISTS (
+                SELECT 1 FROM unnest($2::text[]) AS p(prefix)
+                WHERE left(lower(user_email), char_length(p.prefix)) = p.prefix
+              ))                                                                  AS internal,
               bool_or(event_name='camera_start' AND outcome IS DISTINCT FROM 'failure') AS r_camera,
               bool_or(event_name='photo_added')                                  AS r_photo,
               bool_or(event_name='analyze_start')                                AS r_analyze,
@@ -188,7 +184,7 @@ async function queryFunnelRow(
        (SELECT count(*) FROM sess WHERE NOT internal AND r_saved)     AS saved,
        fails.fail_camera, fails.fail_ocr, fails.fail_ask, fails.fail_stt
      FROM fails`,
-    [exclude]
+    [exclude, excludePrefixes]
   );
   const row = q.rows[0] ?? {};
   const out: Record<string, number> = {};
@@ -338,13 +334,18 @@ async function getWebsiteReport(hours: number): Promise<WebsiteReport> {
 export async function buildMorningReport(hours: number): Promise<MorningData> {
   hours = Math.min(Math.max(hours, 1), 24 * 365);
   const exclude = excludeList();
+  const excludePrefixes = excludePrefixList();
   const windowLabel = hours === 24 ? 'last 24 hours' : hours % 24 === 0 ? `last ${hours / 24} days` : `last ${hours} h`;
   const w = `now() - interval '${hours} hours'`;
-  // Parameterized exclusion: $1 = lower-cased email array. Safe against injection.
+  // Parameterized exclusion: $1 = exact emails; $2 = identity prefixes. Safe
+  // against injection and broad enough to hide throwaway Avi account variants.
   // NOTE: a session's pre-login rows have NULL email; the per-user query keys off
   // the rows that DO carry the email, so a logged-in user is counted once — there
   // is no separate "anonymous session" double-count.
-  const notExcluded = `lower(user_email) <> ALL($1::text[])`;
+  const notExcluded = `lower(user_email) <> ALL($1::text[]) AND NOT EXISTS (
+    SELECT 1 FROM unnest($2::text[]) AS p(prefix)
+    WHERE left(lower(user_email), char_length(p.prefix)) = p.prefix
+  )`;
   const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());
 
   return withClient(async (client) => {
@@ -374,7 +375,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
        SELECT win.*, life.first_ts, life.lifetime_sessions, (life.first_ts > ${w}) AS is_new
        FROM win JOIN life USING (user_email)
        ORDER BY is_new DESC, win.last_in_window DESC`,
-      [exclude]
+      [exclude, excludePrefixes]
     );
 
     // Previous window of equal length [now-2h, now-h] for day-over-day deltas.
@@ -401,12 +402,12 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
          (SELECT count(*) FROM life
             WHERE first_ts >  now() - interval '${hours * 2} hours'
               AND first_ts <= now() - interval '${hours} hours')           AS new_users`,
-      [exclude]
+      [exclude, excludePrefixes]
     );
 
     const [curF, prevF] = await Promise.all([
-      queryFunnelRow(client, exclude, `ts > ${w}`),
-      queryFunnelRow(client, exclude,
+      queryFunnelRow(client, exclude, excludePrefixes, `ts > ${w}`),
+      queryFunnelRow(client, exclude, excludePrefixes,
         `ts > now() - interval '${hours * 2} hours' AND ts <= now() - interval '${hours} hours'`),
     ]);
 
@@ -469,7 +470,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       totals,
       newUsers,
       returningUsers: rows.filter((u) => !u.is_new),
-      excluded: exclude,
+      excluded: [...exclude, ...excludePrefixes.map((prefix) => `${prefix}*`)],
       prev,
       deltas,
       funnel,
