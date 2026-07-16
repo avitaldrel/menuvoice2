@@ -9,18 +9,18 @@ export function excludeList(): string[] {
   return raw.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
 }
 
-// Prefixes catch throwaway variants without requiring a new exact-email entry for
-// every account. "avi" excludes avi274 and avi1@gmail.com, but not david@gmail.com.
-export function excludePrefixList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAIL_PREFIXES ?? 'avi';
-  return raw.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+// Match only the throwaway shape "avi" plus optional digits, ending there or at
+// the email separator. This excludes avi274 and avi1@gmail.com while preserving
+// Avital..., Ravital..., and labels such as "Avi Trail Personal".
+export function excludePatternList(): string[] {
+  return ['^avi[0-9]*(@|$)'];
 }
 
 export function isExcludedIdentity(
   identity: string,
   emails = excludeList(),
-  prefixes = excludePrefixList(),
+  patterns = excludePatternList(),
 ): boolean {
   const normalized = identity.trim().toLowerCase();
-  return emails.includes(normalized) || prefixes.some((prefix) => normalized.startsWith(prefix));
+  return emails.includes(normalized) || patterns.some((pattern) => new RegExp(pattern, 'i').test(normalized));
 }

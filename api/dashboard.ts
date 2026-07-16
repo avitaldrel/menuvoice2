@@ -21,7 +21,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@vercel/postgres';
 import { cartesiaConfiguredKeyCount, getCartesiaStatus } from './_cartesiaStatus.js';
-import { excludeList, excludePrefixList } from './_reportExclusions.js';
+import { excludeList, excludePatternList } from './_reportExclusions.js';
 
 // This endpoint deliberately does NOT import ./_morningData — doing so pulls that
 // module's whole dependency graph into load, which has crashed view endpoints
@@ -100,17 +100,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Internal/test accounts (own testing) are excluded everywhere so the dashboard
   // reflects real usage and agrees with the morning report. $1 = exact emails and
-  // $2 = prefixes; anonymous events (NULL email) always pass. Both are parameterized.
+  // $2 = identity patterns; anonymous events (NULL email) always pass. Both are parameterized.
   const exclude = excludeList();
-  const excludePrefixes = excludePrefixList();
-  const prefixExcluded = (column: string) => `EXISTS (
-    SELECT 1 FROM unnest($2::text[]) AS p(prefix)
-    WHERE left(lower(${column}), char_length(p.prefix)) = p.prefix
-  )`;
-  const keep = `(user_email IS NULL OR (lower(user_email) <> ALL($1::text[]) AND NOT ${prefixExcluded('user_email')}))`;
-  const keepE = `(e.user_email IS NULL OR (lower(e.user_email) <> ALL($1::text[]) AND NOT ${prefixExcluded('e.user_email')}))`;
-  const keepSignedIn = `user_email IS NOT NULL AND lower(user_email) <> ALL($1::text[]) AND NOT ${prefixExcluded('user_email')}`;
-  const queryParams = [exclude, excludePrefixes];
+  const excludePatterns = excludePatternList();
+  const patternExcluded = (column: string) => `(lower(${column}) ~ ANY($2::text[]))`;
+  const keep = `(user_email IS NULL OR (lower(user_email) <> ALL($1::text[]) AND NOT ${patternExcluded('user_email')}))`;
+  const keepE = `(e.user_email IS NULL OR (lower(e.user_email) <> ALL($1::text[]) AND NOT ${patternExcluded('e.user_email')}))`;
+  const keepSignedIn = `user_email IS NOT NULL AND lower(user_email) <> ALL($1::text[]) AND NOT ${patternExcluded('user_email')}`;
+  const queryParams = [exclude, excludePatterns];
 
   try {
     const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());

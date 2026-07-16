@@ -5,7 +5,7 @@
 import { Redis } from '@upstash/redis';
 import { createClient } from '@vercel/postgres';
 import { cartesiaConfiguredKeyCount, getCartesiaStatus, type CartesiaStatus } from './_cartesiaStatus.js';
-import { excludeList, excludePrefixList } from './_reportExclusions.js';
+import { excludeList, excludePatternList } from './_reportExclusions.js';
 // nodemailer is imported lazily inside sendEmail() (its only use). A top-level
 // import pulls it into module load for EVERY consumer of this file — including the
 // /api/morning and /api/dashboard view endpoints — and nodemailer failing to load
@@ -144,16 +144,14 @@ const FAIL_DEFS: { key: string; label: string }[] = [
 async function queryFunnelRow(
   client: ReturnType<typeof createClient>,
   exclude: string[],
-  excludePrefixes: string[],
+  excludePatterns: string[],
   windowSql: string,
 ): Promise<Record<string, number>> {
   const q = await client.query(
     `WITH sess AS (
        SELECT session_id,
-              bool_or(lower(user_email) = ANY($1::text[]) OR EXISTS (
-                SELECT 1 FROM unnest($2::text[]) AS p(prefix)
-                WHERE left(lower(user_email), char_length(p.prefix)) = p.prefix
-              ))                                                                  AS internal,
+              bool_or(lower(user_email) = ANY($1::text[])
+                OR lower(user_email) ~ ANY($2::text[]))                            AS internal,
               bool_or(event_name='camera_start' AND outcome IS DISTINCT FROM 'failure') AS r_camera,
               bool_or(event_name='photo_added')                                  AS r_photo,
               bool_or(event_name='analyze_start')                                AS r_analyze,
@@ -184,7 +182,7 @@ async function queryFunnelRow(
        (SELECT count(*) FROM sess WHERE NOT internal AND r_saved)     AS saved,
        fails.fail_camera, fails.fail_ocr, fails.fail_ask, fails.fail_stt
      FROM fails`,
-    [exclude, excludePrefixes]
+    [exclude, excludePatterns]
   );
   const row = q.rows[0] ?? {};
   const out: Record<string, number> = {};
@@ -334,18 +332,16 @@ async function getWebsiteReport(hours: number): Promise<WebsiteReport> {
 export async function buildMorningReport(hours: number): Promise<MorningData> {
   hours = Math.min(Math.max(hours, 1), 24 * 365);
   const exclude = excludeList();
-  const excludePrefixes = excludePrefixList();
+  const excludePatterns = excludePatternList();
   const windowLabel = hours === 24 ? 'last 24 hours' : hours % 24 === 0 ? `last ${hours / 24} days` : `last ${hours} h`;
   const w = `now() - interval '${hours} hours'`;
-  // Parameterized exclusion: $1 = exact emails; $2 = identity prefixes. Safe
-  // against injection and broad enough to hide throwaway Avi account variants.
+  // Parameterized exclusion: $1 = exact emails; $2 = identity patterns. Safe
+  // against injection and narrow enough to preserve non-test Avi names.
   // NOTE: a session's pre-login rows have NULL email; the per-user query keys off
   // the rows that DO carry the email, so a logged-in user is counted once — there
   // is no separate "anonymous session" double-count.
-  const notExcluded = `lower(user_email) <> ALL($1::text[]) AND NOT EXISTS (
-    SELECT 1 FROM unnest($2::text[]) AS p(prefix)
-    WHERE left(lower(user_email), char_length(p.prefix)) = p.prefix
-  )`;
+  const notExcluded = `lower(user_email) <> ALL($1::text[])
+    AND NOT (lower(user_email) ~ ANY($2::text[]))`;
   const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());
 
   return withClient(async (client) => {
@@ -375,7 +371,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
        SELECT win.*, life.first_ts, life.lifetime_sessions, (life.first_ts > ${w}) AS is_new
        FROM win JOIN life USING (user_email)
        ORDER BY is_new DESC, win.last_in_window DESC`,
-      [exclude, excludePrefixes]
+      [exclude, excludePatterns]
     );
 
     // Previous window of equal length [now-2h, now-h] for day-over-day deltas.
@@ -402,12 +398,12 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
          (SELECT count(*) FROM life
             WHERE first_ts >  now() - interval '${hours * 2} hours'
               AND first_ts <= now() - interval '${hours} hours')           AS new_users`,
-      [exclude, excludePrefixes]
+      [exclude, excludePatterns]
     );
 
     const [curF, prevF] = await Promise.all([
-      queryFunnelRow(client, exclude, excludePrefixes, `ts > ${w}`),
-      queryFunnelRow(client, exclude, excludePrefixes,
+      queryFunnelRow(client, exclude, excludePatterns, `ts > ${w}`),
+      queryFunnelRow(client, exclude, excludePatterns,
         `ts > now() - interval '${hours * 2} hours' AND ts <= now() - interval '${hours} hours'`),
     ]);
 
@@ -470,7 +466,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       totals,
       newUsers,
       returningUsers: rows.filter((u) => !u.is_new),
-      excluded: [...exclude, ...excludePrefixes.map((prefix) => `${prefix}*`)],
+      excluded: [...exclude, 'avi plus optional numbers'],
       prev,
       deltas,
       funnel,
