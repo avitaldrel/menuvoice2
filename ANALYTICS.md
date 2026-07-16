@@ -138,6 +138,20 @@ Upstash/Vercel KV connection for durable history. `CARTESIA_KEY_RECOVERY_HOURS` 
 the estimated return/retry interval (default 720 hours, or 30 days); this is explicitly
 shown as an estimate because Cartesia's credit-usage API does not expose plan reset dates.
 
+The protected dashboard can also show the account email, live credits used, and calculated
+credits left for every numbered key. Configure matching numbered variables for each slot:
+
+- `CARTESIA_API_KEY_EMAIL_1` - account label shown in the protected dashboard.
+- `CARTESIA_ADMIN_API_KEY_1` - Cartesia admin key used server-side for `/usage/credits`.
+- `CARTESIA_MONTHLY_CREDITS_1` - the account's monthly credit allowance.
+- `CARTESIA_CREDIT_RESET_DAY_1` - UTC day of month when that allowance resets (`1`-`31`).
+
+Repeat through the highest configured key slot. Standard `sk_car_...` keys cannot read the
+usage endpoint. Cartesia reports usage rather than a direct remaining-balance field, so the
+dashboard labels credits left as a calculation from live usage and these billing settings.
+Values are cached for five minutes to keep the auto-refreshing page from repeatedly hitting
+Cartesia. No API or admin key value is returned to the browser.
+
 #### Automated daily email (`/api/cron-morning`)
 
 A Vercel Cron (configured in `vercel.json`, runs `0 11 * * *` = 11:00 UTC =

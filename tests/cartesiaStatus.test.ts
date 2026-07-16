@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { summarizeCartesiaState, type CartesiaRotationState } from '../api/_cartesiaStatus.ts';
+import { creditPeriod, getCartesiaCreditStatus, sumCreditUsage } from '../api/_cartesiaCredits.ts';
 import { renderCartesiaText } from '../api/_morningData.ts';
 import { shouldSendMorningReport } from '../api/cron-morning.ts';
 import dashboardHandler from '../api/dashboard.ts';
@@ -16,13 +17,75 @@ test('Cartesia status exposes slots without exposing API key values', () => {
       '2': { activeSince: '2026-07-14T12:00:00.000Z', lastSuccessAt: '2026-07-16T12:00:00.000Z' },
     },
   };
-  const result = summarizeCartesiaState(state, 3, new Date('2026-07-16T12:00:00.000Z'), 720, 'redis');
+  const result = summarizeCartesiaState(
+    state,
+    3,
+    new Date('2026-07-16T12:00:00.000Z'),
+    720,
+    'redis',
+    ['first@example.com', 'second@example.com', 'third@example.com'],
+  );
   assert.equal(result.activeLabel, 'Key 2');
+  assert.equal(result.activeEmail, 'second@example.com');
+  assert.equal(result.keys[1].email, 'second@example.com');
   assert.equal(result.remainingAfterActive, 1);
   assert.equal(result.keys[0].status, 'exhausted');
   assert.equal(result.keys[2].status, 'available');
   assert.equal(result.projectedRunOutAt, '2026-07-27T12:00:00.000Z');
   assert.equal(JSON.stringify(result).includes('sk_car'), false);
+});
+
+test('Cartesia billing period follows the configured monthly reset day', () => {
+  const current = creditPeriod(new Date('2026-07-16T12:00:00.000Z'), 10);
+  assert.equal(current.start.toISOString(), '2026-07-10T00:00:00.000Z');
+  assert.equal(current.end.toISOString(), '2026-08-10T00:00:00.000Z');
+
+  const previous = creditPeriod(new Date('2026-07-02T12:00:00.000Z'), 10);
+  assert.equal(previous.start.toISOString(), '2026-06-10T00:00:00.000Z');
+  assert.equal(previous.end.toISOString(), '2026-07-10T00:00:00.000Z');
+});
+
+test('Cartesia usage totals are summed without estimating missing data', () => {
+  assert.equal(sumCreditUsage({ data: [{ credits: 1200 }, { credits: 980 }] }), 2180);
+  assert.equal(sumCreditUsage({ data: [{ credits: 'bad' }] }), null);
+  assert.equal(sumCreditUsage({}), null);
+});
+
+test('Cartesia credit status uses the admin usage API and configured allowance', async () => {
+  const names = [
+    'CARTESIA_ADMIN_API_KEY_9',
+    'CARTESIA_MONTHLY_CREDITS_9',
+    'CARTESIA_CREDIT_RESET_DAY_9',
+  ] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.CARTESIA_ADMIN_API_KEY_9 = 'sk_car_admin_test';
+  process.env.CARTESIA_MONTHLY_CREDITS_9 = '20000';
+  process.env.CARTESIA_CREDIT_RESET_DAY_9 = '10';
+  let requested = '';
+  try {
+    const result = await getCartesiaCreditStatus(
+      9,
+      new Date('2026-07-16T12:00:00.000Z'),
+      async (input) => {
+        requested = String(input);
+        return new Response(JSON.stringify({ data: [{ credits: 3500 }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    );
+    assert.equal(result.state, 'live');
+    assert.equal(result.used, 3500);
+    assert.equal(result.remaining, 16500);
+    assert.match(requested, /usage\/credits/);
+    assert.match(requested, /start_ts=2026-07-10/);
+    assert.equal(JSON.stringify(result).includes('sk_car_admin_test'), false);
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
 });
 
 test('Cartesia status reports complete exhaustion and first estimated return', () => {
@@ -73,4 +136,7 @@ test('analytics dashboard shell includes the accessible Cartesia status section'
   assert.match(body, /<h2>Cartesia API keys<\/h2>/);
   assert.match(body, /id="cartesia" aria-live="polite"/);
   assert.match(body, /renderCartesia\(d\)/);
+  assert.match(body, /Account email/);
+  assert.match(body, /Credits left/);
+  assert.ok(body.indexOf('<h2>Cartesia API keys</h2>') > body.indexOf('<h2>Failures</h2>'));
 });

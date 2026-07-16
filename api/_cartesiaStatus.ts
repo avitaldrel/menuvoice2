@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { getCartesiaCreditStatus, type CartesiaCreditStatus } from './_cartesiaCredits.js';
 
 const STATE_KEY = 'menuvoice:cartesia:key-rotation:v1';
 const DEFAULT_RECOVERY_HOURS = 30 * 24;
@@ -21,17 +22,20 @@ export interface CartesiaRotationState {
 export interface CartesiaKeyStatus {
   slot: number;
   label: string;
+  email: string | null;
   status: 'active' | 'available' | 'exhausted';
   activeSince: string | null;
   lastSuccessAt: string | null;
   exhaustedAt: string | null;
   availableAt: string | null;
+  credits: CartesiaCreditStatus;
 }
 
 export interface CartesiaStatus {
   configured: number;
   activeSlot: number | null;
   activeLabel: string | null;
+  activeEmail: string | null;
   activeSince: string | null;
   lastSwitchedAt: string | null;
   allExhausted: boolean;
@@ -153,6 +157,8 @@ export function summarizeCartesiaState(
   now = new Date(),
   configuredRecoveryHours = recoveryHours(),
   storage: 'redis' | 'memory' = 'memory',
+  emails: Array<string | null> = [],
+  credits: CartesiaCreditStatus[] = [],
 ): CartesiaStatus {
   const nowMs = now.getTime();
   const keys: CartesiaKeyStatus[] = [];
@@ -163,11 +169,17 @@ export function summarizeCartesiaState(
     keys.push({
       slot,
       label: `Key ${slot}`,
+      email: emails[slot - 1] ?? null,
       status: active ? 'active' : unavailable ? 'exhausted' : 'available',
       activeSince: s.activeSince ?? null,
       lastSuccessAt: s.lastSuccessAt ?? null,
       exhaustedAt: s.exhaustedAt ?? null,
       availableAt: unavailable ? s.availableAt ?? null : null,
+      credits: credits[slot - 1] ?? {
+        state: 'missing-admin-key', used: null, limit: null, remaining: null,
+        periodStart: null, periodEnd: null, checkedAt: null,
+        message: 'Add the Cartesia admin API key for this account.',
+      },
     });
   }
 
@@ -195,6 +207,7 @@ export function summarizeCartesiaState(
     configured,
     activeSlot: active?.slot ?? null,
     activeLabel: active?.label ?? null,
+    activeEmail: active?.email ?? null,
     activeSince: active?.activeSince ?? null,
     lastSwitchedAt: state.lastSwitchedAt,
     allExhausted,
@@ -211,5 +224,20 @@ export function summarizeCartesiaState(
 
 export async function getCartesiaStatus(configured: number): Promise<CartesiaStatus> {
   const { state, redis } = await readState();
-  return summarizeCartesiaState(state, configured, new Date(), recoveryHours(), redis ? 'redis' : 'memory');
+  const now = new Date();
+  const emails = Array.from({ length: configured }, (_, index) =>
+    process.env[`CARTESIA_API_KEY_EMAIL_${index + 1}`]?.trim() || null,
+  );
+  const credits = await Promise.all(
+    Array.from({ length: configured }, (_, index) => getCartesiaCreditStatus(index + 1, now)),
+  );
+  return summarizeCartesiaState(
+    state,
+    configured,
+    now,
+    recoveryHours(),
+    redis ? 'redis' : 'memory',
+    emails,
+    credits,
+  );
 }
