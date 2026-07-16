@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSpeechSpeed } from '../api/tts.ts';
+import { CARTESIA_TTS_MODEL_DEFAULT, resolveSpeechSpeed } from '../api/tts.ts';
+
+test('Cartesia defaults to a model that supports speed control', () => {
+  assert.equal(CARTESIA_TTS_MODEL_DEFAULT, 'sonic-3');
+});
 
 test('requested speech speed overrides the configured default', () => {
   assert.equal(resolveSpeechSpeed({ speed: 1.4 }, '0.8'), 1.4);
