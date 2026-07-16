@@ -20,11 +20,12 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@vercel/postgres';
+import { cartesiaConfiguredKeyCount, getCartesiaStatus } from './_cartesiaStatus.js';
 
-// Self-contained on purpose: this endpoint depends only on @vercel/postgres (the
-// same surface as the working /api/report). It deliberately does NOT import
-// ./_morningData — doing so pulls that module's whole dependency graph into load,
-// which has crashed view endpoints (FUNCTION_INVOCATION_FAILED). The three helpers
+// This endpoint deliberately does NOT import ./_morningData — doing so pulls that
+// module's whole dependency graph into load, which has crashed view endpoints
+// (FUNCTION_INVOCATION_FAILED). Cartesia status comes from one small Redis helper.
+// The three helpers
 // below mirror _morningData's excludeList()/withClient()/esc() so all three views
 // stay consistent; keep the exclusion default in sync if it changes there.
 
@@ -112,6 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const keepSignedIn = `user_email IS NOT NULL AND lower(user_email) <> ALL($1::text[])`;
 
   try {
+    const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());
     const data = await withClient(async (client) => {
       const [headline, prev, series, funnel, screens, topEvents, users, recent, failures] =
         await Promise.all([
@@ -242,6 +244,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       window_hours: hours,
       bucket_unit: bucketUnit,
       generated: new Date().toISOString(),
+      cartesia: await cartesiaPromise,
       ...data,
     });
   } catch (err) {
@@ -334,6 +337,9 @@ function shell(key: string): string {
 
 <div class="cards" id="cards"></div>
 
+<h2>Cartesia API keys</h2>
+<div id="cartesia" aria-live="polite"></div>
+
 <h2>Activity over time</h2>
 <div id="chart" role="img" aria-label="Activity over time"></div>
 
@@ -410,6 +416,21 @@ function renderCards(d){
     return '<div class="card"><div class="num '+(isFail&&Number(h[key])>0?'bad':'')+'">'+num(h[key])+'</div>'+
       '<div class="lbl">'+lbl+'</div>'+delta(h[key],p[key])+'</div>';
   }).join('');
+}
+
+function renderCartesia(d){
+  const c=d.cartesia||{};
+  const box=$('cartesia');
+  if(!c.configured){ box.innerHTML='<p class="empty">No Cartesia keys configured.</p>'; return; }
+  const headline=c.allExhausted
+    ? '<p class="bad">All Cartesia keys are exhausted. OpenAI fallback is active.</p>'
+    : '<p><strong>Active:</strong> '+esc(c.activeLabel||'not observed yet')+(c.activeSince?' since '+esc(fmtTs(c.activeSince)):'')+'</p>';
+  const summary='<p><strong>Remaining after active:</strong> '+num(c.remainingAfterActive)+
+    (c.lastSwitchedAt?' &middot; <strong>Last switched:</strong> '+esc(fmtTs(c.lastSwitchedAt))+' ('+esc(ago(c.lastSwitchedAt))+')':'')+
+    (c.firstReturnsAt?' &middot; <strong>First estimated return:</strong> '+esc(fmtTs(c.firstReturnsAt)):'')+'</p>';
+  const rows=(c.keys||[]).map(k=>'<tr><td>'+esc(k.label)+'</td><td class="'+(k.status==='exhausted'?'bad':k.status==='active'?'good':'')+'">'+esc(k.status)+'</td><td>'+esc(fmtTs(k.exhaustedAt))+'</td><td>'+esc(fmtTs(k.availableAt))+'</td></tr>').join('');
+  const prediction=c.projectedRunOutAt?'<p><strong>At the recent rate, '+esc(c.activeLabel)+' might run out on '+esc(c.projectedRunOutAt.slice(0,10))+'.</strong></p>':'';
+  box.innerHTML=headline+summary+prediction+'<table><thead><tr><th>Key slot</th><th>Status</th><th>Used at</th><th>Estimated return</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 function renderChart(d){
@@ -549,7 +570,7 @@ async function load(){
     const d=await r.json();
     if(!d.ok){ throw new Error(d.error||'error'); }
     $('err').textContent='';
-    renderCards(d); renderChart(d); renderFunnel(d); renderScreens(d);
+    renderCards(d); renderCartesia(d); renderChart(d); renderFunnel(d); renderScreens(d);
     renderUsers(d); renderEvents(d); renderRecent(d); renderFailures(d);
     lastFetch=Date.now();
     setStatus(true, d.generated);
