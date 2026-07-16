@@ -13,8 +13,10 @@ import { startRecording, stopRecording, requestMicPermission, getActiveStream } 
 import { watchForSilence } from '../lib/vad';
 import { transcribeAudio } from '../lib/openai';
 import { cleanName, parseList, normalizeAllergens } from '../util';
+import { configuredAppleShortcutUrl, isAppleMobileDevice } from '../lib/appleShortcut';
+import { track } from '../lib/telemetry';
 
-type Step = 'intro' | 'name' | 'allergies';
+type Step = 'intro' | 'name' | 'allergies' | 'shortcut';
 
 const INTRO =
   'Welcome to MenuVoice. You can scan a menu, search by restaurant name, or paste a menu link. Two quick setup questions to get started.';
@@ -24,6 +26,8 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState<Step>('intro');
   const [name, setName] = useState('');
   const [allergiesText, setAllergiesText] = useState('');
+  const shortcutUrl = configuredAppleShortcutUrl();
+  const shouldOfferShortcut = !!shortcutUrl && isAppleMobileDevice();
 
   const promptFor = (s: Step): string => {
     switch (s) {
@@ -33,6 +37,8 @@ export default function OnboardingScreen() {
         return 'What should I call you? Tap the button and say your first name.';
       case 'allergies':
         return 'Do you have any food allergies or things you cannot eat? Tap and say them, or say none.';
+      case 'shortcut':
+        return 'You can create a Shortcut so saying Siri, launch MenuVoice opens this app. You can skip this and create it later in Settings.';
     }
   };
 
@@ -53,16 +59,29 @@ export default function OnboardingScreen() {
     return () => stopSpeaking();
   }, [step]);
 
-  const finish = async () => {
+  const finish = async (
+    shortcutChoice: 'opened' | 'skipped' | 'not_offered' = 'not_offered',
+    confirmByVoice = true,
+  ) => {
     // Correct misheard/misspelled allergens on the way in — safety path.
     const { list: allergies } = normalizeAllergens(parseList(allergiesText));
+    track('onboarding', 'shortcut_choice', { metadata: { choice: shortcutChoice } });
     await update({ name: cleanName(name), allergies, onboarded: true });
+    if (!confirmByVoice) return;
     await speak(
       `Thanks${name.trim() ? ', ' + cleanName(name) : ''}. You're all set. ` +
         (allergies.length
           ? `I'll always warn you about ${allergies.join(' and ')} before describing any dish.`
           : 'You can add allergies any time in Settings.')
     );
+  };
+
+  const finishAllergyStep = () => {
+    if (shouldOfferShortcut) {
+      setStep('shortcut');
+      return;
+    }
+    void finish();
   };
 
   return (
@@ -104,11 +123,36 @@ export default function OnboardingScreen() {
           onChange={setAllergiesText}
           // keep as a readable string; turned into a list at finish
           transform={(raw) => raw.replace(/\band\b/gi, ',').replace(/[.!]+$/, '').trim()}
-          onNext={finish}
-          nextLabel="Finish"
+          onNext={finishAllergyStep}
+          nextLabel={shouldOfferShortcut ? 'Next' : 'Finish'}
           onBack={() => setStep('name')}
           headingRef={stepHeadingRef}
         />
+      )}
+
+      {step === 'shortcut' && shortcutUrl && (
+        <div className="col">
+          <h2 className="heading" ref={stepHeadingRef} tabIndex={-1}>Open MenuVoice with Siri</h2>
+          <Body>
+            Create a Shortcut so saying “Siri, launch MenuVoice” opens this app.
+          </Body>
+          <a
+            className="btn btn-primary"
+            href={shortcutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none' }}
+            aria-label="Create Siri Shortcut. Opens Apple's Shortcut page in a new tab"
+            onClick={() => { void finish('opened', false); }}
+          >
+            Create Siri Shortcut
+          </a>
+          <SecondaryButton
+            label="Skip for now"
+            hint="Continue to MenuVoice. You can add the Shortcut later in Settings"
+            onClick={() => { void finish('skipped'); }}
+          />
+        </div>
       )}
     </Screen>
   );
