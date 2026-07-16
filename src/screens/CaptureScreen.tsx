@@ -24,6 +24,7 @@ import {
   type ZoomRange,
 } from '../lib/camera';
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
+import { friendlyError, SERVICE_UNAVAILABLE_MSG } from '../lib/errors';
 import { saveRestaurant } from '../lib/storage';
 import { MenuScanner } from '../lib/scanner';
 import { assessPhotoQuality, type PhotoQualityIssue } from '../lib/photoQuality';
@@ -404,7 +405,7 @@ export default function CaptureScreen({
       return;
     }
     if (!hasApiKey()) {
-      setStatus('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
+      setStatus(SERVICE_UNAVAILABLE_MSG);
       return;
     }
     const pendingCount = photos.filter((photo) => photo.checkingQuality).length;
@@ -485,7 +486,7 @@ export default function CaptureScreen({
         durationMs: Date.now() - t0,
         metadata: { error: String(e?.message) },
       });
-      const errMsg = e?.message ?? 'I could not read the menu. Try retaking the photos with more light.';
+      const errMsg = friendlyError(e, 'I could not read the menu. Try retaking the photos with more light.');
       setStatus(errMsg);
       setAnalyzing(false);
       analyzingRef.current = false;

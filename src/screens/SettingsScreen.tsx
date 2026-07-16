@@ -2,11 +2,11 @@
 // This screen never speaks — VoiceOver reads all controls and the status
 // region. Inline mics (name, dislike) still use MediaRecorder for field input.
 
-import { useState } from 'react';
-import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton } from '../components';
+import { useRef, useState } from 'react';
+import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton, AllergenReviewPanel, type AllergenQuestion } from '../components';
 import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
-import { splitList, normalizeAllergens } from '../util';
+import { splitList, reviewAllergenInput } from '../util';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { setSpeechRate } from '../lib/speech';
@@ -88,24 +88,51 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
     setSrStatus(msg);
   };
 
-  const persist = async () => {
-    // Auto-correct misspelled/misheard allergens before saving — an allergen
-    // that doesn't match the menu text is a safety failure.
-    const { list: allergyList, corrections } = normalizeAllergens(splitList(allergies));
-    if (corrections.length) setAllergies(allergyList.join(', '));
-    await update({ allergies: allergyList, cuisinesLiked: splitList(cuisines) });
+  // Pending questions about the allergy list. Nothing is saved while this is
+  // non-null; the user answers each question, THEN we save.
+  const [allergyReview, setAllergyReview] = useState<AllergenQuestion[] | null>(null);
+  const reviewAcceptedRef = useRef<string[]>([]);
+
+  const saveAllergyList = async (list: string[]) => {
+    // De-dupe case-insensitively while keeping the user's chosen spellings.
+    const seen = new Set<string>();
+    const final = list.filter((a) => {
+      const k = a.trim().toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    await update({ allergies: final, cuisinesLiked: splitList(cuisines) });
+    setAllergies(final.join(', '));
     setSaved(true);
     // Allergies are a safety feature — confirm in the DOM and aloud what was
-    // saved so a VoiceOver user knows the warning list took effect (P1-6), and
-    // surface any spelling corrections so a silent change can't hide a mistake.
-    const fixNote = corrections.length
-      ? ` I corrected ${corrections.map(([from, to]) => `${from} to ${to}`).join(', ')}.`
-      : '';
-    const msg = allergyList.length
-      ? `Saved.${fixNote} I will warn you about ${allergyList.join(', ')}.`
+    // saved so a VoiceOver user knows the warning list took effect.
+    const msg = final.length
+      ? `Saved. I will warn you about ${final.join(', ')}.`
       : 'Saved. No allergies set.';
     announce(msg);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const persist = async () => {
+    // NEVER silently rewrite an allergy. If a word looks misspelled we ask
+    // before changing it; if we don't recognize it at all, we ask what to do.
+    const review = reviewAllergenInput(splitList(allergies));
+    const questions: AllergenQuestion[] = [
+      ...review.corrections.map(([typed, suggested]) => ({ typed, suggested })),
+      ...review.unknown.map((typed) => ({ typed })),
+    ];
+    if (questions.length > 0) {
+      reviewAcceptedRef.current = review.accepted;
+      setAllergyReview(questions);
+      announce(
+        questions.length === 1
+          ? 'One quick question about your allergy list before I save it. Answer below.'
+          : `${questions.length} quick questions about your allergy list before I save it. Answer below.`,
+      );
+      return;
+    }
+    await saveAllergyList(review.accepted);
   };
 
   const saveName = async (val: string) => {
@@ -193,8 +220,8 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
   const anyMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
 
-  const currentTheme: AppTheme = profile.theme ?? 'dark';
-  const currentScale: TextScale = profile.textScale ?? 'normal';
+  const currentTheme: AppTheme = profile.theme ?? 'light';
+  const currentScale: TextScale = profile.textScale ?? 'large';
   const currentRate = profile.speechRate ?? 1;
   const themeHint = THEME_OPTIONS.find((t) => t.value === currentTheme)?.hint ?? '';
 
@@ -430,7 +457,17 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
         aria-label="Favorite foods, comma separated"
       />
 
-      <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} />
+      {allergyReview && (
+        <AllergenReviewPanel
+          questions={allergyReview}
+          onDone={(kept) => {
+            setAllergyReview(null);
+            saveAllergyList([...reviewAcceptedRef.current, ...kept]);
+          }}
+        />
+      )}
+
+      <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} disabled={!!allergyReview} />
       <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0, textAlign: 'center' }}>
         {srStatus}
       </p>

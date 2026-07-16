@@ -36,6 +36,7 @@ import {
 import { mergeUnique } from '../util';
 import { menuStats } from '../lib/storage';
 import { analyzeItemAllergens, allergenAlertText, dishSpokenLabel } from '../lib/allergens';
+import { friendlyError } from '../lib/errors';
 import {
   provenanceSummary,
   provenanceOpeningNote,
@@ -448,7 +449,7 @@ export default function ConversationScreen({
         earconThinkingStop();
         earconError();
         try { navigator.vibrate?.([200, 50, 200]); } catch {}
-        const msg = e?.message ?? "Something went wrong. Let's try that again.";
+        const msg = friendlyError(e, "Something went wrong. Let's try that again.");
         setErrorMsg(msg);
         setPhase('error');
         await speak(msg, profile.ttsVoice);
@@ -475,7 +476,7 @@ export default function ConversationScreen({
       } catch (e: any) {
         earconThinkingStop();
         earconError();
-        const msg = e?.message ?? "Something went wrong. Let's try that again.";
+        const msg = friendlyError(e, "Something went wrong. Let's try that again.");
         setErrorMsg(msg);
         setPhase('error');
         return;

@@ -6,17 +6,19 @@
 // reserved for Conversation Mode.
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
+import { Screen, Title, Body, PrimaryButton, SecondaryButton, AllergenReviewPanel, type AllergenQuestion } from '../components';
 import { useProfile } from '../state/ProfileContext';
-import { cleanName, parseList, normalizeAllergens } from '../util';
+import { cleanName, parseList, reviewAllergenInput } from '../util';
 
-type Step = 'name' | 'allergies';
+type Step = 'name' | 'allergies' | 'confirm';
 
 export default function OnboardingScreen() {
   const { update } = useProfile();
   const [step, setStep] = useState<Step>('name');
   const [name, setName] = useState('');
   const [allergiesText, setAllergiesText] = useState('');
+  const [questions, setQuestions] = useState<AllergenQuestion[]>([]);
+  const acceptedRef = useRef<string[]>([]);
 
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -25,10 +27,33 @@ export default function OnboardingScreen() {
     stepHeadingRef.current?.focus();
   }, [step]);
 
+  const complete = async (allergies: string[]) => {
+    // De-dupe case-insensitively, keeping the user's chosen spellings.
+    const seen = new Set<string>();
+    const final = allergies.filter((a) => {
+      const k = a.trim().toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    await update({ name: cleanName(name), allergies: final, onboarded: true });
+  };
+
   const finish = async () => {
-    // Correct misheard/misspelled allergens on the way in — safety path.
-    const { list: allergies } = normalizeAllergens(parseList(allergiesText));
-    await update({ name: cleanName(name), allergies, onboarded: true });
+    // NEVER silently rewrite an allergy the user gave us. Suggest spellings and
+    // ask; if a word is unrecognized, say so and ask whether to keep it.
+    const review = reviewAllergenInput(parseList(allergiesText));
+    const qs: AllergenQuestion[] = [
+      ...review.corrections.map(([typed, suggested]) => ({ typed, suggested })),
+      ...review.unknown.map((typed) => ({ typed })),
+    ];
+    if (qs.length > 0) {
+      acceptedRef.current = review.accepted;
+      setQuestions(qs);
+      setStep('confirm');
+      return;
+    }
+    await complete(review.accepted);
   };
 
   return (
@@ -60,6 +85,20 @@ export default function OnboardingScreen() {
           onBack={() => setStep('name')}
           headingRef={stepHeadingRef}
         />
+      )}
+
+      {step === 'confirm' && (
+        <div className="col">
+          <h2 className="heading" ref={stepHeadingRef} tabIndex={-1}>
+            Checking your allergies
+          </h2>
+          <Body>Allergies keep you safe, so I never change a word without asking.</Body>
+          <AllergenReviewPanel
+            questions={questions}
+            onDone={(kept) => complete([...acceptedRef.current, ...kept])}
+          />
+          <SecondaryButton label="Back" onClick={() => setStep('allergies')} />
+        </div>
       )}
     </Screen>
   );

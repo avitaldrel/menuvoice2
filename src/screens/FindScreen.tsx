@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { findMenuByName, parseMenuFromUrl, hasApiKey } from '../lib/openai';
+import { friendlyError, SERVICE_UNAVAILABLE_MSG } from '../lib/errors';
 import { saveRestaurant } from '../lib/storage';
 import { track } from '../lib/telemetry';
 import { MenuProvenance } from '../types';
@@ -160,7 +161,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
     setPendingMatch(null);
     setFailure(null);
     if (!hasApiKey()) {
-      announce('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
+      announce(SERVICE_UNAVAILABLE_MSG);
       return;
     }
 
@@ -221,7 +222,7 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
       const fallback = isUrl
         ? "I couldn't read the menu from that link. Try a different link, or type the restaurant's name and city."
         : "I couldn't find that restaurant's menu online. Try adding the city and state to the name.";
-      const message = e?.message ?? fallback;
+      const message = friendlyError(e, fallback);
       setFailure({ message, wasUrl: isUrl });
       announce(message);
       // Land focus on the failure explanation so the next actions are reachable.

@@ -705,6 +705,16 @@ body::before {
   text-wrap: pretty;
 }
 
+/* ── Allergen review questions ───────────────────── */
+.allergen-question {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.allergen-question:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
 /* ── Settings: segmented controls ────────────────── */
 .setting-block {
   display: flex;
