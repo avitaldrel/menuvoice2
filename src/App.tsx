@@ -193,30 +193,44 @@ function BackNavigationDialog({
   onDismiss: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const dismissingRef = useRef(false);
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
-    if (dialog && !dialog.open) dialog.showModal();
+    if (!dialog) return;
+
+    if (!dialog.open) {
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+      else dialog.setAttribute('open', '');
+    }
   }, []);
+
+  const dismiss = (source: 'dialog_cancel' | 'dialog_close') => {
+    if (dismissingRef.current) return;
+    dismissingRef.current = true;
+    track('nav', 'back_gesture', { metadata: { source } });
+    onDismiss();
+  };
 
   return (
     <dialog
       ref={dialogRef}
       className="app-route-dialog"
+      role="dialog"
+      aria-modal="true"
       aria-label={label}
+      tabIndex={-1}
       onCancel={(event) => {
         // A VoiceOver two-finger scrub dismisses a modal dialog through this
         // native path on iOS. Keep the dialog mounted until browser history has
         // moved so the previous MenuVoice screen is restored atomically.
         event.preventDefault();
-        track('nav', 'back_gesture', { metadata: { source: 'dialog_cancel' } });
-        onDismiss();
+        dismiss('dialog_cancel');
       }}
       onClose={() => {
         // WebKit normally fires `cancel` first. This covers versions that close
         // the dialog directly for an accessibility dismiss action.
-        track('nav', 'back_gesture', { metadata: { source: 'dialog_close' } });
-        onDismiss();
+        dismiss('dialog_close');
       }}
     >
       {children}

@@ -10,6 +10,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "a11y": "node scripts/a11y/loop.mjs",
     "a11y:audit": "node scripts/a11y/audit.mjs",
+    "a11y:scrub": "node scripts/a11y/scrub-navigation.mjs",
     "a11y:report": "node scripts/a11y/report.mjs"
   },
   "dependencies": {

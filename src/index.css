@@ -1078,7 +1078,9 @@ body::before {
    coarse/no-hover (touch) devices so a short desktop browser window never trips
    it — on desktop the app must stay a centered phone-width column. */
 @media (orientation: landscape) and (max-height: 620px) and (pointer: coarse) and (hover: none) {
-  #root {
+  #root,
+  .app-route-dialog {
+    width: 100%;
     max-width: none;
   }
 
