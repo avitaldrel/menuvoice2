@@ -85,6 +85,13 @@ export interface ZoomRange {
   native: boolean;
 }
 
+/** Return the next supported zoom value in one direction, clamped to the camera range. */
+export function nextZoomValue(range: ZoomRange, current: number, direction: 1 | -1): number {
+  const step = Number.isFinite(range.step) && range.step > 0 ? range.step : 0.25;
+  const next = current + direction * step;
+  return Number(Math.min(range.max, Math.max(range.min, next)).toFixed(2));
+}
+
 export function getZoomRange(stream: MediaStream | null): ZoomRange {
   const fallback = { min: 1, max: 3, step: 0.25, value: 1, native: false };
   try {
