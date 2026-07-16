@@ -15,6 +15,7 @@ import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import HomeScreen from './screens/HomeScreen';
 import CaptureScreen from './screens/CaptureScreen';
+import { CAPTURE_PAGE_STATUS } from './lib/captureCopy';
 import ConversationScreen from './screens/ConversationScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -208,7 +209,7 @@ function pushAppHistoryEntry(entry: AppHistoryEntry): void {
 function pageStatusFor(name: Route['name']): string {
   switch (name) {
     case 'home': return 'Home screen. Choose scan, find, saved restaurants, demo menu, tutorial, or settings.';
-    case 'capture': return 'Capture menu screen. Point the camera at the menu, take photos, then analyze.';
+    case 'capture': return CAPTURE_PAGE_STATUS;
     case 'find': return 'Find menu screen. Enter a restaurant name and city, or paste a menu link.';
     case 'conversation': return 'Conversation screen. MenuVoice can speak with you or let you browse the menu.';
     case 'saved': return 'Saved restaurants screen. Open or delete saved menus.';

@@ -27,6 +27,7 @@ import { saveRestaurant } from '../lib/storage';
 import { MenuScanner } from '../lib/scanner';
 import { assessPhotoQuality, type PhotoQualityIssue } from '../lib/photoQuality';
 import { earconTick, earconCapture } from '../lib/earcon';
+import { AUTO_CAPTURE_INSTRUCTION, AUTO_CAPTURE_STATUS } from '../lib/captureCopy';
 import { track, isImageLoggingOn } from '../lib/telemetry';
 
 const ANALYSIS_PHRASES = [
@@ -211,14 +212,10 @@ export default function CaptureScreen({
     if (!autoRef.current) autoRef.current = new MenuScanner();
 
     let cancelled = false;
-    const intro =
-      'Auto capture is on. Hold your phone flat, about a foot above the menu. ' +
-      'I will guide you and take the photo automatically. If I take too long, ' +
-      'find the Take photo button below the camera.';
-    setCoachStatus('Auto capture on. Hold your phone flat over the menu.');
+    setCoachStatus(AUTO_CAPTURE_STATUS);
 
     (async () => {
-      await speak(intro);
+      await speak(AUTO_CAPTURE_INSTRUCTION);
       if (cancelled || !videoRef.current) return;
       autoRef.current!.start(videoRef.current, {
         onCoach: (msg) => {
