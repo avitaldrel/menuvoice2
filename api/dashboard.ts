@@ -21,13 +21,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@vercel/postgres';
 import { cartesiaConfiguredKeyCount, getCartesiaStatus } from './_cartesiaStatus.js';
+import { excludeList, excludePrefixList } from './_reportExclusions.js';
 
 // This endpoint deliberately does NOT import ./_morningData — doing so pulls that
 // module's whole dependency graph into load, which has crashed view endpoints
 // (FUNCTION_INVOCATION_FAILED). Cartesia status comes from one small Redis helper.
-// The three helpers
-// below mirror _morningData's excludeList()/withClient()/esc() so all three views
-// stay consistent; keep the exclusion default in sync if it changes there.
+// The exclusion helper is dependency-free, so this view can share its rules with
+// the morning report without importing that module's larger dependency graph.
 
 async function withClient<T>(fn: (client: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
   const client = createClient();
@@ -48,13 +48,7 @@ function esc(v: unknown): string {
     .replace(/"/g, '&quot;');
 }
 
-// Internal/test accounts to hide. Mirrors _morningData.excludeList() (same env var
-// + default) so /api/report, /api/morning, and /api/dashboard agree.
-function excludeList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com';
-  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-}
-
+// Internal/test accounts are supplied by the shared helper above.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expected = process.env.REPORT_KEY?.trim();
   const provided = (req.query.key as string) ?? '';
@@ -105,12 +99,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const bucketStep = bucketUnit === 'hour' ? '1 hour' : '1 day';
 
   // Internal/test accounts (own testing) are excluded everywhere so the dashboard
-  // reflects real usage and agrees with the morning report. $1 = lower-cased email
-  // array; anonymous events (NULL email) always pass. Parameterized = injection-safe.
+  // reflects real usage and agrees with the morning report. $1 = exact emails and
+  // $2 = prefixes; anonymous events (NULL email) always pass. Both are parameterized.
   const exclude = excludeList();
-  const keep = `(user_email IS NULL OR lower(user_email) <> ALL($1::text[]))`;
-  const keepE = `(e.user_email IS NULL OR lower(e.user_email) <> ALL($1::text[]))`;
-  const keepSignedIn = `user_email IS NOT NULL AND lower(user_email) <> ALL($1::text[])`;
+  const excludePrefixes = excludePrefixList();
+  const prefixExcluded = (column: string) => `EXISTS (
+    SELECT 1 FROM unnest($2::text[]) AS p(prefix)
+    WHERE left(lower(${column}), char_length(p.prefix)) = p.prefix
+  )`;
+  const keep = `(user_email IS NULL OR (lower(user_email) <> ALL($1::text[]) AND NOT ${prefixExcluded('user_email')}))`;
+  const keepE = `(e.user_email IS NULL OR (lower(e.user_email) <> ALL($1::text[]) AND NOT ${prefixExcluded('e.user_email')}))`;
+  const keepSignedIn = `user_email IS NOT NULL AND lower(user_email) <> ALL($1::text[]) AND NOT ${prefixExcluded('user_email')}`;
+  const queryParams = [exclude, excludePrefixes];
 
   try {
     const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());
@@ -126,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               count(*) FILTER (WHERE outcome='failure')                         AS failures,
               min(ts) AS first_ts, max(ts) AS last_ts
             FROM events WHERE ts > ${w} AND ${keep}
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT
               count(*)                                                          AS events,
@@ -135,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               count(DISTINCT session_id) FILTER (WHERE user_email IS NULL)      AS anon_sessions,
               count(*) FILTER (WHERE outcome='failure')                         AS failures
             FROM events WHERE ts > ${prevStart} AND ts <= ${w} AND ${keep}
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             WITH buckets AS (
               SELECT generate_series(
@@ -153,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ON date_trunc('${bucketUnit}', e.ts) = b.bucket AND e.ts > ${w} AND ${keepE}
             GROUP BY b.bucket
             ORDER BY b.bucket
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT
               count(*) FILTER (WHERE event_name='camera_start')                          AS camera,
@@ -163,7 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               count(*) FILTER (WHERE event_name='user_utterance')                        AS asked,
               count(*) FILTER (WHERE event_name='llm_reply')                             AS replied
             FROM events WHERE ts > ${w} AND ${keep}
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT coalesce(screen,'(none)') AS screen,
                    count(*) AS n,
@@ -171,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    count(*) FILTER (WHERE outcome='failure') AS failures
             FROM events WHERE ts > ${w} AND ${keep}
             GROUP BY screen ORDER BY n DESC LIMIT 12
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT event_type, event_name,
                    count(*) AS n,
@@ -179,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    round(avg(duration_ms)) AS avg_ms
             FROM events WHERE ts > ${w} AND ${keep}
             GROUP BY event_type, event_name ORDER BY n DESC LIMIT 20
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             WITH win AS (
               SELECT user_email,
@@ -202,19 +202,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    (life.first_ts > ${w}) AS is_new
             FROM win JOIN life USING (user_email)
             ORDER BY win.last_seen DESC LIMIT 100
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT ts, coalesce(user_email,'(anon)') AS user_email, screen,
                    event_type, event_name, outcome, duration_ms, session_id
             FROM events WHERE ts > ${w} AND ${keep}
             ORDER BY ts DESC LIMIT 50
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT ts, coalesce(user_email,'(anon)') AS user_email, screen,
                    event_name, session_id, content
             FROM events WHERE outcome='failure' AND ts > ${w} AND ${keep}
             ORDER BY ts DESC LIMIT 30
-          `, [exclude]),
+          `, queryParams),
         ]);
 
       return {
