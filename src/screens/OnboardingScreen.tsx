@@ -9,14 +9,18 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
 import { cleanName, parseList, normalizeAllergens } from '../util';
+import { configuredAppleShortcutUrl, isAppleMobileDevice } from '../lib/appleShortcut';
+import { track } from '../lib/telemetry';
 
-type Step = 'name' | 'allergies';
+type Step = 'name' | 'allergies' | 'shortcut';
 
 export default function OnboardingScreen() {
   const { update } = useProfile();
   const [step, setStep] = useState<Step>('name');
   const [name, setName] = useState('');
   const [allergiesText, setAllergiesText] = useState('');
+  const shortcutUrl = configuredAppleShortcutUrl();
+  const shouldOfferShortcut = !!shortcutUrl && isAppleMobileDevice();
 
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -25,10 +29,19 @@ export default function OnboardingScreen() {
     stepHeadingRef.current?.focus();
   }, [step]);
 
-  const finish = async () => {
+  const finish = async (shortcutChoice: 'opened' | 'skipped' | 'not_offered' = 'not_offered') => {
     // Correct misheard/misspelled allergens on the way in — safety path.
     const { list: allergies } = normalizeAllergens(parseList(allergiesText));
+    track('onboarding', 'shortcut_choice', { metadata: { choice: shortcutChoice } });
     await update({ name: cleanName(name), allergies, onboarded: true });
+  };
+
+  const finishAllergyStep = () => {
+    if (shouldOfferShortcut) {
+      setStep('shortcut');
+      return;
+    }
+    void finish();
   };
 
   return (
@@ -55,11 +68,34 @@ export default function OnboardingScreen() {
           placeholder="e.g. shellfish, peanuts"
           value={allergiesText}
           onChange={setAllergiesText}
-          onNext={finish}
-          nextLabel="Finish"
+          onNext={finishAllergyStep}
+          nextLabel={shouldOfferShortcut ? 'Next' : 'Finish'}
           onBack={() => setStep('name')}
           headingRef={stepHeadingRef}
         />
+      )}
+
+      {step === 'shortcut' && shortcutUrl && (
+        <div className="col">
+          <h2 className="heading" ref={stepHeadingRef} tabIndex={-1}>Open MenuVoice with Siri</h2>
+          <Body>Create a Shortcut so saying “Siri, launch MenuVoice” opens this app.</Body>
+          <a
+            className="btn btn-primary"
+            href={shortcutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none' }}
+            aria-label="Create Siri Shortcut. Opens Apple's Shortcut page in a new tab"
+            onClick={() => { void finish('opened'); }}
+          >
+            Create Siri Shortcut
+          </a>
+          <SecondaryButton
+            label="Skip for now"
+            hint="Continue to MenuVoice. You can create the Shortcut later in Settings"
+            onClick={() => { void finish('skipped'); }}
+          />
+        </div>
       )}
     </Screen>
   );
