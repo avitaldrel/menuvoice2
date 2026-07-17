@@ -152,6 +152,12 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
   transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
 }
 .btn:active { transform: translateY(1px); }
+/* Match the email input's focus treatment so keyboard focus is equally
+   visible on every interactive element, not just the form field. */
+.btn:focus-visible, .nav-links a:focus-visible, .foot-grid .links a:focus-visible, .brand:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
 .btn-primary  { background: var(--accent); color: var(--accent-text); box-shadow: 0 10px 30px -12px var(--accent-glow); }
 .btn-primary:hover  { background: var(--accent-warm); }
 .btn-secondary { background: transparent; color: var(--text-primary); border-color: var(--border); }
@@ -552,7 +558,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 
         <div class="hero-copy">
           <p class="eyebrow reveal">Voice-first menu access</p>
-          <h1 class="display reveal" data-d="1" id="hero-h">Read me<br/>the <em>menu.</em></h1>
+          <h1 class="display reveal" data-d="1" id="hero-h">Read me <br/>the <em>menu.</em></h1>
           <p class="lede reveal" data-d="2">Point your phone at a menu. MenuVoice reads it aloud, checks ingredients and allergens, and lets you ask follow-up questions by voice.</p>
           <div class="hero-cta reveal" data-d="3">
             <a class="btn btn-primary btn-lg" href="#waitlist">Request a demo <span class="arrow">→</span></a>
