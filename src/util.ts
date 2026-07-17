@@ -107,22 +107,23 @@ export function reviewAllergenInput(items: string[]): AllergenReviewResult {
   const accepted: string[] = [];
   const corrections: Array<[string, string]> = [];
   const unknown: string[] = [];
-  const seen = new Set<string>();
-  const push = (arr: string[], v: string) => {
-    const k = v.toLowerCase();
-    if (!seen.has(k)) { seen.add(k); arr.push(v); }
-  };
+  const seenInputs = new Set<string>();
   for (const raw of items) {
     const t = raw.trim();
     if (!t) continue;
     const key = t.toLowerCase().replace(/[^a-z\s]/g, '').trim();
     if (!key) continue;
-    if (CANONICAL_ALLERGENS.includes(key)) { push(accepted, key); continue; }
+    if (seenInputs.has(key)) continue;
+    seenInputs.add(key);
+    if (CANONICAL_ALLERGENS.includes(key)) {
+      accepted.push(key);
+      continue;
+    }
     const fixed = correctAllergen(t);
     if (fixed.toLowerCase() !== t.toLowerCase()) {
-      if (!seen.has(fixed.toLowerCase())) { seen.add(fixed.toLowerCase()); corrections.push([t, fixed]); }
+      corrections.push([t, fixed]);
     } else {
-      push(unknown, t);
+      unknown.push(t);
     }
   }
   return { accepted, corrections, unknown };

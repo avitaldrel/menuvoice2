@@ -9,6 +9,7 @@ const DEFAULT_PROFILE = {
   hidePrices: false,
   ttsVoice: 'shimmer',
   onboarded: true,
+  tutorialSeen: true,
 };
 
 export function resolveA11yBaseUrl(argv = process.argv, env = process.env) {

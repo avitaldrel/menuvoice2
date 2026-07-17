@@ -45,3 +45,12 @@ export function friendlyError(e: unknown, fallback: string): string {
 /** Friendly line for when the AI/menu service is not configured or reachable. */
 export const SERVICE_UNAVAILABLE_MSG =
   "The menu reader isn't available right now. Please try again in a few minutes.";
+
+/** Convert an HTTP status into recovery copy without exposing a server body. */
+export function apiErrorMessage(status: number, fallback: string): string {
+  if (status === 401 || status === 403) return SERVICE_UNAVAILABLE_MSG;
+  if (status === 408 || status === 504 || status === 524) return TIMEOUT_MSG;
+  if (status === 429) return BUSY_MSG;
+  if (status >= 500) return SERVER_MSG;
+  return fallback;
+}

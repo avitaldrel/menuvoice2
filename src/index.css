@@ -229,21 +229,29 @@ body::before {
 .app-route-dialog {
   position: fixed;
   inset: 0;
-  width: min(100%, 560px);
+  width: 100%;
   height: 100%;
-  max-width: 560px;
+  max-width: none;
   max-height: 100%;
   margin: auto;
   padding: 0;
   border: 0;
   background: var(--bg);
   color: var(--text-primary);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app-route-dialog[open] {
-  display: flex;
-  flex-direction: column;
+  display: block;
+}
+
+.app-route-dialog > .screen {
+  width: min(100%, 560px);
+  min-height: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .app-route-dialog::backdrop {
@@ -1104,6 +1112,7 @@ body::before {
   }
 
   .screen {
+    max-width: none;
     display: grid;
     grid-template-columns: minmax(280px, 1fr) minmax(260px, 360px);
     grid-auto-rows: min-content;

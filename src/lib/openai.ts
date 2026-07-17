@@ -9,6 +9,10 @@
 import { ParsedMenu, UserProfile, ChatTurn, MenuProvenance } from '../types';
 import { track } from './telemetry';
 import { provenanceSummary } from './provenance';
+import { sanitizeMenu } from './menuSanitizer';
+import { apiErrorMessage } from './errors';
+
+export { sanitizeMenu } from './menuSanitizer';
 
 const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
 const AUDIO_PROVIDER = import.meta.env.VITE_AUDIO_PROVIDER ?? 'openai';
@@ -85,61 +89,6 @@ async function audioSpeech(body: object): Promise<Blob> {
   });
   if (!res.ok) throw new Error(await parseApiError(res));
   return res.blob();
-}
-
-// ── Malformed-AI-output safety net ─────────────────────────────────────────
-// The model is ASKED for a strict JSON shape, but we never trust that it
-// complied. sanitizeMenu() rebuilds the menu from whatever came back, keeping
-// only well-formed pieces, so a bad response can never crash a screen or put
-// raw JSON/garbage into the app voice. Returns null when nothing usable is left.
-function asCleanString(v: unknown, maxLen = 500): string {
-  return typeof v === 'string' ? v.trim().slice(0, maxLen) : '';
-}
-
-export function sanitizeMenu(raw: unknown): ParsedMenu | null {
-  if (typeof raw !== 'object' || raw === null) return null;
-  const src = raw as Record<string, unknown>;
-  const categoriesIn = Array.isArray(src.categories) ? src.categories : [];
-
-  const categories = categoriesIn
-    .map((cat) => {
-      if (typeof cat !== 'object' || cat === null) return null;
-      const c = cat as Record<string, unknown>;
-      const itemsIn = Array.isArray(c.items) ? c.items : [];
-      const items = itemsIn
-        .map((it) => {
-          if (typeof it !== 'object' || it === null) return null;
-          const i = it as Record<string, unknown>;
-          const name = asCleanString(i.name, 200);
-          if (!name) return null; // a dish without a name is unusable
-          const description = asCleanString(i.description);
-          const price = asCleanString(i.price, 40);
-          const ingredients = Array.isArray(i.ingredients)
-            ? i.ingredients.map((g) => asCleanString(g, 80)).filter(Boolean).slice(0, 40)
-            : [];
-          return {
-            name,
-            ...(description ? { description } : {}),
-            ...(price ? { price } : {}),
-            ...(ingredients.length ? { ingredients } : {}),
-          };
-        })
-        .filter((x): x is NonNullable<typeof x> => x !== null);
-      if (items.length === 0) return null;
-      return { name: asCleanString(c.name, 120) || 'Menu', items };
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null);
-
-  if (categories.length === 0) return null;
-
-  return {
-    categories,
-    ...(asCleanString(src.restaurantName, 160) ? { restaurantName: asCleanString(src.restaurantName, 160) } : {}),
-    ...(asCleanString(src.notes, 600) ? { notes: asCleanString(src.notes, 600) } : {}),
-    incomplete: src.incomplete === true,
-    ...(asCleanString(src.incompleteReason, 300) ? { incompleteReason: asCleanString(src.incompleteReason, 300) } : {}),
-    ...(typeof src.pageCount === 'number' && isFinite(src.pageCount) ? { pageCount: src.pageCount } : {}),
-  };
 }
 
 /** Menu photos (base64 JPEG, no data: prefix) -> structured menu. */
@@ -436,8 +385,10 @@ export async function parseMenuFromUrl(
     signal,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const msg = (err as any).error ?? "Hey, sorry. I couldn't read the menu from that website. Double-check the link and try again.";
+    const msg = await parseApiError(
+      res,
+      "I couldn't read the menu from that website. Double-check the link and try again.",
+    );
     track('menu', 'parse_url', { outcome: 'failure', durationMs: Date.now() - t0, metadata: { url, status: res.status } });
     throw new Error(msg);
   }
@@ -468,6 +419,18 @@ export async function findMenuByName(query: string, signal?: AbortSignal): Promi
     body: JSON.stringify({ query }),
     signal,
   });
+  if (!res.ok) {
+    const message = await parseApiError(
+      res,
+      "I couldn't find that restaurant's menu online. Try adding the city to the name.",
+    );
+    track('menu', 'find_by_name', {
+      outcome: 'failure',
+      durationMs: Date.now() - t0,
+      metadata: { query, status: res.status },
+    });
+    throw new Error(message);
+  }
   const data = (await res.json().catch(() => ({}))) as {
     menu?: unknown;
     restaurantName?: string | null;
@@ -479,14 +442,14 @@ export async function findMenuByName(query: string, signal?: AbortSignal): Promi
   };
   // Sanitize before trusting: the server relays AI output, and a malformed
   // menu must fail with a friendly sentence, never crash the conversation.
-  const menu = res.ok ? sanitizeMenu(data.menu) : null;
+  const menu = sanitizeMenu(data.menu);
   if (!menu) {
     track('menu', 'find_by_name', {
       outcome: 'failure',
       durationMs: Date.now() - t0,
       metadata: { query, status: res.status, reason: data.error ?? 'malformed_menu' },
     });
-    throw new Error(data.error ?? "I couldn't find that restaurant's menu online. Try adding the city to the name.");
+    throw new Error("I couldn't find a usable menu for that restaurant. Try adding the city to the name.");
   }
   const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
   track('menu', 'find_by_name', {
@@ -531,14 +494,12 @@ export async function synthesizeSpeech(text: string, voice?: string, speed?: num
 // Users HEAR these messages, so they are plain recovery sentences — never
 // status codes, key names, or provider wording. The technical detail is logged
 // for developers instead.
-async function parseApiError(res: Response): Promise<string> {
+async function parseApiError(
+  res: Response,
+  fallback = 'Something went wrong on my end. Please try again in a moment.',
+): Promise<string> {
   let body = '';
   try { body = await res.text(); } catch {}
   console.warn(`MenuVoice API error (technical detail): status ${res.status}`, body.slice(0, 500));
-  if (res.status === 429) return "I'm a little busy right now. Wait a few seconds and try again.";
-  if (res.status === 504 || res.status === 524 || res.status === 408)
-    return 'That took too long. The menu might be complex. Please try again.';
-  if (res.status === 401 || res.status === 403 || body.includes('No API key'))
-    return "The menu reader isn't available right now. Please try again in a few minutes.";
-  return 'Something went wrong on my end. Please try again in a moment.';
+  return apiErrorMessage(res.status, fallback);
 }
