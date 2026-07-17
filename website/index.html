@@ -54,6 +54,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
@@ -772,8 +773,8 @@ html[data-a11y-font="readable"] {
   <!-- ═══════════════════════ WHY ═══════════════════════ -->
   <section class="section-pad" id="why" aria-labelledby="why-h">
     <div class="wrap">
-      <p class="eyebrow reveal">The problem</p>
-      <blockquote class="manifesto-quote reveal" data-d="1" id="why-h">
+      <h2 class="eyebrow reveal" id="why-h">The problem</h2>
+      <blockquote class="manifesto-quote reveal" data-d="1">
         A menu assumes you can read it. If you cannot, dinner often starts by asking someone else to read, filter, and choose with you.
       </blockquote>
       <dl class="openrow reveal" data-d="2">
@@ -787,7 +788,8 @@ html[data-a11y-font="readable"] {
   <hr class="rule" />
 
   <!-- ═══════════════════════ SCROLL DEMO ═══════════════════════ -->
-  <section class="demo-section" id="demo-section" aria-label="How MenuVoice works">
+  <section class="demo-section" id="demo-section" aria-labelledby="demo-h">
+    <h2 class="sr-only" id="demo-h">How it works</h2>
     <div class="demo-sticky" id="demo-sticky">
 
       <!-- LEFT: minimal labels that stay once shown -->
