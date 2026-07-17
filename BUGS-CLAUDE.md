@@ -314,6 +314,26 @@ voice-related controls.
 `appVoice` removed from `UserProfile` (old stored profiles simply carry an
 ignored extra key). All 48 tests pass, tsc clean.
 
+### 18. Combine Scan a Menu and Find a Menu into one entry point
+**Reported:** combine Find a Menu and Scan a Menu; clicking the one button
+gives two options — scan or find by name — saying scanning is recommended if
+you are at the restaurant.
+**Fix:**
+  - `src/screens/GetMenuScreen.tsx` (new) — chooser screen with the note "If
+    you are at the restaurant, scanning the menu with your camera is
+    recommended. Otherwise, find it by restaurant name or a link.", then two
+    tiles: Scan a Menu (primary, "Recommended at the restaurant.") → capture,
+    Find a Menu → find, plus Back. Silent screen; guidance is visible text.
+  - `src/screens/HomeScreen.tsx` — the two tiles replaced by one primary
+    "Read a Menu" tile ("Scan it with your camera, or find it by name").
+  - `src/nav.ts` / `src/App.tsx` — new `getMenu` route, screen wiring, and a
+    page-change announcement for the chooser.
+**Verified:** live Chromium walk — Home shows the single Read a Menu tile;
+tapping it opens the chooser with the recommendation note; Find a Menu lands
+on the Find screen; back, then Scan a Menu lands on the Capture screen
+(camera itself blocked in the sandboxed pane — its accessible text fallback
+displayed correctly); Back returns Home. Zero console errors. All 48 tests
+pass, tsc clean.
 
 ---
 

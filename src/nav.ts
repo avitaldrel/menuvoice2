@@ -5,6 +5,7 @@ import { ParsedMenu, MenuProvenance } from './types';
 
 export type Route =
   | { name: 'home' }
+  | { name: 'getMenu' } // chooser: scan with camera vs. find by name/link
   | { name: 'capture'; appendTo?: { menu: ParsedMenu; restaurantName: string } }
   | { name: 'find' }
   | { name: 'conversation'; menu: ParsedMenu; restaurantName: string; source?: 'url' | 'find' | 'photo' | 'saved'; provenance?: MenuProvenance }

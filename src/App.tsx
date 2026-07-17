@@ -7,6 +7,7 @@ import { track, setCurrentScreen } from './lib/telemetry';
 import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import HomeScreen from './screens/HomeScreen';
+import GetMenuScreen from './screens/GetMenuScreen';
 import CaptureScreen from './screens/CaptureScreen';
 import ConversationScreen from './screens/ConversationScreen';
 import SavedScreen from './screens/SavedScreen';
@@ -62,6 +63,9 @@ function Root() {
   switch (current.name) {
     case 'home':
       screen = <HomeScreen navigate={navigate} goBack={goBack} />;
+      break;
+    case 'getMenu':
+      screen = <GetMenuScreen navigate={navigate} goBack={goBack} />;
       break;
     case 'capture':
       screen = <CaptureScreen navigate={navigate} goBack={goBack} route={current} />;
@@ -123,7 +127,8 @@ function Root() {
 
 function pageStatusFor(name: Route['name']): string {
   switch (name) {
-    case 'home': return 'Home screen. Choose scan, find, saved restaurants, or settings.';
+    case 'home': return 'Home screen. Choose read a menu, saved restaurants, or settings.';
+    case 'getMenu': return 'Read a menu. Scan with your camera, recommended at the restaurant, or find the menu by name or link.';
     case 'capture': return 'Capture menu screen. Point the camera at the menu, take photos, then analyze.';
     case 'find': return 'Find menu screen. Enter a restaurant name and city, or paste a menu link.';
     case 'conversation': return 'Conversation screen. MenuVoice can speak with you or let you browse the menu.';
