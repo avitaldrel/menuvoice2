@@ -21,7 +21,7 @@ import FindScreen from './screens/FindScreen';
 import TutorialScreen from './screens/TutorialScreen';
 
 function Root() {
-  const { profile, loaded } = useProfile();
+  const { profile, loaded, update } = useProfile();
   const { paused, status, pause, resume } = usePause();
   const [historyEntry, setHistoryEntry] = useState<AppHistoryEntry>(initializeAppHistory);
   const historyEntryRef = useRef(historyEntry);
@@ -101,6 +101,21 @@ function Root() {
 
   if (!profile.email) return <LoginScreen />;
   if (!profile.onboarded) return <OnboardingScreen />;
+
+  // First open after setup: the tutorial IS the first screen. "Get started"
+  // (or navigating anywhere from it) marks it seen; it never auto-shows again.
+  if (!profile.tutorialSeen) {
+    return (
+      <TutorialScreen
+        firstRun
+        navigate={(route) => {
+          update({ tutorialSeen: true });
+          navigate(route);
+        }}
+        goBack={() => update({ tutorialSeen: true })}
+      />
+    );
+  }
 
   const current = historyEntry.route;
   let screen: ReactNode;
