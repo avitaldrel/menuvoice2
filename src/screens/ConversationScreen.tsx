@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Screen, SecondaryButton } from '../components';
 import { ScreenProps, Route } from '../nav';
-import { ChatTurn, ParsedMenu } from '../types';
+import { ChatTurn, ParsedMenu, SavedRestaurant, type CorrectionType } from '../types';
 import { useProfile } from '../state/ProfileContext';
 import { usePause } from '../state/PauseContext';
 import { speak, stopSpeaking, createStreamingSpeech } from '../lib/speech';
@@ -34,6 +34,8 @@ import {
   earconThinkingStop,
 } from '../lib/earcon';
 import { mergeUnique } from '../util';
+import { buildMenuTrustSummary, buildSavedRestaurantTrustLines, buildStaffVerificationCard } from '../lib/menuData';
+import { getSavedRestaurant, recordRestaurantCorrection } from '../lib/storage';
 
 type Phase = 'speaking' | 'idle' | 'recording' | 'transcribing' | 'thinking' | 'error';
 
@@ -57,6 +59,13 @@ function dishLabel(item: ParsedMenu['categories'][number]['items'][number]): str
   if (item.ingredients && item.ingredients.length > 0) {
     label += `. Ingredients: ${item.ingredients.join(', ')}`;
   }
+  if (item.missing_price) label += '. Price not listed on this menu.';
+  if (item.unknown_allergens && item.unknown_allergens.length > 0) {
+    label += `. Allergy details are unclear for ${item.unknown_allergens.join(', ')}.`;
+  } else if (item.needs_user_check) {
+    label += '. Details should be confirmed with staff.';
+  }
+  if (item.confidence === 'low') label += '. This item may need a rescan.';
   return label;
 }
 
@@ -113,6 +122,30 @@ function MenuDocument({
                     {item.ingredients.join(', ')}
                   </p>
                 )}
+                {item.source_section && item.source_section !== cat.name && (
+                  <p className="browse-item-desc" aria-hidden="true">
+                    <span className="browse-item-sub">Listed under: </span>
+                    {item.source_section}
+                  </p>
+                )}
+                {item.missing_price && (
+                  <p className="browse-item-desc" aria-hidden="true">
+                    <span className="browse-item-sub">Price: </span>
+                    Not listed on this menu.
+                  </p>
+                )}
+                {item.unknown_allergens && item.unknown_allergens.length > 0 && (
+                  <p className="browse-item-desc" aria-hidden="true">
+                    <span className="browse-item-sub">Allergy note: </span>
+                    Ask staff to confirm {item.unknown_allergens.join(', ')}.
+                  </p>
+                )}
+                {item.needs_user_check && (!item.unknown_allergens || item.unknown_allergens.length === 0) && (
+                  <p className="browse-item-desc" aria-hidden="true">
+                    <span className="browse-item-sub">Check: </span>
+                    Verify this item with staff before relying on the details.
+                  </p>
+                )}
               </article>
             ))}
           </div>
@@ -144,6 +177,11 @@ export default function ConversationScreen({
   const [speakMode, setSpeakMode] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [screenStatus, setScreenStatus] = useState('');
+  const [restaurantRecord, setRestaurantRecord] = useState<SavedRestaurant | null>(null);
+  const [correctionItemName, setCorrectionItemName] = useState('');
+  const [correctionNote, setCorrectionNote] = useState('');
+  const [correctionSaving, setCorrectionSaving] = useState<CorrectionType | null>(null);
 
   const started = useRef(false);
   const speechManagerRef = useRef<SpeechManager | null>(null);
@@ -155,6 +193,16 @@ export default function ConversationScreen({
   pausedRef.current = paused;
   const actionButtonRef = useRef<HTMLButtonElement>(null);
   const menuHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (!route.savedRestaurantId) return;
+    getSavedRestaurant(route.savedRestaurantId).then(setRestaurantRecord).catch(() => {});
+  }, [route.savedRestaurantId]);
+
+  const announceStatus = async (msg: string) => {
+    setScreenStatus(msg);
+    await speak(msg, profile.ttsVoice);
+  };
 
   // Opening: speak menu overview on first mount.
   useEffect(() => {
@@ -435,7 +483,43 @@ export default function ConversationScreen({
     }
   };
 
+  const submitCorrection = async (type: CorrectionType) => {
+    if (!route.savedRestaurantId) {
+      await announceStatus('This menu is not saved yet, so I could not store that correction.');
+      return;
+    }
+    setCorrectionSaving(type);
+    try {
+      const updated = await recordRestaurantCorrection(route.savedRestaurantId, {
+        type,
+        itemName: correctionItemName,
+        note: correctionNote,
+      });
+      if (!updated) {
+        await announceStatus('I could not save that correction right now.');
+        return;
+      }
+      setRestaurantRecord(updated);
+      setCorrectionItemName('');
+      setCorrectionNote('');
+      const label =
+        type === 'wrong_price'
+          ? 'Wrong price'
+          : type === 'missing_item'
+            ? 'Missing item'
+            : type === 'not_on_menu_anymore'
+              ? 'Not on menu anymore'
+              : 'Allergen unclear';
+      await announceStatus(`${label} saved. Thanks for helping keep this menu current.`);
+    } finally {
+      setCorrectionSaving(null);
+    }
+  };
+
   const displayText = liveText || latestAssistant;
+  const menuTrustSummary = buildMenuTrustSummary(menu);
+  const trustLines = restaurantRecord ? buildSavedRestaurantTrustLines(restaurantRecord) : [];
+  const staffCard = buildStaffVerificationCard(menu, profile, latestUser, displayText);
   const indicator = indicatorFor(phase);
   const conversationSummary =
     latestUser && displayText
@@ -496,6 +580,61 @@ export default function ConversationScreen({
         aria-label={phase === 'speaking' ? 'MenuVoice is speaking. Tap empty space to interrupt.' : undefined}
       >
       <h1 className="heading" style={{ marginTop: 4 }}>{restaurantName}</h1>
+
+      <p
+        role="status"
+        aria-live={phase === 'recording' ? 'off' : 'polite'}
+        className="body"
+        style={{ minHeight: 24, marginTop: 0 }}
+      >
+        {screenStatus}
+      </p>
+
+      <div
+        className="card"
+        role="note"
+        aria-label="Menu trust summary"
+        style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+      >
+        <p className="body" style={{ margin: 0, fontWeight: 700 }}>
+          {menuTrustSummary}
+        </p>
+        {trustLines.map((line) => (
+          <p key={line} className="body" style={{ margin: 0 }}>
+            {line}
+          </p>
+        ))}
+      </div>
+
+      {staffCard && (
+        <div
+          className="card"
+          role="note"
+          aria-label={staffCard.title}
+          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+        >
+          <p className="body" style={{ margin: 0, fontWeight: 700 }}>
+            {staffCard.title}
+          </p>
+          <p className="body" style={{ margin: 0 }}>
+            {staffCard.intro}
+          </p>
+          <p className="body" style={{ margin: 0 }}>
+            {staffCard.script}
+          </p>
+          <button
+            className="btn btn-secondary"
+            style={{ minHeight: 64 }}
+            onClick={async () => {
+              setScreenStatus('Playing the staff verification question aloud.');
+              await speak(staffCard.script, profile.ttsVoice);
+            }}
+            aria-label="Play this staff verification question aloud"
+          >
+            Play aloud
+          </button>
+        </div>
+      )}
 
       {/* Incomplete-menu notice — first thing on the page, one sentence, with
           the option to supplement by adding photos. */}
@@ -616,6 +755,71 @@ export default function ConversationScreen({
       >
         {speakMode ? 'Voice mode' : 'Browse mode'}
       </button>
+
+      <section
+        className="card"
+        role="group"
+        aria-label="Report a menu issue"
+        style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+      >
+        <p className="body" style={{ margin: 0, fontWeight: 700 }}>
+          Report a menu issue
+        </p>
+        <p className="body" style={{ margin: 0 }}>
+          Use one of these buttons if the menu looks out of date or unclear.
+        </p>
+        <input
+          className="input"
+          type="text"
+          value={correctionItemName}
+          onChange={(event) => setCorrectionItemName(event.target.value)}
+          placeholder="Dish name, if known"
+          aria-label="Dish name for the correction, if known"
+        />
+        <textarea
+          className="input"
+          value={correctionNote}
+          onChange={(event) => setCorrectionNote(event.target.value)}
+          placeholder="Optional note"
+          aria-label="Optional note about the menu issue"
+          rows={3}
+          style={{ resize: 'vertical', minHeight: 96 }}
+        />
+        <div className="correction-grid">
+          <button
+            className="btn btn-secondary"
+            style={{ minHeight: 64 }}
+            disabled={!!correctionSaving}
+            onClick={() => submitCorrection('wrong_price')}
+          >
+            {correctionSaving === 'wrong_price' ? 'Saving...' : 'Wrong price'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{ minHeight: 64 }}
+            disabled={!!correctionSaving}
+            onClick={() => submitCorrection('missing_item')}
+          >
+            {correctionSaving === 'missing_item' ? 'Saving...' : 'Missing item'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{ minHeight: 64 }}
+            disabled={!!correctionSaving}
+            onClick={() => submitCorrection('not_on_menu_anymore')}
+          >
+            {correctionSaving === 'not_on_menu_anymore' ? 'Saving...' : 'Not on menu anymore'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{ minHeight: 64 }}
+            disabled={!!correctionSaving}
+            onClick={() => submitCorrection('allergen_unclear')}
+          >
+            {correctionSaving === 'allergen_unclear' ? 'Saving...' : 'Allergen unclear'}
+          </button>
+        </div>
+      </section>
 
       <SecondaryButton
         label={saving ? 'Saving...' : 'Done'}

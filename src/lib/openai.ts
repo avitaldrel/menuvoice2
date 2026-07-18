@@ -8,6 +8,7 @@
 
 import { ParsedMenu, UserProfile, ChatTurn } from '../types';
 import { track } from './telemetry';
+import { sanitizeParsedMenu } from './menuData';
 
 const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
 const AUDIO_PROVIDER = import.meta.env.VITE_AUDIO_PROVIDER ?? 'openai';
@@ -93,12 +94,15 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
         '(appetizers, mains, desserts, drinks, specials, etc.). ' +
         'For each item include: name, description (if shown), price (as written, with currency symbol), ' +
         'and a best-effort ingredients list inferred from the name and description. ' +
+        'Also include confidence ("high", "medium", or "low"), missing_price (boolean), ' +
+        'unknown_allergens (array of unclear or unverified allergen concerns), source_section, and ' +
+        'needs_user_check (boolean when a guest should verify details with staff or rescan). ' +
         'Also extract the restaurant name if it is visible on the menu (e.g. on the header or cover). ' +
         'If a photo is unreadable, note it. ' +
         'Set "incomplete" to true if these photos clearly show only PART of the menu. Text cut off at ' +
         'an edge, sections referenced but not pictured, or unreadable areas. Set it to false if the menu appears whole. ' +
         'Respond ONLY with JSON matching this shape: ' +
-        '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string,"incomplete":boolean}',
+        '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[],"confidence":"high|medium|low","missing_price":boolean,"unknown_allergens":string[],"source_section":string,"needs_user_check":boolean}]}],"notes":string,"incomplete":boolean}',
     },
   ];
   for (const b64 of imagesBase64) {
@@ -114,7 +118,7 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
   const raw = json.choices?.[0]?.message?.content ?? '{}';
   let parsed: ParsedMenu;
   try {
-    parsed = JSON.parse(raw);
+    parsed = sanitizeParsedMenu(JSON.parse(raw));
   } catch {
     throw new Error('The menu reader returned something I could not understand. Try retaking the photos.');
   }
@@ -147,6 +151,8 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile): string {
     '',
     'HARD RULES:',
     `- The guest has these ALLERGIES: ${allergies}. Before describing, recommending, or discussing ANY item that contains (or likely contains) one of these allergens, you MUST flag it first, e.g. "Heads up. This contains shellfish, which is one of your allergies. Want me to continue?"`,
+    '- Treat any item with needs_user_check=true, missing_price=true, low confidence, or non-empty unknown_allergens as unverified. Never call those details confirmed or safe.',
+    '- For allergy or ingredient questions, if the menu data is uncertain, say the details are unclear and suggest confirming with staff before ordering.',
     `- The guest dislikes: ${dislikes}. Spice tolerance: ${profile.spiceTolerance}. Cuisines they like: ${cuisines}.`,
     `- Dishes ${profile.name || 'the guest'} has chosen/enjoyed before: ${orders}. When it fits naturally, use these to make recommendations (e.g. "last time you went for the ${profile.pastOrders[0] ?? 'salmon'}, so you might like..."). Don't force it.`,
     profile.hidePrices
@@ -351,14 +357,15 @@ export async function parseMenuFromUrl(url: string): Promise<ParsedMenu> {
     throw new Error(msg);
   }
   const data = (await res.json()) as { menu: ParsedMenu };
-  const itemCount = data.menu.categories.reduce((s, c) => s + c.items.length, 0);
+  const menu = sanitizeParsedMenu(data.menu);
+  const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
   track('menu', 'parse_url', {
     outcome: 'success',
     durationMs: Date.now() - t0,
-    content: { restaurantName: data.menu.restaurantName, itemCount },
+    content: { restaurantName: menu.restaurantName, itemCount },
     metadata: { url },
   });
-  return data.menu;
+  return menu;
 }
 
 /** Restaurant NAME (+ city) -> structured menu, via server-side web search.
@@ -385,14 +392,15 @@ export async function findMenuByName(query: string): Promise<{ menu: ParsedMenu;
     });
     throw new Error(data.error ?? "I couldn't find that restaurant's menu online. Try adding the city to the name.");
   }
-  const itemCount = data.menu.categories.reduce((s, c) => s + c.items.length, 0);
+  const menu = sanitizeParsedMenu(data.menu);
+  const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
   track('menu', 'find_by_name', {
     outcome: 'success',
     durationMs: Date.now() - t0,
-    content: { restaurantName: data.menu.restaurantName ?? data.restaurantName, itemCount },
+    content: { restaurantName: menu.restaurantName ?? data.restaurantName, itemCount },
     metadata: { query, via: data.via, sourceUrl: data.sourceUrl },
   });
-  return { menu: data.menu, restaurantName: data.restaurantName ?? data.menu.restaurantName ?? null, sourceUrl: data.sourceUrl };
+  return { menu, restaurantName: data.restaurantName ?? menu.restaurantName ?? null, sourceUrl: data.sourceUrl };
 }
 
 /** Text -> mp3 Blob (OpenAI TTS). */

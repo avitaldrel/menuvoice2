@@ -19,6 +19,11 @@ export interface MenuItem {
   description?: string;
   price?: string;
   ingredients?: string[];
+  confidence?: 'high' | 'medium' | 'low';
+  missing_price?: boolean;
+  unknown_allergens?: string[];
+  source_section?: string;
+  needs_user_check?: boolean;
 }
 export interface MenuCategory { name: string; items: MenuItem[]; }
 export interface ParsedMenu {
@@ -256,13 +261,16 @@ export async function fetchMenuSource(url: string): Promise<MenuSource> {
 }
 
 const MENU_JSON_SHAPE =
-  '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],"notes":string,"incomplete":boolean}';
+  '{"restaurantName":string|null,"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[],"confidence":"high|medium|low","missing_price":boolean,"unknown_allergens":string[],"source_section":string,"needs_user_check":boolean}]}],"notes":string,"incomplete":boolean}';
 
 const PARSE_INSTRUCTIONS =
   'Extract EVERY menu item you can find. Group items into the menu\'s natural sections ' +
   '(appetizers, mains, desserts, drinks, specials, etc.). For each item include: name, ' +
   'description (if shown), price (as written, with currency symbol), and a best-effort ' +
-  'ingredients list inferred from the name and description. Extract the restaurant name if visible. ' +
+  'ingredients list inferred from the name and description. Also include confidence ("high", "medium", or "low"), ' +
+  'missing_price (boolean), unknown_allergens (array of unclear or unverified allergen concerns), ' +
+  'source_section, and needs_user_check (boolean when the guest should verify with staff or rescan). ' +
+  'Extract the restaurant name if visible. ' +
   'If no menu items are found, set categories to an empty array. ' +
   'Set "incomplete" to true if this looks like only PART of the menu — text cut off, ' +
   'sections referenced but missing, a page clearly continuing elsewhere, or unreadable areas. ' +
@@ -299,6 +307,24 @@ export function extractJson(raw: string): any {
 }
 
 export function sanitizeMenu(menu: ParsedMenu): ParsedMenu {
+  const cleanText = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  };
+  const uniqueStrings = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const part of value) {
+      if (typeof part !== 'string') continue;
+      const cleaned = part.trim().toLowerCase();
+      if (!cleaned || seen.has(cleaned)) continue;
+      seen.add(cleaned);
+      out.push(cleaned);
+    }
+    return out;
+  };
   const categories: MenuCategory[] = [];
   if (Array.isArray(menu.categories)) {
     for (const cat of menu.categories) {
@@ -310,13 +336,34 @@ export function sanitizeMenu(menu: ParsedMenu): ParsedMenu {
         if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
         const itemName = typeof item.name === 'string' ? item.name.trim() : '';
         if (!itemName) continue;
+        const price = cleanText(item.price);
+        const unknownAllergens = uniqueStrings(item.unknown_allergens);
+        const missingPrice = item.missing_price === true || !price;
+        const confidence =
+          item.confidence === 'high' || item.confidence === 'medium' || item.confidence === 'low'
+            ? item.confidence
+            : unknownAllergens.length > 0 || missingPrice
+              ? 'medium'
+              : 'high';
         items.push({
           name: itemName,
-          description: typeof item.description === 'string' ? item.description : undefined,
-          price: typeof item.price === 'string' ? item.price : undefined,
+          description: cleanText(item.description),
+          price,
           ingredients: Array.isArray(item.ingredients)
-            ? item.ingredients.filter((x): x is string => typeof x === 'string')
+            ? item.ingredients
+                .filter((x): x is string => typeof x === 'string')
+                .map((x) => x.trim())
+                .filter(Boolean)
             : undefined,
+          confidence,
+          missing_price: missingPrice,
+          unknown_allergens: unknownAllergens,
+          source_section: cleanText(item.source_section) ?? name,
+          needs_user_check:
+            item.needs_user_check === true ||
+            confidence !== 'high' ||
+            missingPrice ||
+            unknownAllergens.length > 0,
         });
       }
       if (items.length) categories.push({ name, items });

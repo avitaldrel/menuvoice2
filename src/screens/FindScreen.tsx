@@ -105,8 +105,8 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
         announce('Reading the menu from that link. This may take a moment.');
         const menu = await parseMenuFromUrl(fullUrl);
         const restaurantName = menu.restaurantName?.trim() || 'This restaurant';
-        await saveRestaurant(restaurantName, menu).catch(() => {});
-        navigate({ name: 'conversation', menu, restaurantName, source: 'url' });
+        const saved = await saveRestaurant(restaurantName, menu, { source: 'url', sourceUrl: fullUrl }).catch(() => null);
+        navigate({ name: 'conversation', menu, restaurantName, source: 'url', savedRestaurantId: saved?.id });
         return;
       }
 
@@ -141,8 +141,11 @@ export default function FindScreen({ navigate, goBack }: ScreenProps) {
   const confirmMatch = async () => {
     if (!pendingMatch) return;
     const name = pendingMatch.restaurantName?.trim() || pendingMatch.requestedName;
-    await saveRestaurant(name, pendingMatch.menu, pendingMatch.sourceUrl).catch(() => {});
-    navigate({ name: 'conversation', menu: pendingMatch.menu, restaurantName: name, source: 'find' });
+    const saved = await saveRestaurant(name, pendingMatch.menu, {
+      source: 'find',
+      sourceUrl: pendingMatch.sourceUrl,
+    }).catch(() => null);
+    navigate({ name: 'conversation', menu: pendingMatch.menu, restaurantName: name, source: 'find', savedRestaurantId: saved?.id });
   };
 
   const rejectMatch = () => {

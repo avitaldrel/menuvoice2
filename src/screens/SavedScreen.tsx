@@ -7,6 +7,7 @@ import { SavedRestaurant } from '../types';
 import { loadSavedRestaurants, deleteRestaurant } from '../lib/storage';
 import { speak } from '../lib/speech';
 import { track } from '../lib/telemetry';
+import { buildSavedRestaurantTrustLines } from '../lib/menuData';
 
 export default function SavedScreen({ navigate, goBack }: ScreenProps) {
   const [list, setList] = useState<SavedRestaurant[] | null>(null);
@@ -72,13 +73,18 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
               <div className="muted" style={{ marginTop: 4 }}>
                 Last visit: {formatDate(r.capturedAt)}
               </div>
+              <div className="muted" style={{ marginTop: 8 }}>
+                {buildSavedRestaurantTrustLines(r).map((line) => (
+                  <p key={line} style={{ margin: '0 0 4px' }}>{line}</p>
+                ))}
+              </div>
               <div className="row" style={{ marginTop: 12 }}>
                 <PrimaryButton
                   label="Open"
                   hint={`Open the menu for ${r.name}`}
                   onClick={() => {
                     track('saved', 'open', { content: { restaurantName: r.name } });
-                    navigate({ name: 'conversation', menu: r.menu, restaurantName: r.name });
+                    navigate({ name: 'conversation', menu: r.menu, restaurantName: r.name, source: r.source, savedRestaurantId: r.id });
                   }}
                   style={{ flex: 1 }}
                 />

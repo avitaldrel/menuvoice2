@@ -22,7 +22,7 @@ const SEARCH_MODEL = process.env.SEARCH_MODEL ?? 'gpt-5.4-mini';
 
 const FIND_JSON_SHAPE =
   '{"found":boolean,"restaurantName":string|null,"menuUrl":string|null,' +
-  '"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[]}]}],' +
+  '"categories":[{"name":string,"items":[{"name":string,"description":string,"price":string,"ingredients":string[],"confidence":"high|medium|low","missing_price":boolean,"unknown_allergens":string[],"source_section":string,"needs_user_check":boolean}]}],' +
   '"notes":string,"reason":string,"incomplete":boolean}';
 
 function buildPrompt(query: string): string {
@@ -34,7 +34,8 @@ function buildPrompt(query: string): string {
     '',
     'Extract EVERY menu item you can actually read from the pages you visit: name,',
     'description, price as written with currency symbol, and a best-effort ingredients',
-    'list. Group items into the menu\'s natural sections. NEVER invent items you did not read.',
+    'list. Also include confidence, missing_price, unknown_allergens, source_section, and',
+    'needs_user_check for each item. Group items into the menu\'s natural sections. NEVER invent items you did not read.',
     '',
     'Set "incomplete" to true if you could only read PART of the menu (some sections',
     'unreadable or missing, or sources only show highlights). Set it to false if it appears whole.',
@@ -56,6 +57,24 @@ function buildPrompt(query: string): string {
 function sanitizeCategories(raw: unknown): ParsedMenu['categories'] {
   if (!Array.isArray(raw)) return [];
   const categories: ParsedMenu['categories'] = [];
+  const cleanText = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  };
+  const uniqueStrings = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const part of value) {
+      if (typeof part !== 'string') continue;
+      const cleaned = part.trim().toLowerCase();
+      if (!cleaned || seen.has(cleaned)) continue;
+      seen.add(cleaned);
+      out.push(cleaned);
+    }
+    return out;
+  };
   for (const cat of raw) {
     if (!cat || typeof cat !== 'object' || Array.isArray(cat)) continue;
     const { name, items } = cat as { name?: unknown; items?: unknown };
@@ -65,13 +84,34 @@ function sanitizeCategories(raw: unknown): ParsedMenu['categories'] {
       if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
       const it = item as Record<string, unknown>;
       if (typeof it.name !== 'string' || !it.name.trim()) continue;
+      const price = cleanText(it.price);
+      const unknownAllergens = uniqueStrings(it.unknown_allergens);
+      const missingPrice = it.missing_price === true || !price;
+      const confidence =
+        it.confidence === 'high' || it.confidence === 'medium' || it.confidence === 'low'
+          ? it.confidence
+          : unknownAllergens.length > 0 || missingPrice
+            ? 'medium'
+            : 'high';
       cleanItems.push({
         name: it.name.trim(),
-        description: typeof it.description === 'string' ? it.description : undefined,
-        price: typeof it.price === 'string' ? it.price : undefined,
+        description: cleanText(it.description),
+        price,
         ingredients: Array.isArray(it.ingredients)
-          ? it.ingredients.filter((x): x is string => typeof x === 'string')
+          ? it.ingredients
+              .filter((x): x is string => typeof x === 'string')
+              .map((x) => x.trim())
+              .filter(Boolean)
           : undefined,
+        confidence,
+        missing_price: missingPrice,
+        unknown_allergens: unknownAllergens,
+        source_section: cleanText(it.source_section) ?? name.trim(),
+        needs_user_check:
+          it.needs_user_check === true ||
+          confidence !== 'high' ||
+          missingPrice ||
+          unknownAllergens.length > 0,
       });
     }
     if (cleanItems.length > 0) categories.push({ name: name.trim(), items: cleanItems });

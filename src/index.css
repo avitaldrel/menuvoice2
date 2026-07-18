@@ -351,6 +351,12 @@ body {
   min-width: 0;
 }
 
+.correction-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
 /* ── Phase indicator (ConversationScreen) ─────────── */
 /* Each phase gets a background fill + border + dot animation.
    The dot is aria-hidden; spoken state comes from aria-live. */

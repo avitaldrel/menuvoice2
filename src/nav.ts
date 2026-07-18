@@ -7,7 +7,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'capture'; appendTo?: { menu: ParsedMenu; restaurantName: string } }
   | { name: 'find' }
-  | { name: 'conversation'; menu: ParsedMenu; restaurantName: string; source?: 'url' | 'find' | 'photo' }
+  | { name: 'conversation'; menu: ParsedMenu; restaurantName: string; source?: 'url' | 'find' | 'photo'; savedRestaurantId?: string }
   | { name: 'saved' }
   | { name: 'settings' };
 

@@ -1,0 +1,111 @@
+[
+  {
+    "name": "messy-breakfast",
+    "raw": {
+      "restaurantName": "Cafe Example",
+      "categories": [
+        {
+          "name": "Breakfast",
+          "items": [
+            {
+              "name": "Avocado Toast",
+              "description": "Chili flakes",
+              "price": "",
+              "ingredients": ["bread", "avocado", "bread"],
+              "confidence": "low",
+              "unknown_allergens": ["wheat", "wheat"],
+              "needs_user_check": true
+            },
+            {
+              "name": ""
+            }
+          ]
+        },
+        {
+          "name": "",
+          "items": [
+            { "name": "Should drop" }
+          ]
+        }
+      ],
+      "incomplete": true
+    },
+    "expect": {
+      "categoryCount": 1,
+      "itemCount": 1,
+      "missingPriceCount": 1,
+      "unknownAllergenItemCount": 1,
+      "needsUserCheckCount": 1,
+      "lowConfidenceCount": 1
+    }
+  },
+  {
+    "name": "clean-salads-defaults",
+    "raw": {
+      "restaurantName": "Lunch Spot",
+      "categories": [
+        {
+          "name": "Salads",
+          "items": [
+            {
+              "name": "Garden Salad",
+              "price": "$12",
+              "ingredients": ["lettuce", "tomato", "cucumber"]
+            },
+            {
+              "name": "Caesar Salad",
+              "price": "$14",
+              "source_section": "Chef Salads"
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "categoryCount": 1,
+      "itemCount": 2,
+      "missingPriceCount": 0,
+      "unknownAllergenItemCount": 0,
+      "needsUserCheckCount": 0,
+      "lowConfidenceCount": 0
+    }
+  },
+  {
+    "name": "allergy-unclear-import",
+    "raw": {
+      "restaurantName": "Noodle House",
+      "categories": [
+        {
+          "name": "Entrees",
+          "items": [
+            {
+              "name": "Pad Thai",
+              "description": "Rice noodles in tamarind sauce",
+              "price": "$17",
+              "confidence": "medium",
+              "unknown_allergens": ["peanuts", "shellfish"]
+            },
+            {
+              "name": "Curry Tofu",
+              "description": "Coconut curry",
+              "price": "$16",
+              "missing_price": false
+            }
+          ]
+        },
+        {
+          "name": "Broken",
+          "items": [null, 7]
+        }
+      ]
+    },
+    "expect": {
+      "categoryCount": 1,
+      "itemCount": 2,
+      "missingPriceCount": 0,
+      "unknownAllergenItemCount": 1,
+      "needsUserCheckCount": 1,
+      "lowConfidenceCount": 0
+    }
+  }
+]

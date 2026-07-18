@@ -35,6 +35,32 @@ const ANALYSIS_PHRASES = [
 
 // When supplementing an existing (incomplete) menu, fold the new parse into it:
 // items join their matching category by name; new categories are appended.
+function mergeItemDetails(base: ParsedMenu['categories'][number]['items'][number], extra: ParsedMenu['categories'][number]['items'][number]) {
+  const mergedIngredients = Array.from(new Set([...(base.ingredients ?? []), ...(extra.ingredients ?? [])]));
+  const mergedUnknownAllergens = Array.from(new Set([...(base.unknown_allergens ?? []), ...(extra.unknown_allergens ?? [])]));
+  const bestConfidence =
+    extra.confidence === 'high' || (extra.confidence === 'medium' && base.confidence !== 'high')
+      ? extra.confidence
+      : base.confidence;
+
+  return {
+    ...base,
+    description: base.description || extra.description,
+    price: base.price || extra.price,
+    ingredients: mergedIngredients.length ? mergedIngredients : undefined,
+    confidence: bestConfidence,
+    missing_price: !(base.price || extra.price),
+    unknown_allergens: mergedUnknownAllergens,
+    source_section: extra.source_section || base.source_section,
+    needs_user_check:
+      base.needs_user_check === true ||
+      extra.needs_user_check === true ||
+      !(base.price || extra.price) ||
+      mergedUnknownAllergens.length > 0 ||
+      bestConfidence === 'low',
+  };
+}
+
 function mergeMenus(base: ParsedMenu, extra: ParsedMenu): ParsedMenu {
   const categories = base.categories.map((c) => ({ ...c, items: [...c.items] }));
   for (const cat of extra.categories) {
@@ -46,10 +72,11 @@ function mergeMenus(base: ParsedMenu, extra: ParsedMenu): ParsedMenu {
       continue;
     }
     for (const item of cat.items) {
-      const dup = existing.items.some(
+      const dup = existing.items.find(
         (i) => i.name.trim().toLowerCase() === item.name.trim().toLowerCase()
       );
       if (!dup) existing.items.push(item);
+      else Object.assign(dup, mergeItemDetails(dup, item));
     }
   }
   return {
@@ -336,9 +363,9 @@ export default function CaptureScreen({
       });
       const restaurantName =
         appendTo?.restaurantName || menu.restaurantName?.trim() || 'This restaurant';
-      await saveRestaurant(restaurantName, menu).catch(() => {});
+      const saved = await saveRestaurant(restaurantName, menu, { source: 'photo' }).catch(() => null);
       stopCamera(streamRef.current);
-      navigate({ name: 'conversation', menu, restaurantName });
+      navigate({ name: 'conversation', menu, restaurantName, source: 'photo', savedRestaurantId: saved?.id });
     } catch (e: any) {
       track('capture', 'ocr_result', {
         outcome: 'failure',
