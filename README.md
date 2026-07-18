@@ -1,9 +1,15 @@
 # MenuVoice (mobile web prototype)
 
-Voice-first menu navigation for blind and low-vision diners. Capture a menu, then
-talk to it: ask what's on it, what's cheap, what fits your diet — with proactive
-allergen warnings from your saved profile and strict turn-taking (the app never
-cuts you off).
+**MenuVoice is a voice-first menu navigation app for blind and low-vision
+diners.** Capture a menu, then talk to it: ask what's on it, what's cheap, or
+what fits your diet — with proactive allergen warnings from your saved profile
+and strict turn-taking so the app never cuts you off.
+
+You can [open the MenuVoice app](https://menu.avitaldrel.com/) or
+[learn more about MenuVoice](https://menuvoice.avitaldrel.com/) on its public
+website. To learn more about the founder of MenuVoice, Avital Drel, and see more
+accessibility and product work, visit
+[AvitalDrel.com](https://avitaldrel.com/).
 
 This is a **mobile web app** (React + Vite). It runs on Windows/Mac for dev, and
 deploys to a URL your testers open on their own iPhone with VoiceOver — no App
@@ -119,4 +125,3 @@ src/screens/               Onboarding, Home, Capture, Conversation, Saved, Setti
 
 The conversation state machine and the turn-taking guarantee are documented at
 the top of `src/screens/ConversationScreen.tsx`.
-```
