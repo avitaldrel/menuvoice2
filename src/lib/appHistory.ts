@@ -47,5 +47,5 @@ export function readAppHistoryEntry(value: unknown): StoredAppHistoryEntry | nul
 function isRoute(value: unknown): value is Route {
   if (!value || typeof value !== 'object') return false;
   const name = (value as { name?: unknown }).name;
-  return name === 'home' || name === 'capture' || name === 'find' || name === 'conversation' || name === 'saved' || name === 'settings' || name === 'tutorial';
+  return name === 'home' || name === 'getMenu' || name === 'capture' || name === 'find' || name === 'conversation' || name === 'saved' || name === 'settings' || name === 'tutorial';
 }
