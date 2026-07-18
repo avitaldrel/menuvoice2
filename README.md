@@ -125,3 +125,9 @@ src/screens/               Onboarding, Home, Capture, Conversation, Saved, Setti
 
 The conversation state machine and the turn-taking guarantee are documented at
 the top of `src/screens/ConversationScreen.tsx`.
+
+## About the founder
+
+MenuVoice was created by Avital Drel. Visit
+[AvitalDrel.com](https://avitaldrel.com/) to explore more accessibility and
+product work.
