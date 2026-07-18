@@ -2,7 +2,7 @@
 // Keep this module dependency-free so dashboard view functions can import it safely.
 
 const DEFAULT_EXCLUDED_EMAILS =
-  '2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com';
+  '2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com,m.ibkhan@icloud.com';
 
 export function excludeList(): string[] {
   const raw = process.env.REPORT_EXCLUDE_EMAILS ?? DEFAULT_EXCLUDED_EMAILS;

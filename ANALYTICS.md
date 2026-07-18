@@ -127,7 +127,7 @@ https://<deployment>/api/morning?key=<REPORT_KEY>
   pre-login rows (session start / first screen / welcome TTS, fired before Google
   login attaches the email) are NOT counted as a separate "anonymous" user — they
   belong to whichever account the session resolves to. There is no anonymous metric.
-- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com`). Testers who also receive the report are excluded here too, so their own testing never shows up in the numbers they read.
+- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com,m.ibkhan@icloud.com`). Testers who also receive the report are excluded here too, so their own testing never shows up in the numbers they read.
 - Window: `?hours=N` or `?days=N` (default 24h). Output: HTML (default), `?format=text` (cron/email friendly), or `?format=json`.
 - Same `REPORT_KEY` guard. Zero AI tokens.
 - The bottom of every report shows Cartesia key rotation status. A full Cartesia

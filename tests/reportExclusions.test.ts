@@ -1,6 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isExcludedIdentity } from '../api/_reportExclusions.ts';
+import { excludeList, isExcludedIdentity } from '../api/_reportExclusions.ts';
+
+test('default exclusions include the requested morning-report account', () => {
+  const original = process.env.REPORT_EXCLUDE_EMAILS;
+  delete process.env.REPORT_EXCLUDE_EMAILS;
+  try {
+    assert.equal(excludeList().includes('m.ibkhan@icloud.com'), true);
+  } finally {
+    if (original === undefined) {
+      delete process.env.REPORT_EXCLUDE_EMAILS;
+    } else {
+      process.env.REPORT_EXCLUDE_EMAILS = original;
+    }
+  }
+});
 
 test('Avi test identities are excluded case-insensitively', () => {
   assert.equal(isExcludedIdentity('avi274', []), true);
