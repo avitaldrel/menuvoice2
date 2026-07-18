@@ -20,13 +20,14 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@vercel/postgres';
+import { cartesiaConfiguredKeyCount, getCartesiaStatus } from './_cartesiaStatus.js';
+import { excludeList, excludePatternList } from './_reportExclusions.js';
 
-// Self-contained on purpose: this endpoint depends only on @vercel/postgres (the
-// same surface as the working /api/report). It deliberately does NOT import
-// ./_morningData — doing so pulls that module's whole dependency graph into load,
-// which has crashed view endpoints (FUNCTION_INVOCATION_FAILED). The three helpers
-// below mirror _morningData's excludeList()/withClient()/esc() so all three views
-// stay consistent; keep the exclusion default in sync if it changes there.
+// This endpoint deliberately does NOT import ./_morningData — doing so pulls that
+// module's whole dependency graph into load, which has crashed view endpoints
+// (FUNCTION_INVOCATION_FAILED). Cartesia status comes from one small Redis helper.
+// The exclusion helper is dependency-free, so this view can share its rules with
+// the morning report without importing that module's larger dependency graph.
 
 async function withClient<T>(fn: (client: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
   const client = createClient();
@@ -47,13 +48,7 @@ function esc(v: unknown): string {
     .replace(/"/g, '&quot;');
 }
 
-// Internal/test accounts to hide. Mirrors _morningData.excludeList() (same env var
-// + default) so /api/report, /api/morning, and /api/dashboard agree.
-function excludeList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com';
-  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-}
-
+// Internal/test accounts are supplied by the shared helper above.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expected = process.env.REPORT_KEY?.trim();
   const provided = (req.query.key as string) ?? '';
@@ -104,14 +99,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const bucketStep = bucketUnit === 'hour' ? '1 hour' : '1 day';
 
   // Internal/test accounts (own testing) are excluded everywhere so the dashboard
-  // reflects real usage and agrees with the morning report. $1 = lower-cased email
-  // array; anonymous events (NULL email) always pass. Parameterized = injection-safe.
+  // reflects real usage and agrees with the morning report. $1 = exact emails and
+  // $2 = identity patterns; anonymous events (NULL email) always pass. Both are parameterized.
   const exclude = excludeList();
-  const keep = `(user_email IS NULL OR lower(user_email) <> ALL($1::text[]))`;
-  const keepE = `(e.user_email IS NULL OR lower(e.user_email) <> ALL($1::text[]))`;
-  const keepSignedIn = `user_email IS NOT NULL AND lower(user_email) <> ALL($1::text[])`;
+  const excludePatterns = excludePatternList();
+  const patternExcluded = (column: string) => `(lower(${column}) ~ ANY($2::text[]))`;
+  const keep = `(user_email IS NULL OR (lower(user_email) <> ALL($1::text[]) AND NOT ${patternExcluded('user_email')}))`;
+  const keepE = `(e.user_email IS NULL OR (lower(e.user_email) <> ALL($1::text[]) AND NOT ${patternExcluded('e.user_email')}))`;
+  const keepSignedIn = `user_email IS NOT NULL AND lower(user_email) <> ALL($1::text[]) AND NOT ${patternExcluded('user_email')}`;
+  const queryParams = [exclude, excludePatterns];
 
   try {
+    const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());
     const data = await withClient(async (client) => {
       const [headline, prev, series, funnel, screens, topEvents, users, recent, failures] =
         await Promise.all([
@@ -124,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               count(*) FILTER (WHERE outcome='failure')                         AS failures,
               min(ts) AS first_ts, max(ts) AS last_ts
             FROM events WHERE ts > ${w} AND ${keep}
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT
               count(*)                                                          AS events,
@@ -133,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               count(DISTINCT session_id) FILTER (WHERE user_email IS NULL)      AS anon_sessions,
               count(*) FILTER (WHERE outcome='failure')                         AS failures
             FROM events WHERE ts > ${prevStart} AND ts <= ${w} AND ${keep}
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             WITH buckets AS (
               SELECT generate_series(
@@ -151,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ON date_trunc('${bucketUnit}', e.ts) = b.bucket AND e.ts > ${w} AND ${keepE}
             GROUP BY b.bucket
             ORDER BY b.bucket
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT
               count(*) FILTER (WHERE event_name='camera_start')                          AS camera,
@@ -161,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               count(*) FILTER (WHERE event_name='user_utterance')                        AS asked,
               count(*) FILTER (WHERE event_name='llm_reply')                             AS replied
             FROM events WHERE ts > ${w} AND ${keep}
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT coalesce(screen,'(none)') AS screen,
                    count(*) AS n,
@@ -169,7 +168,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    count(*) FILTER (WHERE outcome='failure') AS failures
             FROM events WHERE ts > ${w} AND ${keep}
             GROUP BY screen ORDER BY n DESC LIMIT 12
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT event_type, event_name,
                    count(*) AS n,
@@ -177,7 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    round(avg(duration_ms)) AS avg_ms
             FROM events WHERE ts > ${w} AND ${keep}
             GROUP BY event_type, event_name ORDER BY n DESC LIMIT 20
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             WITH win AS (
               SELECT user_email,
@@ -200,19 +199,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    (life.first_ts > ${w}) AS is_new
             FROM win JOIN life USING (user_email)
             ORDER BY win.last_seen DESC LIMIT 100
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT ts, coalesce(user_email,'(anon)') AS user_email, screen,
                    event_type, event_name, outcome, duration_ms, session_id
             FROM events WHERE ts > ${w} AND ${keep}
             ORDER BY ts DESC LIMIT 50
-          `, [exclude]),
+          `, queryParams),
           client.query(`
             SELECT ts, coalesce(user_email,'(anon)') AS user_email, screen,
                    event_name, session_id, content
             FROM events WHERE outcome='failure' AND ts > ${w} AND ${keep}
             ORDER BY ts DESC LIMIT 30
-          `, [exclude]),
+          `, queryParams),
         ]);
 
       return {
@@ -242,6 +241,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       window_hours: hours,
       bucket_unit: bucketUnit,
       generated: new Date().toISOString(),
+      cartesia: await cartesiaPromise,
       ...data,
     });
   } catch (err) {
@@ -310,6 +310,9 @@ function shell(key: string): string {
   .chart .axis { stroke: var(--muted); stroke-width: 1; }
   .chart text { fill: currentColor; font-size: 10px; opacity: .7; }
   .empty { opacity: .65; font-style: italic; padding: .5rem 0; }
+  .table-scroll { overflow-x: auto; }
+  .credit-note { max-width: 75ch; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   #err { color: var(--bad); font-weight: 600; }
 </style>
 </head>
@@ -365,6 +368,9 @@ function shell(key: string): string {
   </div>
 </div>
 
+<h2>Cartesia API keys</h2>
+<div id="cartesia" aria-live="polite"></div>
+
 <script>
 const KEY = ${JSON.stringify(key)};
 const REFRESH_MS = 30000;
@@ -410,6 +416,35 @@ function renderCards(d){
     return '<div class="card"><div class="num '+(isFail&&Number(h[key])>0?'bad':'')+'">'+num(h[key])+'</div>'+
       '<div class="lbl">'+lbl+'</div>'+delta(h[key],p[key])+'</div>';
   }).join('');
+}
+
+function renderCartesia(d){
+  const c=d.cartesia||{};
+  const box=$('cartesia');
+  if(!c.configured){ box.innerHTML='<p class="empty">No Cartesia keys configured.</p>'; return; }
+  const headline=c.allExhausted
+    ? '<p class="bad">All Cartesia keys are exhausted. OpenAI fallback is active.</p>'
+    : '<p><strong>Active account:</strong> '+esc(c.activeEmail||c.activeLabel||'not observed yet')+
+      (c.activeEmail&&c.activeLabel?' ('+esc(c.activeLabel)+')':'')+
+      (c.activeSince?' since '+esc(fmtTs(c.activeSince)):'')+'</p>';
+  const summary='<p><strong>Remaining after active:</strong> '+num(c.remainingAfterActive)+
+    (c.lastSwitchedAt?' &middot; <strong>Last switched:</strong> '+esc(fmtTs(c.lastSwitchedAt))+' ('+esc(ago(c.lastSwitchedAt))+')':'')+
+    (c.firstReturnsAt?' &middot; <strong>First estimated return:</strong> '+esc(fmtTs(c.firstReturnsAt)):'')+'</p>';
+  const hasLiveCredits=(c.keys||[]).some(k=>k.credits&&k.credits.state==='live');
+  const hasTrackedCredits=(c.keys||[]).some(k=>k.credits&&k.credits.state==='tracked');
+  const creditNote=hasLiveCredits
+    ? '<p class="small credit-note">Accounts marked Cartesia usage API use live usage totals and their configured allowance. Accounts marked MenuVoice tracked estimate start at 20,000 and subtract successful MenuVoice TTS requests at approximately one credit per character.</p>'
+    : hasTrackedCredits
+      ? '<p class="small credit-note"><strong>Each free key starts at 20,000 credits.</strong> Credits left are a MenuVoice tracked estimate based on successful TTS requests at approximately one credit per character. Tracking begins with this deployment and cannot see usage outside MenuVoice; Cartesia may vary slightly.</p>'
+      : '<p class="small credit-note">Credit totals are unavailable.</p>';
+  const creditCell=(k,field)=>{
+    const cr=k.credits||{};
+    if(cr.state==='live'||cr.state==='tracked') return num(cr[field]);
+    return '<span class="small">'+esc(cr.message||'Unavailable')+'</span>';
+  };
+  const rows=(c.keys||[]).map(k=>'<tr><td>'+esc(k.email||'Email not stored')+'</td><td>'+esc(k.label)+'</td><td class="'+(k.status==='exhausted'?'bad':k.status==='active'?'good':'')+'">'+esc(k.status)+'</td><td class="r">'+creditCell(k,'remaining')+'</td><td class="r">'+creditCell(k,'used')+'</td><td class="r">'+(k.credits&&k.credits.limit!=null?num(k.credits.limit):'')+'</td><td>'+esc(k.credits&&k.credits.state==='live'?'Cartesia usage API':k.credits&&k.credits.state==='tracked'?'MenuVoice tracked estimate':'Unavailable')+'</td><td>'+esc(k.credits&&k.credits.periodStart?fmtTs(k.credits.periodStart):'')+'</td><td>'+esc(fmtTs(k.lastSuccessAt))+'</td><td>'+esc(fmtTs(k.exhaustedAt))+'</td><td>'+esc(fmtTs(k.availableAt))+'</td></tr>').join('');
+  const prediction=c.projectedRunOutAt?'<p><strong>At the recent rate, '+esc(c.activeLabel)+' might run out on '+esc(c.projectedRunOutAt.slice(0,10))+'.</strong></p>':'';
+  box.innerHTML=headline+summary+prediction+creditNote+'<div class="table-scroll"><table><caption class="sr-only">Cartesia account credits and key rotation breakdown</caption><thead><tr><th>Account email</th><th>Key slot</th><th>Rotation status</th><th class="r">Credits left</th><th class="r">Credits used</th><th class="r">Monthly allowance</th><th>Balance source</th><th>Tracking or period started</th><th>Last successful use</th><th>Exhausted at</th><th>Estimated return</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
 function renderChart(d){
@@ -549,7 +584,7 @@ async function load(){
     const d=await r.json();
     if(!d.ok){ throw new Error(d.error||'error'); }
     $('err').textContent='';
-    renderCards(d); renderChart(d); renderFunnel(d); renderScreens(d);
+    renderCards(d); renderCartesia(d); renderChart(d); renderFunnel(d); renderScreens(d);
     renderUsers(d); renderEvents(d); renderRecent(d); renderFailures(d);
     lastFetch=Date.now();
     setStatus(true, d.generated);

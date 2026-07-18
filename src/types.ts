@@ -6,11 +6,36 @@ export interface UserProfile {
   spiceTolerance: 'none' | 'mild' | 'medium' | 'hot';
   cuisinesLiked: string[];
   pastOrders: string[]; // dishes the guest decided on before — feeds recommendations
+  diningHistory: DiningHistoryEntry[];
   hidePrices: boolean;
   ttsVoice: string;
   onboarded: boolean;
   imageLogging: boolean;
+  // Accessibility preferences.
+  theme?: AppTheme; // color scheme (default 'light': black-on-white for low vision)
+  textScale?: TextScale; // global text size (default 'large')
+  speechRate?: number; // Conversation Mode speaking speed multiplier (default 1)
+  tutorialSeen?: boolean; // first-run tutorial shown once, then never auto-shown
 }
+
+export interface DiningHistoryEntry {
+  id: string;
+  learnedAt: string;
+  restaurantName?: string;
+  location?: string;
+  sourceType?: MenuSourceType;
+  orders: string[];
+  likes: string[];
+  dislikes: string[];
+  turnCount: number;
+  menuItemCount?: number;
+}
+// Color schemes tuned for different low-vision needs:
+//   dark          – light text on near-black (glare/photophobia friendly)
+//   light         – near-black text on white (maximum edge contrast)
+//   high-contrast – bright yellow on pure black (classic low-vision high contrast)
+export type AppTheme = 'dark' | 'light' | 'high-contrast';
+export type TextScale = 'normal' | 'large' | 'xlarge';
 
 export interface MenuItem {
   name: string;
@@ -73,6 +98,13 @@ export interface SavedRestaurant {
   name: string;
   menu: ParsedMenu;
   capturedAt: string; // ISO date
+  createdAt?: string; // first time this restaurant/location was saved
+  updatedAt?: string; // last time the saved menu data changed
+  lastOpenedAt?: string;
+  openCount?: number;
+  saveCount?: number;
+  categoryCount?: number;
+  itemCount?: number;
   sourceUrl?: string;
   location?: string; // confirmed branch address; keeps chain branches separate
   provenance?: MenuProvenance;
@@ -91,8 +123,14 @@ export const EMPTY_PROFILE: UserProfile = {
   spiceTolerance: 'medium',
   cuisinesLiked: [],
   pastOrders: [],
+  diningHistory: [],
   hidePrices: false,
   ttsVoice: 'shimmer',
   onboarded: false,
   imageLogging: false,
+  // Research-backed low-vision defaults: black text on white, large type.
+  // Dark and High-contrast schemes stay one tap away in Settings.
+  theme: 'light',
+  textScale: 'large',
+  speechRate: 1,
 };

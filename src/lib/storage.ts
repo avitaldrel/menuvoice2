@@ -7,6 +7,46 @@ import { track } from './telemetry';
 
 const PROFILE_KEY = 'menuvoice.profile.v1';
 const SAVED_KEY = 'menuvoice.savedRestaurants.v1';
+const MAX_DINING_HISTORY = 100;
+
+export function menuStats(menu: ParsedMenu): { categoryCount: number; itemCount: number } {
+  const categoryCount = Array.isArray(menu.categories) ? menu.categories.length : 0;
+  const itemCount = Array.isArray(menu.categories)
+    ? menu.categories.reduce((sum, category) => sum + (Array.isArray(category.items) ? category.items.length : 0), 0)
+    : 0;
+  return { categoryCount, itemCount };
+}
+
+function normalizeProfile(profile: Partial<UserProfile> | null | undefined): UserProfile {
+  const merged = { ...EMPTY_PROFILE, ...(profile ?? {}) };
+  return {
+    ...merged,
+    diningHistory: Array.isArray(merged.diningHistory)
+      ? merged.diningHistory.slice(0, MAX_DINING_HISTORY)
+      : [],
+  };
+}
+
+function normalizeSavedRestaurant(r: SavedRestaurant): SavedRestaurant {
+  const stats = menuStats(r.menu);
+  const capturedAt = r.capturedAt || new Date().toISOString();
+  return {
+    ...r,
+    capturedAt,
+    createdAt: r.createdAt ?? capturedAt,
+    updatedAt: r.updatedAt ?? capturedAt,
+    openCount: r.openCount ?? 0,
+    saveCount: r.saveCount ?? 1,
+    categoryCount: r.categoryCount ?? stats.categoryCount,
+    itemCount: r.itemCount ?? stats.itemCount,
+  };
+}
+
+function normalizeSavedRestaurants(restaurants: unknown): SavedRestaurant[] {
+  return Array.isArray(restaurants)
+    ? restaurants.map((r) => normalizeSavedRestaurant(r as SavedRestaurant))
+    : [];
+}
 
 // ── Cloud sync ────────────────────────────────────────────────────────────────
 
@@ -39,7 +79,7 @@ export async function loadFromCloud(email: string): Promise<{ profile: UserProfi
       outcome: 'success',
       metadata: { restaurant_count: (data.restaurants ?? []).length },
     });
-    return { profile: data.profile ?? null, restaurants: data.restaurants ?? [] };
+    return { profile: normalizeProfile(data.profile), restaurants: normalizeSavedRestaurants(data.restaurants) };
   } catch {
     return null;
   }
@@ -49,9 +89,9 @@ export async function loadFromCloud(email: string): Promise<{ profile: UserProfi
 export async function restoreFromCloud(email: string): Promise<UserProfile | null> {
   const cloud = await loadFromCloud(email);
   if (!cloud?.profile) return null;
-  const merged: UserProfile = { ...EMPTY_PROFILE, ...cloud.profile, email };
+  const merged: UserProfile = normalizeProfile({ ...cloud.profile, email });
   localStorage.setItem(PROFILE_KEY, JSON.stringify(merged));
-  localStorage.setItem(SAVED_KEY, JSON.stringify(cloud.restaurants ?? []));
+  localStorage.setItem(SAVED_KEY, JSON.stringify(normalizeSavedRestaurants(cloud.restaurants)));
   return merged;
 }
 
@@ -59,23 +99,24 @@ export async function loadProfile(): Promise<UserProfile> {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     if (!raw) return { ...EMPTY_PROFILE };
-    return { ...EMPTY_PROFILE, ...JSON.parse(raw) };
+    return normalizeProfile(JSON.parse(raw));
   } catch {
     return { ...EMPTY_PROFILE };
   }
 }
 
 export async function saveProfile(profile: UserProfile): Promise<void> {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  const normalized = normalizeProfile(profile);
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(normalized));
   const restaurants = await loadSavedRestaurants();
-  pushToCloud(profile, restaurants);
+  pushToCloud(normalized, restaurants);
 }
 
 export async function loadSavedRestaurants(): Promise<SavedRestaurant[]> {
   try {
     const raw = localStorage.getItem(SAVED_KEY);
     if (!raw) return [];
-    return JSON.parse(raw);
+    return normalizeSavedRestaurants(JSON.parse(raw));
   } catch {
     return [];
   }
@@ -126,26 +167,76 @@ export async function saveRestaurant(
 ): Promise<SavedRestaurant> {
   const { sourceUrl, location, provenance } = opts;
   const list = await loadSavedRestaurants();
+  const now = new Date().toISOString();
+  const stats = menuStats(menu);
+  const entryKey = locationKey({
+    name: name.trim() || 'Unnamed restaurant',
+    location,
+    provenance,
+  });
+  const existing = list.find((r) => locationKey(r) === entryKey);
   const entry: SavedRestaurant = {
-    id: `r-${Date.now()}`,
+    id: existing?.id ?? `r-${Date.now()}`,
     name: name.trim() || 'Unnamed restaurant',
     menu,
-    capturedAt: new Date().toISOString(),
+    capturedAt: now,
+    createdAt: existing?.createdAt ?? existing?.capturedAt ?? now,
+    updatedAt: now,
+    lastOpenedAt: existing?.lastOpenedAt,
+    openCount: existing?.openCount ?? 0,
+    saveCount: (existing?.saveCount ?? 0) + 1,
+    categoryCount: stats.categoryCount,
+    itemCount: stats.itemCount,
     ...(sourceUrl ? { sourceUrl } : {}),
     ...(location ? { location } : {}),
     ...(provenance ? { provenance } : {}),
   };
-  const entryKey = locationKey(entry);
   const filtered = list.filter((r) => locationKey(r) !== entryKey);
   filtered.unshift(entry);
   trySetItem(SAVED_KEY, JSON.stringify(filtered));
   track('restaurant', 'saved', {
     content: { id: entry.id, name: entry.name },
-    metadata: { location: entry.location, sourceType: provenance?.sourceType },
+    metadata: {
+      location: entry.location,
+      sourceType: provenance?.sourceType,
+      category_count: entry.categoryCount,
+      item_count: entry.itemCount,
+      save_count: entry.saveCount,
+    },
   });
   const profile = await loadProfile();
   pushToCloud(profile, filtered);
   return entry;
+}
+
+export async function markRestaurantOpened(id: string): Promise<SavedRestaurant | null> {
+  const list = await loadSavedRestaurants();
+  const index = list.findIndex((r) => r.id === id);
+  if (index < 0) return null;
+
+  const now = new Date().toISOString();
+  const updated: SavedRestaurant = {
+    ...list[index],
+    lastOpenedAt: now,
+    openCount: (list[index].openCount ?? 0) + 1,
+    updatedAt: now,
+  };
+  const next = [...list];
+  next[index] = updated;
+  localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+  track('saved', 'open', {
+    content: { restaurantName: updated.name },
+    metadata: {
+      location: updated.location,
+      sourceType: updated.provenance?.sourceType,
+      item_count: updated.itemCount,
+      open_count: updated.openCount,
+      last_opened_at: updated.lastOpenedAt,
+    },
+  });
+  const profile = await loadProfile();
+  pushToCloud(profile, next);
+  return updated;
 }
 
 export async function deleteRestaurant(id: string): Promise<void> {

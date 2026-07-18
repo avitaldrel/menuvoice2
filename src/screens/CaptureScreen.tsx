@@ -24,6 +24,7 @@ import {
   type ZoomRange,
 } from '../lib/camera';
 import { parseMenuFromImages, hasApiKey } from '../lib/openai';
+import { friendlyError, SERVICE_UNAVAILABLE_MSG } from '../lib/errors';
 import { saveRestaurant } from '../lib/storage';
 import { MenuScanner } from '../lib/scanner';
 import { assessPhotoQuality, type PhotoQualityIssue } from '../lib/photoQuality';
@@ -35,6 +36,13 @@ const ANALYSIS_PHRASES = [
   'Almost there, hang tight.',
   'Still working on it, one more moment.',
 ];
+
+interface CapturedPhoto {
+  id: number;
+  imageBase64: string;
+  issues: PhotoQualityIssue[];
+  checkingQuality: boolean;
+}
 
 // When supplementing an existing (incomplete) menu, fold the new parse into it:
 // items join their matching category by name; new categories are appended.
@@ -80,14 +88,12 @@ export default function CaptureScreen({
   const prevSteadyRef = useRef(0);
   const reassureIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reassureCountRef = useRef(0);
+  const nextPhotoIdRef = useRef(1);
+  const photosRef = useRef<CapturedPhoto[]>([]);
 
-  const [photos, setPhotos] = useState<string[]>([]);
-  // Parallel to `photos` — issues[i] is empty when photo i passed quality
-  // checks. Kept separate from telemetry-only tracking so the UI can gate on
-  // it (retake prompt, confirm-before-analyzing) without recomputing.
-  const [photoIssues, setPhotoIssues] = useState<PhotoQualityIssue[][]>([]);
+  const [photos, setPhotosState] = useState<CapturedPhoto[]>([]);
   const [confirmAnalyzeWithIssues, setConfirmAnalyzeWithIssues] = useState(false);
-  const [status, setStatus] = useState('Starting camera...');
+  const [status, setStatus] = useState('');
   const [coachStatus, setCoachStatus] = useState('');
   const [camError, setCamError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
@@ -96,6 +102,12 @@ export default function CaptureScreen({
   const [previewAspect, setPreviewAspect] = useState('3 / 4');
   const [zoomRange, setZoomRange] = useState<ZoomRange>({ min: 1, max: 3, step: 0.25, value: 1, native: false });
   const [zoom, setZoom] = useState(1);
+
+  const setPhotos = (updater: (prev: CapturedPhoto[]) => CapturedPhoto[]) => {
+    const next = updater(photosRef.current);
+    photosRef.current = next;
+    setPhotosState(next);
+  };
 
   // Start / stop camera.
   useEffect(() => {
@@ -194,11 +206,6 @@ export default function CaptureScreen({
     }
     if (!autoRef.current) autoRef.current = new MenuScanner();
 
-    setCoachStatus(
-      'Auto capture is on. Hold your phone flat, about a foot above the menu. ' +
-        'I will guide you and take the photo automatically. If I take too long, ' +
-        'find the Take photo button below the camera.',
-    );
     if (videoRef.current) {
       autoRef.current.start(videoRef.current, {
         onCoach: (msg) => {
@@ -231,35 +238,55 @@ export default function CaptureScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoMode, cameraReady, analyzing, camError, zoom, zoomRange.native, paused]);
 
-  // Runs after every capture (manual or auto) — auto-capture already gets
-  // live framing/lighting coaching from MenuScanner while shooting, but
-  // nothing previously checked the STILL result, and manual shots get no
-  // live coaching at all. A blind user can't glance at a thumbnail to judge
-  // a bad photo, so this speaks up immediately if one is flagged.
-  const addPhoto = async (b64: string | null, viaAuto: boolean) => {
+  const finishPhotoQuality = (id: number, quality: { ok: boolean; issues: PhotoQualityIssue[] }) => {
+    const index = photosRef.current.findIndex((photo) => photo.id === id);
+    if (index === -1) return;
+    setPhotos((prev) =>
+      prev.map((photo) =>
+        photo.id === id
+          ? { ...photo, issues: quality.issues, checkingQuality: false }
+          : photo
+      )
+    );
+    track('capture', 'photo_quality', {
+      metadata: {
+        photo_number: index + 1,
+        quality_ok: quality.ok,
+        issues: quality.issues.map((i) => i.code),
+      },
+    });
+    if (!quality.ok) {
+      const msg = `Photo ${index + 1}. ${quality.issues.map((i) => i.message).join(' ')} Consider retaking it, or tap Read menu to continue.`;
+      setStatus(msg);
+    }
+  };
+
+  // Runs after every capture (manual or auto). Add the photo immediately, then
+  // attach the quality verdict when decoding finishes so the capture flow never
+  // appears to stall.
+  const addPhoto = (b64: string | null, viaAuto: boolean) => {
     if (!b64) return;
     if (viaAuto) earconCapture();
     setConfirmAnalyzeWithIssues(false);
-    const quality = await assessPhotoQuality(b64).catch<{ ok: boolean; issues: PhotoQualityIssue[] }>(() => ({ ok: true, issues: [] }));
-    setPhotoIssues((prev) => [...prev, quality.issues]);
+    const id = nextPhotoIdRef.current++;
     setPhotos((prev) => {
-      const next = [...prev, b64];
+      const next = [...prev, { id, imageBase64: b64, issues: [], checkingQuality: true }];
       const count = next.length;
-      const base = viaAuto ? `Got it, photo ${count}.` : `Photo ${count} captured.`;
-      const msg = quality.ok
-        ? `${base} ${viaAuto ? 'Line up the next page, or tap Read menu.' : 'Take another, or tap Read menu.'}`
-        : `${base} ${quality.issues.map((i) => i.message).join(' ')} Consider retaking it, or tap Read menu to continue.`;
+      const msg = viaAuto
+        ? `Got it, photo ${count}. Checking quality. Line up the next page, or tap Read menu.`
+        : `Photo ${count} captured. Checking quality. Take another, or tap Read menu.`;
       setStatus(msg);
       track('capture', 'photo_added', {
         metadata: {
           mode: viaAuto ? 'auto' : 'manual',
           photo_count: count,
-          quality_ok: quality.ok,
-          issues: quality.issues.map((i) => i.code),
         },
       });
       return next;
     });
+    assessPhotoQuality(b64)
+      .then((quality) => finishPhotoQuality(id, quality))
+      .catch(() => finishPhotoQuality(id, { ok: true, issues: [] }));
   };
 
   const manualCapture = () => {
@@ -272,7 +299,6 @@ export default function CaptureScreen({
     if (photos.length === 0 || analyzing) return;
     setConfirmAnalyzeWithIssues(false);
     setPhotos((prev) => prev.slice(0, -1));
-    setPhotoIssues((prev) => prev.slice(0, -1));
     const msg = 'Removed the last photo. Take it again when ready.';
     setStatus(msg);
     track('capture', 'photo_removed', { metadata: { photo_count: photos.length - 1 } });
@@ -309,26 +335,56 @@ export default function CaptureScreen({
     });
     if (added.length) {
       setConfirmAnalyzeWithIssues(false);
-      const qualityResults = await Promise.all(
-        added.map((b64) => assessPhotoQuality(b64).catch<{ ok: boolean; issues: PhotoQualityIssue[] }>(() => ({ ok: true, issues: [] })))
-      );
-      setPhotoIssues((prev) => [...prev, ...qualityResults.map((q) => q.issues)]);
+      const entries = added.map((imageBase64) => ({
+        id: nextPhotoIdRef.current++,
+        imageBase64,
+        issues: [],
+        checkingQuality: true,
+      }));
       setPhotos((prev) => {
-        const startIndex = prev.length; // 0-based index of the first newly-added photo
-        const next = [...prev, ...added];
-        const flaggedNumbers = qualityResults
-          .map((q, i) => (q.ok ? null : startIndex + i + 1)) // 1-based, matches spoken "photo N"
-          .filter((n): n is number => n !== null);
+        const next = [...prev, ...entries];
         let m = `Added ${added.length} photo${added.length > 1 ? 's' : ''}. ${next.length} total.`;
         if (failedNames.length) m += ` ${failedNames.length} could not be read — use JPEG or PNG.`;
-        if (flaggedNumbers.length) {
-          m += flaggedNumbers.length === 1
-            ? ` Photo ${flaggedNumbers[0]} may have quality issues — consider retaking it.`
-            : ` Photos ${flaggedNumbers.join(', ')} may have quality issues — consider retaking them.`;
-        }
+        m += ' Checking photo quality.';
         setStatus(m);
         return next;
       });
+      const qualityResults = await Promise.all(
+        entries.map((photo) =>
+          assessPhotoQuality(photo.imageBase64)
+            .then((quality) => ({ id: photo.id, quality }))
+            .catch(() => ({ id: photo.id, quality: { ok: true, issues: [] } }))
+        )
+      );
+      const resultById = new Map(qualityResults.map((result) => [result.id, result.quality]));
+      const flaggedNumbers = photosRef.current
+        .map((photo, index) => {
+          const quality = resultById.get(photo.id);
+          return quality && !quality.ok ? index + 1 : null;
+        })
+        .filter((n): n is number => n !== null);
+      setPhotos((prev) =>
+        prev.map((photo) => {
+          const quality = resultById.get(photo.id);
+          return quality
+            ? { ...photo, issues: quality.issues, checkingQuality: false }
+            : photo;
+        })
+      );
+      for (const result of qualityResults) {
+        track('capture', 'photo_quality', {
+          metadata: {
+            quality_ok: result.quality.ok,
+            issues: result.quality.issues.map((i) => i.code),
+          },
+        });
+      }
+      if (flaggedNumbers.length) {
+        const m = flaggedNumbers.length === 1
+          ? `Photo ${flaggedNumbers[0]} may have quality issues. Consider retaking it.`
+          : `Photos ${flaggedNumbers.join(', ')} may have quality issues. Consider retaking them.`;
+        setStatus(m);
+      }
     } else {
       const errMsg =
         failedNames.length === 1
@@ -344,10 +400,16 @@ export default function CaptureScreen({
       return;
     }
     if (!hasApiKey()) {
-      setStatus('No API key configured. Set OPENAI_API_KEY in Vercel environment variables.');
+      setStatus(SERVICE_UNAVAILABLE_MSG);
       return;
     }
-    const flaggedCount = photoIssues.filter((issues) => issues.length > 0).length;
+    const pendingCount = photos.filter((photo) => photo.checkingQuality).length;
+    if (pendingCount > 0) {
+      const m = 'Still checking photo quality. Try Read menu again in a moment.';
+      setStatus(m);
+      return;
+    }
+    const flaggedCount = photos.filter((photo) => photo.issues.length > 0).length;
     if (flaggedCount > 0 && !confirmAnalyzeWithIssues) {
       setConfirmAnalyzeWithIssues(true);
       setStatus(`Heads up. ${flaggedCount} of your ${photos.length} photo${photos.length === 1 ? '' : 's'} may have quality problems, like blur or tilt. Tap Read menu again to continue anyway, or tap Retake last photo to redo the most recent one.`);
@@ -360,13 +422,14 @@ export default function CaptureScreen({
 
     track('capture', 'analyze_start', { metadata: { photo_count: photos.length } });
     const t0 = Date.now();
+    const imageBase64 = photos.map((photo) => photo.imageBase64);
 
     // Upload images to Blob only when the owner has the toggle on.
     let blobUrls: string[] | undefined;
     if (isImageLoggingOn()) {
       try {
         const uploads = await Promise.allSettled(
-          photos.map(async (b64, i) => {
+          imageBase64.map(async (b64, i) => {
             const r = await fetch('/api/upload-image', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -383,7 +446,7 @@ export default function CaptureScreen({
     }
 
     try {
-      let menu = await parseMenuFromImages(photos);
+      let menu = await parseMenuFromImages(imageBase64);
       menu = { ...menu, pageCount: photos.length };
       if (appendTo) menu = mergeMenus(appendTo.menu, menu);
       const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
@@ -418,7 +481,7 @@ export default function CaptureScreen({
         durationMs: Date.now() - t0,
         metadata: { error: String(e?.message) },
       });
-      const errMsg = e?.message ?? 'I could not read the menu. Try retaking the photos with more light.';
+      const errMsg = friendlyError(e, 'I could not read the menu. Try retaking the photos with more light.');
       setStatus(errMsg);
       setAnalyzing(false);
       analyzingRef.current = false;
@@ -426,7 +489,7 @@ export default function CaptureScreen({
   };
 
   return (
-    <Screen>
+    <Screen label="Hold your phone flat over the menu.">
       <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Title>Capture menu</Title>
         <div
@@ -551,7 +614,7 @@ export default function CaptureScreen({
           <SecondaryButton
             label="Retake last photo"
             hint={
-              photoIssues[photoIssues.length - 1]?.length
+              photos[photos.length - 1]?.issues.length
                 ? 'The last photo may have quality issues. Remove it and take it again.'
                 : 'Remove the last photo and take it again'
             }

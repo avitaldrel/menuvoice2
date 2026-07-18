@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen, Body, PrimaryButton, SecondaryButton } from '../components';
 import { ScreenProps } from '../nav';
 import { SavedRestaurant } from '../types';
-import { loadSavedRestaurants, deleteRestaurant } from '../lib/storage';
+import { loadSavedRestaurants, deleteRestaurant, markRestaurantOpened } from '../lib/storage';
 import { track } from '../lib/telemetry';
 import { provenanceForSaved } from '../lib/provenance';
 
@@ -82,8 +82,8 @@ export default function SavedScreen({ navigate, goBack }: ScreenProps) {
                 <PrimaryButton
                   label="Open"
                   hint={`Open the menu for ${r.name}`}
-                  onClick={() => {
-                    track('saved', 'open', { content: { restaurantName: r.name } });
+                  onClick={async () => {
+                    await markRestaurantOpened(r.id).catch(() => null);
                     navigate({
                       name: 'conversation',
                       menu: r.menu,

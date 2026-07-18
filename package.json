@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && npm run typecheck:api && vite build",
+    "typecheck:api": "tsc -p tsconfig.api.json",
     "preview": "vite preview",
     "test": "node --import tsx --test tests/*.test.ts",
     "a11y": "node scripts/a11y/loop.mjs",
     "a11y:audit": "node scripts/a11y/audit.mjs",
+    "a11y:safety": "node scripts/a11y/safety-hardening.mjs",
+    "a11y:scrub": "node scripts/a11y/scrub-navigation.mjs",
     "a11y:report": "node scripts/a11y/report.mjs"
   },
   "dependencies": {

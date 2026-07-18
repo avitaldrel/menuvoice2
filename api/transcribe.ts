@@ -50,33 +50,35 @@ export function bodyForOpenAiTranscription(contentType: string, body: Buffer): B
   const boundary = multipartBoundary(contentType);
   if (!boundary) return body;
 
-  const boundaryMarker = Buffer.from(`--${boundary}`);
-  const headerSeparator = Buffer.from('\r\n\r\n');
-  let partStart = body.indexOf(boundaryMarker);
+  const boundaryMarker = `--${boundary}`;
+  const headerSeparator = '\r\n\r\n';
+  let partStart = body.indexOf(boundaryMarker, 0, 'latin1');
 
   while (partStart !== -1) {
-    const afterBoundary = partStart + boundaryMarker.length;
+    const afterBoundary = partStart + Buffer.byteLength(boundaryMarker, 'latin1');
     if (body.subarray(afterBoundary, afterBoundary + 2).toString('ascii') === '--') return body;
 
     const contentStart = body.subarray(afterBoundary, afterBoundary + 2).toString('ascii') === '\r\n'
       ? afterBoundary + 2
       : afterBoundary;
-    const nextBoundary = body.indexOf(boundaryMarker, contentStart);
+    const nextBoundary = body.indexOf(boundaryMarker, contentStart, 'latin1');
     if (nextBoundary === -1) return body;
 
-    const headerEnd = body.indexOf(headerSeparator, contentStart);
+    const headerEnd = body.indexOf(headerSeparator, contentStart, 'latin1');
     if (headerEnd !== -1 && headerEnd < nextBoundary) {
       const headers = body.subarray(contentStart, headerEnd).toString('latin1');
       if (/content-disposition:\s*form-data\b/i.test(headers) && /name="model"/i.test(headers)) {
-        const valueStart = headerEnd + headerSeparator.length;
+        const valueStart = headerEnd + Buffer.byteLength(headerSeparator, 'latin1');
         const valueEnd = body.subarray(nextBoundary - 2, nextBoundary).toString('ascii') === '\r\n'
           ? nextBoundary - 2
           : nextBoundary;
-        return Buffer.concat([
-          body.subarray(0, valueStart),
-          Buffer.from('whisper-1'),
-          body.subarray(valueEnd),
-        ]);
+        const replacement = Buffer.from('whisper-1');
+        const rewritten = Buffer.allocUnsafe(valueStart + replacement.length + body.length - valueEnd);
+        let writeOffset = 0;
+        for (let index = 0; index < valueStart; index += 1) rewritten[writeOffset++] = body[index];
+        for (const byte of replacement) rewritten[writeOffset++] = byte;
+        for (let index = valueEnd; index < body.length; index += 1) rewritten[writeOffset++] = body[index];
+        return rewritten;
       }
     }
 

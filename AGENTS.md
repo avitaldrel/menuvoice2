@@ -6,6 +6,10 @@ This is a voice-first accessibility app (MenuVoice) for blind/visually-impaired 
 
 Deployment target is Vercel via GitHub auto-deploy. The whitelisted OAuth origin must match the actual deployment URL, and server functions need the non-VITE prefixed env vars (e.g. OPENAI_API_KEY, not just VITE_OPENAI_API_KEY).
 
+## Feature Testing
+
+For meaningful feature changes, use the `menuvoice-feature-testing` skill. Prefer efficient verification: automated checks first, then localhost/browser testing when it proves a real user-facing flow. Backend/API changes should be tested through the narrowest reliable path first, with browser testing only when it validates integration. Fix relevant issues found during testing before calling the work done, and report what was actually tested in plain language.
+
 ## Writing & Content
 
 When writing user-facing copy (emails, newsletters, taglines, postings), avoid AI-slop tone: no salesy language, no fabricated claims, no unverified promises. Keep it factual and grounded in the actual codebase/product.

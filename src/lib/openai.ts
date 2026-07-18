@@ -9,6 +9,10 @@
 import { ParsedMenu, UserProfile, ChatTurn, MenuProvenance } from '../types';
 import { track } from './telemetry';
 import { provenanceSummary } from './provenance';
+import { sanitizeMenu } from './menuSanitizer';
+import { apiErrorMessage } from './errors';
+
+export { sanitizeMenu } from './menuSanitizer';
 
 const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
 const AUDIO_PROVIDER = import.meta.env.VITE_AUDIO_PROVIDER ?? 'openai';
@@ -117,17 +121,18 @@ export async function parseMenuFromImages(imagesBase64: string[]): Promise<Parse
   });
 
   const raw = json.choices?.[0]?.message?.content ?? '{}';
-  let parsed: ParsedMenu;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error('The menu reader returned something I could not understand. Try retaking the photos.');
+    throw new Error('I had trouble reading the menu that time. Please try once more.');
   }
-  if (!parsed.categories || parsed.categories.length === 0) {
+  // Never trust the model's shape — rebuild only the well-formed parts.
+  const menu = sanitizeMenu(parsed);
+  if (!menu) {
     throw new Error('I could not find any menu items in those photos. Try again with more light.');
   }
-  parsed.incomplete = parsed.incomplete === true;
-  return parsed;
+  return menu;
 }
 
 /** Recorded audio Blob -> transcript (Whisper). */
@@ -380,20 +385,28 @@ export async function parseMenuFromUrl(
     signal,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const msg = (err as any).error ?? "Hey, sorry. I couldn't read the menu from that website. Double-check the link and try again.";
+    const msg = await parseApiError(
+      res,
+      "I couldn't read the menu from that website. Double-check the link and try again.",
+    );
     track('menu', 'parse_url', { outcome: 'failure', durationMs: Date.now() - t0, metadata: { url, status: res.status } });
     throw new Error(msg);
   }
-  const data = (await res.json()) as { menu: ParsedMenu; provenance?: MenuProvenance; sourceUrl?: string };
-  const itemCount = data.menu.categories.reduce((s, c) => s + c.items.length, 0);
+  const data = (await res.json().catch(() => ({}))) as { menu?: unknown; provenance?: MenuProvenance; sourceUrl?: string };
+  // Server responses are AI output too — same safety net as photo parsing.
+  const menu = sanitizeMenu(data.menu);
+  if (!menu) {
+    track('menu', 'parse_url', { outcome: 'failure', durationMs: Date.now() - t0, metadata: { url, reason: 'malformed_menu' } });
+    throw new Error("I couldn't read a usable menu from that website. Double-check the link and try again.");
+  }
+  const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
   track('menu', 'parse_url', {
     outcome: 'success',
     durationMs: Date.now() - t0,
-    content: { restaurantName: data.menu.restaurantName, itemCount },
+    content: { restaurantName: menu.restaurantName, itemCount },
     metadata: { url, sourceType: data.provenance?.sourceType },
   });
-  return { menu: data.menu, provenance: data.provenance, sourceUrl: data.sourceUrl };
+  return { menu, provenance: data.provenance, sourceUrl: data.sourceUrl };
 }
 
 /** Restaurant NAME (+ city) -> structured menu, via server-side web search.
@@ -406,8 +419,20 @@ export async function findMenuByName(query: string, signal?: AbortSignal): Promi
     body: JSON.stringify({ query }),
     signal,
   });
+  if (!res.ok) {
+    const message = await parseApiError(
+      res,
+      "I couldn't find that restaurant's menu online. Try adding the city to the name.",
+    );
+    track('menu', 'find_by_name', {
+      outcome: 'failure',
+      durationMs: Date.now() - t0,
+      metadata: { query, status: res.status },
+    });
+    throw new Error(message);
+  }
   const data = (await res.json().catch(() => ({}))) as {
-    menu?: ParsedMenu;
+    menu?: unknown;
     restaurantName?: string | null;
     address?: string | null;
     via?: string;
@@ -415,24 +440,27 @@ export async function findMenuByName(query: string, signal?: AbortSignal): Promi
     provenance?: MenuProvenance;
     error?: string;
   };
-  if (!res.ok || !data.menu) {
+  // Sanitize before trusting: the server relays AI output, and a malformed
+  // menu must fail with a friendly sentence, never crash the conversation.
+  const menu = sanitizeMenu(data.menu);
+  if (!menu) {
     track('menu', 'find_by_name', {
       outcome: 'failure',
       durationMs: Date.now() - t0,
-      metadata: { query, status: res.status, reason: data.error },
+      metadata: { query, status: res.status, reason: data.error ?? 'malformed_menu' },
     });
-    throw new Error(data.error ?? "I couldn't find that restaurant's menu online. Try adding the city to the name.");
+    throw new Error("I couldn't find a usable menu for that restaurant. Try adding the city to the name.");
   }
-  const itemCount = data.menu.categories.reduce((s, c) => s + c.items.length, 0);
+  const itemCount = menu.categories.reduce((s, c) => s + c.items.length, 0);
   track('menu', 'find_by_name', {
     outcome: 'success',
     durationMs: Date.now() - t0,
-    content: { restaurantName: data.menu.restaurantName ?? data.restaurantName, itemCount },
+    content: { restaurantName: menu.restaurantName ?? data.restaurantName, itemCount },
     metadata: { query, via: data.via, sourceUrl: data.sourceUrl },
   });
   return {
-    menu: data.menu,
-    restaurantName: data.restaurantName ?? data.menu.restaurantName ?? null,
+    menu,
+    restaurantName: data.restaurantName ?? menu.restaurantName ?? null,
     address: data.address ?? null,
     sourceUrl: data.sourceUrl,
     provenance: data.provenance,
@@ -444,13 +472,17 @@ export async function findMenuByName(query: string, signal?: AbortSignal): Promi
  * Vercel serverless function that can time out, and we'd rather take a second
  * attempt at the good voice than drop the opening line onto the robotic browser
  * fallback. */
-export async function synthesizeSpeech(text: string, voice?: string): Promise<Blob> {
-  const body = {
+export async function synthesizeSpeech(text: string, voice?: string, speed?: number): Promise<Blob> {
+  const body: Record<string, unknown> = {
     model: TTS_MODEL,
     voice: voice || TTS_VOICE_DEFAULT,
     input: text,
     response_format: 'mp3',
   };
+  // OpenAI TTS accepts speed 0.25–4.0. Only send it when it differs from normal.
+  if (typeof speed === 'number' && speed !== 1) {
+    body.speed = Math.max(0.25, Math.min(4, speed));
+  }
   try {
     return await audioSpeech(body);
   } catch (e) {
@@ -459,18 +491,15 @@ export async function synthesizeSpeech(text: string, voice?: string): Promise<Bl
   }
 }
 
-async function parseApiError(res: Response): Promise<string> {
+// Users HEAR these messages, so they are plain recovery sentences — never
+// status codes, key names, or provider wording. The technical detail is logged
+// for developers instead.
+async function parseApiError(
+  res: Response,
+  fallback = 'Something went wrong on my end. Please try again in a moment.',
+): Promise<string> {
   let body = '';
   try { body = await res.text(); } catch {}
-  try {
-    const json = JSON.parse(body);
-    const msg = json?.error?.message ?? json?.error;
-    if (typeof msg === 'string' && msg) return msg;
-  } catch {}
-  if (res.status === 401) return 'Invalid API key. Check your OPENAI_API_KEY setting.';
-  if (res.status === 429) return 'Rate limit reached. Wait a moment and try again.';
-  if (res.status === 500 && body.includes('No API key')) return 'No API key configured on the server.';
-  if (res.status === 504 || res.status === 524 || res.status === 408)
-    return 'The request timed out. The menu might be complex. Try again.';
-  return `API error (${res.status}). Check your server configuration.`;
+  console.warn(`MenuVoice API error (technical detail): status ${res.status}`, body.slice(0, 500));
+  return apiErrorMessage(res.status, fallback);
 }

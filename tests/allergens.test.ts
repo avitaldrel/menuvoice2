@@ -1,7 +1,12 @@
 // Allergen detection + explicit/inferred confidence (pure functions).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeItemAllergens, allergenDisclaimer, dishSpokenLabel } from '../src/lib/allergens.ts';
+import {
+  analyzeItemAllergens,
+  allergenAlertText,
+  allergenDisclaimer,
+  dishSpokenLabel,
+} from '../src/lib/allergens.ts';
 import type { MenuItem } from '../src/types.ts';
 
 test('blocks a dish containing a profile allergen', () => {
@@ -40,32 +45,46 @@ test('allergenDisclaimer reports explicit declarations as listed', () => {
   assert.match(d, /The restaurant lists soy/);
 });
 
+test('personal allergen alert keeps inferred matches uncertain', () => {
+  const alert = allergenAlertText([{ label: 'shellfish', confidence: 'inferred' }]);
+  assert.match(alert, /may contain shellfish/);
+  assert.match(alert, /does not confirm it/);
+  assert.ok(!/restaurant lists shellfish/.test(alert));
+});
+
+test('personal allergen alert identifies explicit restaurant listings', () => {
+  const alert = allergenAlertText([{ label: 'soy', confidence: 'explicit' }]);
+  assert.match(alert, /restaurant lists soy/);
+  assert.match(alert, /confirm with the restaurant/);
+});
+
 test('empty findings produce empty disclaimer', () => {
   assert.equal(allergenDisclaimer([]), '');
+  assert.equal(allergenAlertText([]), '');
 });
 
-test('dishSpokenLabel puts the allergen warning FIRST, before name/price/description', () => {
-  const item: MenuItem = { name: 'Caesar Salad', price: '$12', description: 'romaine, parmesan, croutons' };
+test('dishSpokenLabel puts the dish name first and the warning before other details', () => {
+  const item: MenuItem = {
+    name: 'Caesar Salad',
+    price: '$12',
+    description: 'romaine, parmesan, croutons',
+  };
   const label = dishSpokenLabel(item, [{ label: 'dairy', confidence: 'inferred' }]);
-  assert.ok(label.startsWith('Allergen warning.'), `expected label to start with the warning, got: "${label}"`);
-  // The rest of the dish info must still be present, just after the warning.
-  assert.match(label, /Caesar Salad/);
-  assert.match(label, /\$12/);
-  assert.match(label, /romaine, parmesan, croutons/);
+
+  assert.ok(label.startsWith('Caesar Salad. Allergen warning.'), label);
+  assert.ok(label.indexOf('Allergen warning') < label.indexOf('Price $12'));
+  assert.ok(label.indexOf('Allergen warning') < label.indexOf('romaine, parmesan, croutons'));
 });
 
-test('dishSpokenLabel has no warning prefix when there are no other allergens', () => {
+test('dishSpokenLabel keeps the normal compact order when there is no warning', () => {
   const item: MenuItem = { name: 'House Fries', price: '$6' };
-  const label = dishSpokenLabel(item, []);
-  assert.equal(label, 'House Fries, $6');
-  assert.ok(!label.includes('Allergen warning'));
+  assert.equal(dishSpokenLabel(item), 'House Fries. Price $6');
 });
 
-test('dishSpokenLabel includes ingredients after the name/price/description', () => {
+test('dishSpokenLabel includes ingredients after the warning', () => {
   const item: MenuItem = { name: 'Pad Thai', ingredients: ['peanuts', 'rice noodles', 'egg'] };
   const label = dishSpokenLabel(item, [{ label: 'peanuts', confidence: 'explicit' }]);
-  assert.ok(label.startsWith('Allergen warning.'));
-  assert.match(label, /Ingredients: peanuts, rice noodles, egg/);
-  // Warning text must come before the dish name in the final string.
-  assert.ok(label.indexOf('Allergen warning') < label.indexOf('Pad Thai'));
+
+  assert.ok(label.startsWith('Pad Thai. Allergen warning.'), label);
+  assert.ok(label.indexOf('Allergen warning') < label.indexOf('Ingredients:'));
 });

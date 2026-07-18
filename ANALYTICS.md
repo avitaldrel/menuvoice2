@@ -102,6 +102,8 @@ What it shows:
 - **People** — per-user table: sessions, events, photos, questions, failures, lifetime
   sessions, last-seen, and a NEW badge for first-time users.
 - **Live event stream** and a **failures** panel, both auto-updating.
+- **Cartesia key status** — active slot, used/exhausted slots, last switch, keys
+  remaining, estimated first return, and a run-out projection once rotation history exists.
 - Window switcher (1h / 6h / 24h / 7d / 30d / all) with no reload.
 
 Same `REPORT_KEY` guard, same `events` table, zero AI tokens. `?format=json` returns the
@@ -125,9 +127,34 @@ https://<deployment>/api/morning?key=<REPORT_KEY>
   pre-login rows (session start / first screen / welcome TTS, fired before Google
   login attaches the email) are NOT counted as a separate "anonymous" user — they
   belong to whichever account the session resolves to. There is no anonymous metric.
-- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com`).
+- **Internal/test accounts are excluded** via `REPORT_EXCLUDE_EMAILS` (default `2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com`). Testers who also receive the report are excluded here too, so their own testing never shows up in the numbers they read.
 - Window: `?hours=N` or `?days=N` (default 24h). Output: HTML (default), `?format=text` (cron/email friendly), or `?format=json`.
 - Same `REPORT_KEY` guard. Zero AI tokens.
+- The bottom of every report shows Cartesia key rotation status. A full Cartesia
+  exhaustion sends the report even on a quiet usage day so the OpenAI fallback is visible.
+
+Cartesia status stores slot numbers only, never secret key values. It uses the existing
+Upstash/Vercel KV connection for durable history. `CARTESIA_KEY_RECOVERY_HOURS` controls
+the estimated return/retry interval (default 720 hours, or 30 days); this is explicitly
+shown as an estimate because Cartesia's credit-usage API does not expose plan reset dates.
+
+The protected dashboard and morning email show the account email, active key, credits used,
+and credits left for every numbered key. Each free key defaults to a 20,000-credit allowance.
+Without an admin key, MenuVoice tracks an estimate by subtracting successful TTS requests at
+approximately one credit per input character. Tracking starts when this version is deployed,
+does not include use outside MenuVoice, and may vary slightly from Cartesia's final count.
+
+Configure matching numbered variables for each slot:
+
+- `CARTESIA_API_KEY_EMAIL_1` - account label shown in the protected dashboard.
+- `CARTESIA_ADMIN_API_KEY_1` - optional Cartesia admin key for authoritative `/usage/credits` data.
+- `CARTESIA_MONTHLY_CREDITS_1` - optional override for the default 20,000-credit allowance.
+- `CARTESIA_CREDIT_RESET_DAY_1` - UTC day of month when that allowance resets (`1`-`31`).
+
+Repeat through the highest configured key slot. Standard `sk_car_...` keys cannot read the
+usage endpoint. If admin keys are supplied, the dashboard labels those balances as Cartesia
+usage API data and caches them for five minutes. Otherwise it labels them as MenuVoice tracked
+estimates. No API or admin key value is returned to the browser or email.
 
 #### Automated daily email (`/api/cron-morning`)
 
@@ -143,6 +170,8 @@ Required env vars in Vercel (Project → Settings → Env Vars), then redeploy:
   - `RESEND_API_KEY` (+ optional `RESEND_FROM`), **or**
   - `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail account + an App Password; requires 2FA).
 - Optional: `REPORT_EMAIL_TO` (default `2firemaster27@gmail.com`),
+  `REPORT_EMAIL_EXTRA` (extra recipients merged into `REPORT_EMAIL_TO`, deduped;
+  default `anibabug@gmail.com,ik8072369@gmail.com`),
   `REPORT_EMAIL_HOURS` (default 24), `REPORT_EXCLUDE_EMAILS`.
 
 Notes: Vercel Cron only fires on **production** deployments. To test delivery on demand,

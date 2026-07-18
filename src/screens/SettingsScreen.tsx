@@ -2,22 +2,77 @@
 // This screen never speaks — VoiceOver reads all controls and the status
 // region. Inline mics (name, dislike) still use MediaRecorder for field input.
 
-import { useEffect, useState } from 'react';
-import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton } from '../components';
+import { useRef, useState } from 'react';
+import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton, AllergenReviewPanel, type AllergenQuestion } from '../components';
 import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
-import { splitList, normalizeAllergens } from '../util';
+import { splitList, reviewAllergenInput } from '../util';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
+import { setSpeechRate } from '../lib/speech';
 import { watchForSilence } from '../lib/vad';
 import { track } from '../lib/telemetry';
+import { configuredAppleShortcutUrl, isAppleMobileDevice } from '../lib/appleShortcut';
+import type { AppTheme, TextScale } from '../types';
 
 const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
 type SpiceLevel = typeof SPICE_LEVELS[number];
 type RecState = 'idle' | 'recording' | 'working';
 
+const THEME_OPTIONS: { value: AppTheme; label: string; hint: string }[] = [
+  { value: 'dark', label: 'Dark', hint: 'Light text on a near-black background. Easiest on the eyes in low light.' },
+  { value: 'light', label: 'Light', hint: 'Dark text on a white background. Highest edge contrast.' },
+  { value: 'high-contrast', label: 'High contrast', hint: 'Bright yellow on pure black. Maximum contrast.' },
+];
+const TEXT_SIZES: { value: TextScale; label: string }[] = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'large', label: 'Large' },
+  { value: 'xlarge', label: 'Extra large' },
+];
+const SPEECH_RATES: { value: number; label: string }[] = [
+  { value: 0.8, label: 'Slow' },
+  { value: 1, label: 'Normal' },
+  { value: 1.25, label: 'Fast' },
+];
+
+// A large, accessible segmented control (radiogroup). Each option is a 64px+
+// button; the selected one is announced and highlighted with the accent color.
+function Segmented<T extends string | number>({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="row" role="radiogroup" aria-label={legend} style={{ flexWrap: 'wrap', gap: 8 }}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={String(opt.value)}
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            aria-label={`${opt.label}${active ? ', selected' : ''}`}
+            className={`seg-btn${active ? ' seg-btn--active' : ''}`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const { profile, update, reset } = useProfile();
+  const shortcutUrl = configuredAppleShortcutUrl();
+  const showAppleShortcut = !!shortcutUrl && isAppleMobileDevice();
   const [allergies, setAllergies] = useState(profile.allergies.join(', '));
   const [cuisines, setCuisines] = useState(profile.cuisinesLiked.join(', '));
   const [saved, setSaved] = useState(false);
@@ -36,24 +91,51 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
     setSrStatus(msg);
   };
 
-  const persist = async () => {
-    // Auto-correct misspelled/misheard allergens before saving — an allergen
-    // that doesn't match the menu text is a safety failure.
-    const { list: allergyList, corrections } = normalizeAllergens(splitList(allergies));
-    if (corrections.length) setAllergies(allergyList.join(', '));
-    await update({ allergies: allergyList, cuisinesLiked: splitList(cuisines) });
+  // Pending questions about the allergy list. Nothing is saved while this is
+  // non-null; the user answers each question, THEN we save.
+  const [allergyReview, setAllergyReview] = useState<AllergenQuestion[] | null>(null);
+  const reviewAcceptedRef = useRef<string[]>([]);
+
+  const saveAllergyList = async (list: string[]) => {
+    // De-dupe case-insensitively while keeping the user's chosen spellings.
+    const seen = new Set<string>();
+    const final = list.filter((a) => {
+      const k = a.trim().toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    await update({ allergies: final, cuisinesLiked: splitList(cuisines) });
+    setAllergies(final.join(', '));
     setSaved(true);
     // Allergies are a safety feature — confirm in the DOM and aloud what was
-    // saved so a VoiceOver user knows the warning list took effect (P1-6), and
-    // surface any spelling corrections so a silent change can't hide a mistake.
-    const fixNote = corrections.length
-      ? ` I corrected ${corrections.map(([from, to]) => `${from} to ${to}`).join(', ')}.`
-      : '';
-    const msg = allergyList.length
-      ? `Saved.${fixNote} I will warn you about ${allergyList.join(', ')}.`
+    // saved so a VoiceOver user knows the warning list took effect.
+    const msg = final.length
+      ? `Saved. I will warn you about ${final.join(', ')}.`
       : 'Saved. No allergies set.';
     announce(msg);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const persist = async () => {
+    // NEVER silently rewrite an allergy. If a word looks misspelled we ask
+    // before changing it; if we don't recognize it at all, we ask what to do.
+    const review = reviewAllergenInput(splitList(allergies));
+    const questions: AllergenQuestion[] = [
+      ...review.corrections.map(([typed, suggested]) => ({ typed, suggested })),
+      ...review.unknown.map((typed) => ({ typed })),
+    ];
+    if (questions.length > 0) {
+      reviewAcceptedRef.current = review.accepted;
+      setAllergyReview(questions);
+      announce(
+        questions.length === 1
+          ? 'One quick question about your allergy list before I save it. Answer below.'
+          : `${questions.length} quick questions about your allergy list before I save it. Answer below.`,
+      );
+      return;
+    }
+    await saveAllergyList(review.accepted);
   };
 
   const saveName = async (val: string) => {
@@ -141,9 +223,64 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
   const anyMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
 
+  const currentTheme: AppTheme = profile.theme ?? 'light';
+  const currentScale: TextScale = profile.textScale ?? 'large';
+  const currentRate = profile.speechRate ?? 1;
+  const themeHint = THEME_OPTIONS.find((t) => t.value === currentTheme)?.hint ?? '';
+
   return (
     <Screen>
       <Title>Settings</Title>
+
+      <SecondaryButton
+        label="How MenuVoice works"
+        hint="Open the step by step tutorial"
+        onClick={() => navigate({ name: 'tutorial' })}
+      />
+
+      <Heading>Accessibility</Heading>
+
+      <div className="setting-block">
+        <span className="setting-label" id="setting-textsize">Text size</span>
+        <Segmented
+          legend="Text size"
+          options={TEXT_SIZES}
+          value={currentScale}
+          onChange={(v) => {
+            update({ textScale: v });
+            announce(`Text size ${TEXT_SIZES.find((t) => t.value === v)?.label}.`);
+          }}
+        />
+      </div>
+
+      <div className="setting-block">
+        <span className="setting-label">Color scheme</span>
+        <Segmented
+          legend="Color scheme"
+          options={THEME_OPTIONS.map(({ value, label }) => ({ value, label }))}
+          value={currentTheme}
+          onChange={(v) => {
+            update({ theme: v });
+            announce(`${THEME_OPTIONS.find((t) => t.value === v)?.label} theme. ${THEME_OPTIONS.find((t) => t.value === v)?.hint ?? ''}`);
+          }}
+        />
+        <p className="body" style={{ margin: '4px 0 0', fontSize: 'calc(14px * var(--text-scale))' }}>{themeHint}</p>
+      </div>
+
+      <div className="setting-block">
+        <span className="setting-label">Talking speed</span>
+        <Segmented
+          legend="Talking speed"
+          options={SPEECH_RATES}
+          value={currentRate}
+          onChange={(v) => {
+            // Apply immediately to the next Conversation Mode response, then persist.
+            setSpeechRate(v);
+            update({ speechRate: v });
+            setSrStatus(`Talking speed ${SPEECH_RATES.find((r) => r.value === v)?.label}.`);
+          }}
+        />
+      </div>
 
       <Heading>Your name</Heading>
       <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
@@ -269,6 +406,24 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
         </button>
       </div>
 
+      {showAppleShortcut && (
+        <section className="card" aria-labelledby="apple-shortcut-heading">
+          <Heading><span id="apple-shortcut-heading">Open MenuVoice with Siri</span></Heading>
+          <Body>Create a Shortcut so saying “Siri, launch MenuVoice” opens this app.</Body>
+          <a
+            className="btn btn-secondary"
+            href={shortcutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none' }}
+            aria-label="Create Siri Shortcut. Opens Apple's Shortcut page in a new tab"
+            onClick={() => track('settings', 'shortcut_open', {})}
+          >
+            Create Siri Shortcut
+          </a>
+        </section>
+      )}
+
       <label
         className="card"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: 16 }}
@@ -323,7 +478,17 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
         aria-label="Favorite foods, comma separated"
       />
 
-      <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} />
+      {allergyReview && (
+        <AllergenReviewPanel
+          questions={allergyReview}
+          onDone={(kept) => {
+            setAllergyReview(null);
+            saveAllergyList([...reviewAcceptedRef.current, ...kept]);
+          }}
+        />
+      )}
+
+      <PrimaryButton label={saved ? 'Saved' : 'Save changes'} onClick={persist} disabled={!!allergyReview} />
       <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0, textAlign: 'center' }}>
         {srStatus}
       </p>

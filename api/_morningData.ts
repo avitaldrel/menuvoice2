@@ -4,6 +4,8 @@
 
 import { Redis } from '@upstash/redis';
 import { createClient } from '@vercel/postgres';
+import { cartesiaConfiguredKeyCount, getCartesiaStatus, type CartesiaStatus } from './_cartesiaStatus.js';
+import { excludeList, excludePatternList } from './_reportExclusions.js';
 // nodemailer is imported lazily inside sendEmail() (its only use). A top-level
 // import pulls it into module load for EVERY consumer of this file — including the
 // /api/morning and /api/dashboard view endpoints — and nodemailer failing to load
@@ -79,13 +81,47 @@ export interface MorningData {
   deltas: { users: number; sessions: number; events: number; newUsers: number };
   funnel: Funnel;
   website: WebsiteReport;
+  cartesia: CartesiaStatus;
 }
 
-// Accounts we never want to see in the report (own testing). Override with the
-// REPORT_EXCLUDE_EMAILS env var (comma-separated). Lower-cased + trimmed.
-export function excludeList(): string[] {
-  const raw = process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com';
-  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+// Exact accounts and account-prefix rules live in _reportExclusions so the morning
+// report and dashboard always hide the same internal/test identities.
+// Who receives the daily email. The primary recipient(s) come from REPORT_EMAIL_TO
+// (a Vercel env var; defaults to the owner account). Additional recipients are
+// merged in from REPORT_EMAIL_EXTRA (defaults to the testers who asked to receive
+// the report). Combining them additively means we never have to overwrite — and
+// risk dropping — whatever REPORT_EMAIL_TO already holds. Returns a de-duplicated,
+// comma-joined string suitable for both nodemailer and (after splitting) Resend.
+export function resolveRecipients(): string {
+  const primary = (process.env.REPORT_EMAIL_TO ?? '2firemaster27@gmail.com')
+    .split(',').map((e) => e.trim()).filter(Boolean);
+  // anibabug + ik8072369 are testers who want the report but are excluded from its
+  // contents (see excludeList). mibrahim.dev17 is intentionally NOT here — excluded
+  // from the report but not emailed it.
+  const extra = (process.env.REPORT_EMAIL_EXTRA ?? 'anibabug@gmail.com,ik8072369@gmail.com')
+    .split(',').map((e) => e.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const addr of [...primary, ...extra]) {
+    const key = addr.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(addr);
+  }
+  return out.join(', ');
+}
+
+// Build a keyed, one-click analytics URL for links inside the email, so a recipient
+// who already gets the report can open the dashboard without ever seeing the "enter
+// the key" page. Uses the stable production alias (override with REPORT_PUBLIC_HOST)
+// rather than the request host — a cron send's host header is a bare per-deployment
+// URL, which is ugly and tied to one deployment. Returns undefined only when
+// REPORT_KEY is unset — we omit the link rather than send one that can't work.
+export function analyticsUrl(path: string): string | undefined {
+  const key = process.env.REPORT_KEY?.trim();
+  if (!key) return undefined;
+  const base = process.env.REPORT_PUBLIC_HOST || 'menuvoice-sigma.vercel.app';
+  return `https://${base}${path}?key=${encodeURIComponent(key)}`;
 }
 
 const STAGE_DEFS: { key: string; label: string }[] = [
@@ -108,12 +144,14 @@ const FAIL_DEFS: { key: string; label: string }[] = [
 async function queryFunnelRow(
   client: ReturnType<typeof createClient>,
   exclude: string[],
+  excludePatterns: string[],
   windowSql: string,
 ): Promise<Record<string, number>> {
   const q = await client.query(
     `WITH sess AS (
        SELECT session_id,
-              bool_or(lower(user_email) = ANY($1::text[]))                       AS internal,
+              bool_or(lower(user_email) = ANY($1::text[])
+                OR lower(user_email) ~ ANY($2::text[]))                            AS internal,
               bool_or(event_name='camera_start' AND outcome IS DISTINCT FROM 'failure') AS r_camera,
               bool_or(event_name='photo_added')                                  AS r_photo,
               bool_or(event_name='analyze_start')                                AS r_analyze,
@@ -144,7 +182,7 @@ async function queryFunnelRow(
        (SELECT count(*) FROM sess WHERE NOT internal AND r_saved)     AS saved,
        fails.fail_camera, fails.fail_ocr, fails.fail_ask, fails.fail_stt
      FROM fails`,
-    [exclude]
+    [exclude, excludePatterns]
   );
   const row = q.rows[0] ?? {};
   const out: Record<string, number> = {};
@@ -294,13 +332,17 @@ async function getWebsiteReport(hours: number): Promise<WebsiteReport> {
 export async function buildMorningReport(hours: number): Promise<MorningData> {
   hours = Math.min(Math.max(hours, 1), 24 * 365);
   const exclude = excludeList();
+  const excludePatterns = excludePatternList();
   const windowLabel = hours === 24 ? 'last 24 hours' : hours % 24 === 0 ? `last ${hours / 24} days` : `last ${hours} h`;
   const w = `now() - interval '${hours} hours'`;
-  // Parameterized exclusion: $1 = lower-cased email array. Safe against injection.
+  // Parameterized exclusion: $1 = exact emails; $2 = identity patterns. Safe
+  // against injection and narrow enough to preserve non-test Avi names.
   // NOTE: a session's pre-login rows have NULL email; the per-user query keys off
   // the rows that DO carry the email, so a logged-in user is counted once — there
   // is no separate "anonymous session" double-count.
-  const notExcluded = `lower(user_email) <> ALL($1::text[])`;
+  const notExcluded = `lower(user_email) <> ALL($1::text[])
+    AND NOT (lower(user_email) ~ ANY($2::text[]))`;
+  const cartesiaPromise = getCartesiaStatus(cartesiaConfiguredKeyCount());
 
   return withClient(async (client) => {
     const websitePromise = getWebsiteReport(hours);
@@ -329,7 +371,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
        SELECT win.*, life.first_ts, life.lifetime_sessions, (life.first_ts > ${w}) AS is_new
        FROM win JOIN life USING (user_email)
        ORDER BY is_new DESC, win.last_in_window DESC`,
-      [exclude]
+      [exclude, excludePatterns]
     );
 
     // Previous window of equal length [now-2h, now-h] for day-over-day deltas.
@@ -356,12 +398,12 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
          (SELECT count(*) FROM life
             WHERE first_ts >  now() - interval '${hours * 2} hours'
               AND first_ts <= now() - interval '${hours} hours')           AS new_users`,
-      [exclude]
+      [exclude, excludePatterns]
     );
 
     const [curF, prevF] = await Promise.all([
-      queryFunnelRow(client, exclude, `ts > ${w}`),
-      queryFunnelRow(client, exclude,
+      queryFunnelRow(client, exclude, excludePatterns, `ts > ${w}`),
+      queryFunnelRow(client, exclude, excludePatterns,
         `ts > now() - interval '${hours * 2} hours' AND ts <= now() - interval '${hours} hours'`),
     ]);
 
@@ -414,6 +456,7 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       stages, failures, biggestLeak,
     };
     const website = await websitePromise;
+    const cartesia = await cartesiaPromise;
 
     return {
       windowLabel,
@@ -423,11 +466,12 @@ export async function buildMorningReport(hours: number): Promise<MorningData> {
       totals,
       newUsers,
       returningUsers: rows.filter((u) => !u.is_new),
-      excluded: exclude,
+      excluded: [...exclude, 'avi plus optional numbers'],
       prev,
       deltas,
       funnel,
       website,
+      cartesia,
     };
   });
 }
@@ -525,7 +569,92 @@ export function renderText(d: MorningData): string {
   }
   lines.push('');
   if (d.excluded.length) lines.push(`(excluded internal accounts: ${d.excluded.join(', ')})`);
+  lines.push('');
+  lines.push(renderCartesiaText(d.cartesia));
   return lines.join('\n');
+}
+
+function dateOnly(ts: string | null): string {
+  return ts ? ts.slice(0, 10) : 'unknown';
+}
+
+export function renderCartesiaText(status: CartesiaStatus): string {
+  const lines = ['CARTESIA API KEYS:'];
+  if (!status.configured) {
+    lines.push('  No Cartesia API keys are configured.');
+    return lines.join('\n');
+  }
+  if (status.allExhausted) {
+    lines.push(`  OUT OF CARTESIA KEYS${status.allExhaustedAt ? ` since ${fmtTs(status.allExhaustedAt)}` : ''}. OpenAI fallback is active.`);
+  } else {
+    const active = status.activeEmail
+      ? `${status.activeEmail}${status.activeLabel ? ` (${status.activeLabel})` : ''}`
+      : status.activeLabel ?? 'not observed yet';
+    lines.push(`  Active: ${active}${status.activeSince ? ` since ${fmtTs(status.activeSince)}` : ''}`);
+  }
+  lines.push(`  Remaining after active key: ${status.remainingAfterActive}`);
+  if (status.lastSwitchedAt) lines.push(`  Last switched: ${fmtTs(status.lastSwitchedAt)} (${ago(status.lastSwitchedAt)})`);
+  for (const key of status.keys.filter((k) => k.status === 'exhausted')) {
+    lines.push(`  Used: ${key.label} — exhausted ${fmtTs(key.exhaustedAt)}; estimated return ${fmtTs(key.availableAt)}`);
+  }
+  if (status.firstReturnsAt) lines.push(`  First key estimated back: ${fmtTs(status.firstReturnsAt)}`);
+  if (status.projectedRunOutAt) {
+    lines.push(`  At the recent rate, ${status.activeLabel} might run out on ${dateOnly(status.projectedRunOutAt)} (${status.projectionBasis}).`);
+  }
+  lines.push('  Full account breakdown:');
+  for (const key of status.keys) {
+    const account = key.email ? `${key.email} (${key.label})` : key.label;
+    const approximate = key.credits.state === 'tracked' ? 'estimated ' : '';
+    const remaining = key.credits.remaining == null ? 'unknown' : key.credits.remaining.toLocaleString('en-US');
+    const used = key.credits.used == null ? 'unknown' : key.credits.used.toLocaleString('en-US');
+    const limit = key.credits.limit == null ? 'unknown' : key.credits.limit.toLocaleString('en-US');
+    lines.push(`    ${account} | ${key.status} | ${approximate}${remaining} credits left of ${limit} | ${approximate}${used} used`);
+  }
+  if (status.storage === 'memory') lines.push('  Status history is temporary until Redis/KV is configured.');
+  return lines.join('\n');
+}
+
+export function renderCartesiaEmailHtml(status: CartesiaStatus, ff: string): string {
+  const tone = status.allExhausted ? C.red : status.activeSlot ? C.greenDk : C.amber;
+  const active = status.activeEmail
+    ? `${status.activeEmail}${status.activeLabel ? ` (${status.activeLabel})` : ''}`
+    : status.activeLabel;
+  const heading = status.allExhausted
+    ? 'All Cartesia keys are exhausted'
+    : active
+      ? `${active} is active`
+      : 'No Cartesia key use observed yet';
+  const used = status.keys.filter((k) => k.status === 'exhausted');
+  const breakdown = status.keys.map((key) => {
+    const account = key.email ? `${key.email} (${key.label})` : key.label;
+    const source = key.credits.state === 'tracked' ? 'MenuVoice tracked estimate' : 'Cartesia usage API';
+    const remaining = key.credits.remaining == null ? 'unknown' : key.credits.remaining.toLocaleString('en-US');
+    const usedCredits = key.credits.used == null ? 'unknown' : key.credits.used.toLocaleString('en-US');
+    const limit = key.credits.limit == null ? 'unknown' : key.credits.limit.toLocaleString('en-US');
+    return `<div style="border-top:1px solid ${C.line};padding:9px 0 7px">
+      <strong style="color:${C.ink}">${esc(account)}</strong><br>
+      <span style="color:${C.sub}">${esc(key.status)} &middot; ${esc(remaining)} credits left of ${esc(limit)} &middot; ${esc(usedCredits)} used<br>${esc(source)}</span>
+    </div>`;
+  }).join('');
+  return `<tr><td style="padding-top:26px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:2px solid ${tone};border-radius:12px">
+      <tr><td style="padding:15px 17px;font-family:${ff}">
+        <div style="font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:${tone}">Cartesia API keys</div>
+        <div style="font-size:18px;font-weight:800;color:${C.ink};margin-top:3px">${esc(heading)}</div>
+        <div style="font-size:13px;color:${C.sub};line-height:1.6;margin-top:6px">
+          ${status.activeSince ? `Active since ${esc(fmtTs(status.activeSince))}.<br>` : ''}
+          ${status.lastSwitchedAt ? `Last switched ${esc(fmtTs(status.lastSwitchedAt))} (${esc(ago(status.lastSwitchedAt))}).<br>` : ''}
+          ${status.remainingAfterActive} key${status.remainingAfterActive === 1 ? '' : 's'} remaining after the active key.<br>
+          ${used.map((k) => `${esc(k.label)} used — exhausted ${esc(fmtTs(k.exhaustedAt))}; estimated return ${esc(fmtTs(k.availableAt))}.<br>`).join('')}
+          ${status.firstReturnsAt ? `First key estimated back: ${esc(fmtTs(status.firstReturnsAt))}.<br>` : ''}
+          ${status.projectedRunOutAt ? `<strong>At the recent rate, ${esc(status.activeLabel)} might run out on ${esc(dateOnly(status.projectedRunOutAt))}.</strong><br>` : ''}
+          ${status.allExhausted ? '<strong>OpenAI fallback is active.</strong>' : ''}
+        </div>
+        <div style="font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:${C.sub};margin-top:14px">Full account breakdown</div>
+        <div style="font-size:13px;line-height:1.5">${breakdown}</div>
+      </td></tr>
+    </table>
+  </td></tr>`;
 }
 
 // Palette
@@ -650,7 +779,7 @@ export function renderWebsiteHtml(w: WebsiteReport, ff: string): string {
   </td></tr>`;
 }
 
-export function renderEmailHtml(d: MorningData, dashboardUrl?: string): string {
+export function renderEmailHtml(d: MorningData, links?: { dashboard?: string; report?: string }): string {
   const t = d.totals;
   const ff = 'Segoe UI,system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif';
   const appUsed = t.users > 0;
@@ -747,13 +876,16 @@ export function renderEmailHtml(d: MorningData, dashboardUrl?: string): string {
             ${renderWebsiteHtml(d.website, ff)}
             ${section('New users', d.newUsers, 'new')}
             ${section('Returning users', d.returningUsers, 'returning')}
-            ${dashboardUrl ? `<tr><td style="padding-top:22px" align="center">
-              <a href="${esc(dashboardUrl)}" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-family:${ff};font-size:14px;font-weight:600;padding:11px 22px;border-radius:10px">Open full dashboard</a>
-            </td></tr>` : ''}
+            ${(links?.dashboard || links?.report) ? `<tr><td style="padding-top:22px" align="center">
+              ${links?.dashboard ? `<a href="${esc(links.dashboard)}" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-family:${ff};font-size:14px;font-weight:600;padding:11px 22px;border-radius:10px">Open live analytics dashboard</a>` : ''}
+              ${links?.report ? `<a href="${esc(links.report)}" style="display:inline-block;margin-left:8px;background:#fff;color:${C.ink};border:1px solid ${C.line};text-decoration:none;font-family:${ff};font-size:14px;font-weight:600;padding:10px 21px;border-radius:10px">View this report</a>` : ''}
+            </td></tr>
+            <tr><td style="padding-top:8px" align="center"><span style="font-family:${ff};font-size:11px;color:${C.sub}">These links include your private access key — no sign-in needed.</span></td></tr>` : ''}
             <tr><td style="padding-top:18px;font-family:${ff};font-size:11px;color:${C.sub};line-height:1.5">
               ${d.excluded.length ? `Internal/test accounts hidden: ${esc(d.excluded.join(', '))}.<br>` : ''}
               "New" = first-ever use in this window. "Returning" = used MenuVoice before and came back.
             </td></tr>
+            ${renderCartesiaEmailHtml(d.cartesia, ff)}
           </table>
         </td></tr>
 
@@ -771,13 +903,15 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
 
   if (process.env.RESEND_API_KEY) {
     const from = process.env.RESEND_FROM ?? 'MenuVoice <onboarding@resend.dev>';
+    // Resend wants an array of addresses; our `to` may be a comma-joined list.
+    const toList = to.split(',').map((e) => e.trim()).filter(Boolean);
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from, to, subject, html, text }),
+      body: JSON.stringify({ from, to: toList, subject, html, text }),
     });
     if (!r.ok) throw new Error(`Resend failed: ${r.status} ${await r.text()}`);
     return 'resend';

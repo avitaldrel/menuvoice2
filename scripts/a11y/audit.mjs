@@ -9,22 +9,12 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { resolveA11yBaseUrl, testProfileJson } from './test-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
-
-const PROFILE = JSON.stringify({
-  email: 'audit@menuvoice.app',
-  name: 'Audit',
-  allergies: [],
-  dislikes: [],
-  spiceTolerance: 'medium',
-  cuisinesLiked: [],
-  pastOrders: [],
-  hidePrices: false,
-  ttsVoice: 'shimmer',
-  onboarded: true,
-});
+const BASE_URL = resolveA11yBaseUrl();
+const PROFILE = testProfileJson();
 
 const SAVED = JSON.stringify([{
   id: 'r-test',
@@ -41,7 +31,7 @@ const SAVED = JSON.stringify([{
 
 const SCREENS = [
   { name: 'login',      ls: {} },
-  { name: 'onboarding', ls: { 'menuvoice.profile.v1': JSON.stringify({ ...JSON.parse(PROFILE), onboarded: false }) } },
+  { name: 'onboarding', ls: { 'menuvoice.profile.v1': testProfileJson({ onboarded: false }) } },
   { name: 'home',       ls: { 'menuvoice.profile.v1': PROFILE } },
   { name: 'capture',    ls: { 'menuvoice.profile.v1': PROFILE }, click: 'Scan a Menu' },
   { name: 'find',       ls: { 'menuvoice.profile.v1': PROFILE }, click: 'Find a Menu' },
@@ -69,7 +59,7 @@ async function auditScreen(browser, screen) {
     }
   }, screen.ls);
 
-  await page.goto('http://localhost:4173', { waitUntil: 'networkidle' });
+  await page.goto(BASE_URL, { waitUntil: 'networkidle' });
 
   try {
     await page.waitForSelector('main.screen', { timeout: 10000 });

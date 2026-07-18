@@ -55,7 +55,117 @@
   --z-float:   20;
   --z-skip:    9999;
 
+  /* Allergen alert ink (theme-overridable) */
+  --danger-ink: #ff8f8f;
+  --danger-on:  #2a0000;
+
+  /* Global text-size multiplier — bumped by data-text-scale (see below) */
+  --text-scale: 1;
+
   color-scheme: dark;
+}
+
+/* Instant, flash-free theme switching: while .theme-swap is on <html>, every
+   transition is suppressed so colors snap to the new scheme in one frame. */
+:root.theme-swap, :root.theme-swap * {
+  transition: none !important;
+}
+
+/* ── Text size (Accessibility → Text size) ───────────
+   Multiplies typographic sizes app-wide. Set on <html> from the profile. */
+:root[data-text-scale='large']  { --text-scale: 1.18; }
+:root[data-text-scale='xlarge'] { --text-scale: 1.40; }
+
+/* ── Light theme — near-black on white, maximum edge contrast ─────────
+   For low-vision users who need crisp dark-on-light rather than dark mode. */
+:root[data-theme='light'] {
+  --bg:           #ffffff;
+  --surface:      #ffffff;
+  --surface-high: #f2f1ec;
+  --surface-user: #fff3e6;
+  --overlay:      rgba(255, 255, 255, 0.86);
+
+  --text-primary:   #14120d;   /* ~18:1 on white */
+  --text-secondary: #38352f;   /* ~10:1 */
+  --text-muted:     #55504a;   /* ~7:1  */
+
+  --accent:      #a24708;      /* deep amber; ~5.6:1 as text on white */
+  --accent-warm: #b8560f;
+  --accent-text: #ffffff;
+
+  --focus:  #8a3b00;
+  --danger: #b0231b;           /* ~6:1 on white */
+  --success:#1a7738;
+
+  --border:      #d7d3ca;
+  --border-warm: rgba(162, 71, 8, 0.42);
+
+  --shadow-sm:   0 1px 2px rgba(40, 32, 18, 0.12);
+  --shadow-md:   0 8px 22px -12px rgba(40, 32, 18, 0.2);
+  --shadow-lg:   0 22px 46px -18px rgba(40, 32, 18, 0.24);
+  --edge-light:  inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  --accent-grad: linear-gradient(177deg, #c05f12 0%, #a24708 55%, #883a06 100%);
+  --glow-accent: 0 8px 20px -8px rgba(162, 71, 8, 0.32);
+
+  --danger-ink: #8f1c15;
+  --danger-on:  #ffffff;
+
+  color-scheme: light;
+}
+
+/* ── High-contrast theme — bright on pure black, thick borders ────────
+   Classic low-vision high contrast: white/yellow on black, no soft grays. */
+:root[data-theme='high-contrast'] {
+  --bg:           #000000;
+  --surface:      #000000;
+  --surface-high: #101012;
+  --surface-user: #14100a;
+  --overlay:      rgba(0, 0, 0, 0.92);
+
+  --text-primary:   #ffffff;   /* 21:1 */
+  --text-secondary: #f4f4f4;   /* ~19:1 */
+  --text-muted:     #d2d2d2;   /* ~14:1 */
+
+  --accent:      #ffe24d;      /* bright yellow, ~16:1 on black */
+  --accent-warm: #fff07a;
+  --accent-text: #000000;
+
+  --focus:  #ffffff;
+  --danger: #ff9a9a;           /* light red reads on black */
+  --success:#82ffa6;
+
+  --border:      #8a8a8a;      /* bright enough to see every edge */
+  --border-warm: #ffe24d;
+
+  --shadow-sm:   none;
+  --shadow-md:   none;
+  --shadow-lg:   none;
+  --edge-light:  none;
+
+  --accent-grad: linear-gradient(177deg, #fff07a 0%, #ffe24d 55%, #f4d021 100%);
+  --glow-accent: 0 0 0 2px rgba(255, 226, 77, 0.35);
+
+  --danger-ink: #ff9a9a;
+  --danger-on:  #000000;
+
+  color-scheme: dark;
+}
+
+/* Ambient amber glow is dark-theme scenery; drop it on the high-contrast/light
+   schemes so it never lowers contrast at the top of the page. */
+:root[data-theme='light'] body::before,
+:root[data-theme='high-contrast'] body::before {
+  background: none;
+}
+
+/* High-contrast wants visible edges everywhere, so thicken interactive borders. */
+:root[data-theme='high-contrast'] .action-tile,
+:root[data-theme='high-contrast'] .browse-item,
+:root[data-theme='high-contrast'] .card,
+:root[data-theme='high-contrast'] .btn-secondary,
+:root[data-theme='high-contrast'] .input {
+  border-width: 2px;
 }
 
 *, *::before, *::after {
@@ -63,16 +173,28 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The PAGE is the scroll container (not the centered column), so scrolling
+   works from anywhere in the viewport — including the side gutters on wide
+   screens — not just over the middle content. */
 html, body, #root {
-  height: 100%;
   margin: 0;
+}
+html {
+  height: 100%;
+}
+body {
+  min-height: 100%;
+}
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -99,6 +221,41 @@ body::before {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+}
+
+/* Every non-home route is a real modal navigation layer. On iOS, VoiceOver's
+   two-finger scrub has native dismissal support for <dialog>; App.tsx maps
+   that dismissal back onto MenuVoice's browser-history entry. */
+.app-route-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: 100%;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-route-dialog[open] {
+  display: block;
+}
+
+.app-route-dialog > .screen {
+  width: min(100%, 560px);
+  min-height: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.app-route-dialog::backdrop {
+  background: var(--bg);
 }
 
 /* Quiet, refined scrollbar — part of the surface, not a default gray slab */
@@ -148,9 +305,6 @@ body::before {
 /* ── Screen ─────────────────────────────────────── */
 .screen {
   flex: 1;
-  min-height: 0;        /* allows flex child to scroll rather than overflow */
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -169,7 +323,7 @@ body::before {
 
 /* ── Typography ──────────────────────────────────── */
 .title {
-  font-size: 36px;
+  font-size: calc(36px * var(--text-scale));
   font-weight: 900;
   line-height: 1.08;
   letter-spacing: -0.03em;
@@ -179,7 +333,7 @@ body::before {
 }
 
 .subtitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale));
   font-weight: 500;
   color: var(--text-secondary);
   margin: 0;
@@ -188,7 +342,7 @@ body::before {
 }
 
 .heading {
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale));
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.025em;
@@ -198,7 +352,7 @@ body::before {
 }
 
 .body {
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.58;
@@ -206,7 +360,7 @@ body::before {
 
 .muted {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   font-weight: 500;
   letter-spacing: 0;
 }
@@ -229,7 +383,7 @@ body::before {
   width: 100%;
   border-radius: var(--r-md);
   padding: 14px 24px;
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   font-weight: 700;
   font-family: inherit;
   letter-spacing: -0.01em;
@@ -373,7 +527,7 @@ body::before {
   border-radius: var(--r-md);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   font-weight: 400;
   padding: 0 16px;
   transition: border-color 120ms ease;
@@ -427,12 +581,12 @@ body::before {
   margin: 4px 0 8px;
 }
 .home-hero .title {
-  font-size: clamp(40px, 11vw, 52px);
+  font-size: clamp(calc(40px * var(--text-scale)), 11vw, calc(52px * var(--text-scale)));
   letter-spacing: -0.04em;
 }
 .home-tagline {
   margin: 8px 0 0;
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   color: var(--text-secondary);
   letter-spacing: -0.01em;
   text-wrap: balance;
@@ -505,13 +659,13 @@ body::before {
   min-width: 0;
 }
 .action-tile__title {
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale));
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
 .action-tile__sub {
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--text-scale));
   font-weight: 500;
   color: var(--text-muted);
   line-height: 1.35;
@@ -539,6 +693,110 @@ body::before {
 @keyframes tile-in {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: none; }
+}
+
+/* ── Tutorial: ordered steps ─────────────────────── */
+.tutorial-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tutorial-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px;
+  background: linear-gradient(180deg, var(--surface-high), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm), var(--edge-light);
+}
+.tutorial-step__num {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent-grad);
+  color: var(--accent-text);
+  font-size: calc(19px * var(--text-scale));
+  font-weight: 800;
+  box-shadow: 0 4px 12px -5px rgba(255, 168, 64, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.tutorial-step__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tutorial-step__title {
+  margin: 0;
+  font-size: calc(19px * var(--text-scale));
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.tutorial-step__text {
+  margin: 0;
+  font-size: calc(16px * var(--text-scale));
+  line-height: 1.55;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+/* ── Allergen review questions ───────────────────── */
+.allergen-question {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.allergen-question:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* ── Settings: segmented controls ────────────────── */
+.setting-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.setting-label {
+  font-size: calc(17px * var(--text-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.seg-btn {
+  flex: 1 1 auto;
+  min-width: 96px;
+  min-height: var(--touch);
+  padding: 10px 16px;
+  border-radius: var(--r-md);
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: calc(16px * var(--text-scale));
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm), var(--edge-light);
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 120ms var(--ease-out-quint);
+}
+.seg-btn:hover:not(:disabled) {
+  border-color: #3d3d45;
+}
+.seg-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.seg-btn--active {
+  border-color: var(--accent);
+  background: var(--surface-high);
+  color: var(--accent);
 }
 
 /* ── Voice visualizer ────────────────────────────── */
@@ -617,7 +875,7 @@ body::before {
   gap: 10px;
   border-radius: var(--r-md);
   padding: 16px 20px;
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   font-weight: 700;
   letter-spacing: -0.01em;
   border: 2px solid transparent;
@@ -731,7 +989,7 @@ body::before {
 }
 
 .turn-text {
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   line-height: 1.5;
   color: var(--text-primary);
   overflow-wrap: break-word;
@@ -755,7 +1013,7 @@ body::before {
 .browse-category-toggle {
   display: flex;
   align-items: center;
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   font-weight: 700;
 }
 
@@ -767,22 +1025,39 @@ body::before {
   box-shadow: var(--shadow-sm), var(--edge-light);
 }
 
-/* Dish carrying a non-profile allergen — visually flagged for low-vision users */
-.browse-item-allergen {
+/* Dish that hits one of the GUEST'S OWN allergens — flagged, never hidden. */
+.browse-item-alert {
   border-color: var(--danger);
   border-width: 2px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--danger) 9%, var(--surface-high)), var(--surface));
 }
 
-.allergen-disclaimer {
-  margin: 10px 0 0;
-  padding: 8px 10px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  border: 1px solid var(--danger);
+/* Prominent alert banner at the TOP of an at-risk dish */
+.allergen-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  font-size: calc(15px * var(--text-scale, 1));
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--danger-ink, var(--danger));
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  border: 1.5px solid var(--danger);
   border-radius: var(--r-sm);
+}
+
+/* Small "N alerts" pill on a category header when it has flagged dishes */
+.browse-alert-count {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 800;
+  color: var(--danger-on, #2a0000);
+  background: var(--danger);
 }
 
 .browse-item-header {
@@ -794,7 +1069,7 @@ body::before {
 
 /* h3 = item for VoiceOver heading rotor */
 .browse-item-name {
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   font-weight: 700;
   margin: 0;
   color: var(--text-primary);
@@ -803,7 +1078,7 @@ body::before {
 }
 
 .browse-item-price {
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   font-weight: 700;
   color: var(--accent);
   white-space: nowrap;
@@ -812,7 +1087,7 @@ body::before {
 }
 
 .browse-item-desc {
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
   color: var(--text-secondary);
   margin: 6px 0 0;
   line-height: 1.5;
@@ -830,11 +1105,14 @@ body::before {
    coarse/no-hover (touch) devices so a short desktop browser window never trips
    it — on desktop the app must stay a centered phone-width column. */
 @media (orientation: landscape) and (max-height: 620px) and (pointer: coarse) and (hover: none) {
-  #root {
+  #root,
+  .app-route-dialog {
+    width: 100%;
     max-width: none;
   }
 
   .screen {
+    max-width: none;
     display: grid;
     grid-template-columns: minmax(280px, 1fr) minmax(260px, 360px);
     grid-auto-rows: min-content;

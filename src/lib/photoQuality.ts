@@ -7,7 +7,8 @@
 // most for a blind/low-vision user who cannot glance at a thumbnail to judge
 // whether a shot came out blurry, dark, or cropped.
 
-import { computeFrameMetrics, FrameMetrics, LUM_DARK, GLARE_FRAC, SHARP_MIN, EDGE_MIN, TOO_FAR_BBOX, SKEW_WARN_DEG } from './scanner';
+import { computeFrameMetrics, LUM_DARK, GLARE_FRAC, SHARP_MIN, EDGE_MIN, TOO_FAR_BBOX, SKEW_WARN_DEG } from './scanner';
+import type { FrameMetrics } from './scanner';
 
 const ANALYSIS_MAX_DIM = 160; // matches the live scanner's per-frame analysis scale
 

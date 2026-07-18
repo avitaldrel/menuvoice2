@@ -4,14 +4,22 @@
 // `Authorization: Bearer $CRON_SECRET` on scheduled invocations; we verify it.
 // You can also trigger manually with ?key=<REPORT_KEY> (e.g. to test delivery).
 //
-// Recipient:  REPORT_EMAIL_TO   (defaults to 2firemaster27@gmail.com)
+// Recipients: REPORT_EMAIL_TO (defaults to 2firemaster27@gmail.com) plus the
+//             extra testers in REPORT_EMAIL_EXTRA — see resolveRecipients().
 // Transport:  RESEND_API_KEY  OR  GMAIL_USER + GMAIL_APP_PASSWORD  (see _morningData.sendEmail)
 // Window:     REPORT_EMAIL_HOURS (default 24).  ?hours= overrides for manual runs.
 //
 // Internal/test accounts are excluded via REPORT_EXCLUDE_EMAILS.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { buildMorningReport, renderText, renderEmailHtml, sendEmail } from './_morningData.js';
+import { buildMorningReport, renderText, renderEmailHtml, sendEmail, resolveRecipients, analyticsUrl } from './_morningData.js';
+
+export function shouldSendMorningReport(
+  data: { anyoneUsed: boolean; cartesia: { allExhausted: boolean } },
+  force = false,
+): boolean {
+  return force || data.anyoneUsed || data.cartesia.allExhausted;
+}
 
 function authorized(req: VercelRequest): boolean {
   const auth = (req.headers.authorization as string) ?? '';
@@ -25,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
 
-  const to = process.env.REPORT_EMAIL_TO ?? '2firemaster27@gmail.com';
+  const to = resolveRecipients();
   const hoursRaw = Number(req.query.hours);
   const envHours = Number(process.env.REPORT_EMAIL_HOURS);
   const hours = Number.isFinite(hoursRaw) && hoursRaw > 0
@@ -48,25 +56,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // window there is nothing new to say, so we skip the send entirely (a clean
     // 200 no-op). Append ?force=1 to override (useful for manual test sends).
     const force = req.query.force === '1' || req.query.force === 'true';
-    if (!d.anyoneUsed && !force) {
+    if (!shouldSendMorningReport(d, force)) {
       return res.status(200).json({ ok: true, sent: false, reason: 'no activity in window — nothing new to report' });
     }
 
     const date = new Date().toISOString().slice(0, 10);
     // Stable, unique tag so a Gmail filter can label every report reliably.
-    const subject = d.anyoneUsed
+    const subject = d.cartesia.allExhausted
+      ? `[MenuVoice] Morning report ${date} — Cartesia keys exhausted`
+      : d.anyoneUsed
       ? `[MenuVoice] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website.visits} site visits`
       : `[MenuVoice] Morning report ${date} — no users in window`;
 
-    const host = req.headers.host;
-    const dashboardUrl = host && process.env.REPORT_KEY
-      ? `https://${host}/api/morning?key=${process.env.REPORT_KEY}`
-      : undefined;
+    const links = {
+      dashboard: analyticsUrl('/api/dashboard'),
+      report: analyticsUrl('/api/morning'),
+    };
 
     const via = await sendEmail({
       to,
       subject,
-      html: renderEmailHtml(d, dashboardUrl),
+      html: renderEmailHtml(d, links),
       text: renderText(d),
     });
 

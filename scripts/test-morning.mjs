@@ -12,7 +12,7 @@ if (!process.env.POSTGRES_URL) { console.error('FAIL: POSTGRES_URL missing'); pr
 
 const hours = Number(process.argv[2]) || 24;
 const w = `now() - interval '${hours} hours'`;
-const exclude = (process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com')
+const exclude = (process.env.REPORT_EXCLUDE_EMAILS ?? '2firemaster27@gmail.com,avitaldrel@gmail.com,mibrahim.dev17@gmail.com,anibabug@gmail.com,ik8072369@gmail.com')
   .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 const notExcluded = `lower(user_email) <> ALL($1::text[])`;
 

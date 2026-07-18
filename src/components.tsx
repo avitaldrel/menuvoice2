@@ -1,16 +1,18 @@
 // Shared accessible web UI primitives. Buttons/inputs are >= 64px,
 // have roles/labels, and a visible focus ring (see index.css :focus-visible).
 
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 
-export function Screen({ children }: { children: React.ReactNode }) {
+export function Screen({ children, label }: { children: React.ReactNode; label?: string }) {
   const ref = useRef<HTMLElement>(null);
-  useEffect(() => {
-    // Move focus to screen top on every mount so keyboard/SR users land at content
+  useLayoutEffect(() => {
+    // Move focus before paint so screen readers do not first announce a stale
+    // control from the previous route. A concise label prevents VoiceOver from
+    // treating a newly focused main landmark as a request to read every child.
     ref.current?.focus();
   }, []);
   return (
-    <main id="main-content" className="screen" tabIndex={-1} ref={ref}>
+    <main id="main-content" className="screen" tabIndex={-1} ref={ref} aria-label={label}>
       {children}
     </main>
   );
@@ -78,6 +80,95 @@ export function SecondaryButton({
     >
       {label}
     </button>
+  );
+}
+
+// ── Allergen review panel ───────────────────────────────────────────────────
+// Shown whenever saving allergies would require changing or guessing at what
+// the user said. One question per word; nothing is saved until every question
+// is answered. This keeps a safety-critical field consensual: the app suggests,
+// the user decides.
+export interface AllergenQuestion {
+  typed: string;
+  suggested?: string; // present = spelling suggestion; absent = unrecognized word
+}
+
+export function AllergenReviewPanel({
+  questions,
+  onDone,
+}: {
+  questions: AllergenQuestion[];
+  onDone: (kept: string[]) => void;
+}) {
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const keptRef = useRef<string[]>([]);
+  const promptRef = useRef<HTMLParagraphElement>(null);
+  const question = questions[questionIndex];
+
+  useLayoutEffect(() => {
+    promptRef.current?.focus();
+  }, [questionIndex]);
+
+  const decide = (value: string | null) => {
+    const kept = value ? [...keptRef.current, value] : keptRef.current;
+    keptRef.current = kept;
+    if (questionIndex === questions.length - 1) {
+      onDone(kept);
+      return;
+    }
+    setQuestionIndex((current) => current + 1);
+  };
+
+  if (!question) return null;
+
+  return (
+    <div className="card" role="group" aria-label="Check your allergy list before saving">
+      <p className="body" style={{ fontWeight: 700, marginBottom: 12 }}>
+        Before I save your allergy list, please check this word:
+      </p>
+      <div className="allergen-question">
+        <p className="body" style={{ marginBottom: 10 }} ref={promptRef} tabIndex={-1}>
+          {questions.length > 1 && `Question ${questionIndex + 1} of ${questions.length}. `}
+          {question.suggested ? (
+            <>
+              You entered <strong>{question.typed}</strong>. Did you mean{' '}
+              <strong>{question.suggested}</strong>?
+            </>
+          ) : (
+            <>
+              I don't recognize <strong>{question.typed}</strong> as a food allergen. I can still
+              watch for that exact word on menus.
+            </>
+          )}
+        </p>
+        <div className="row">
+          <button
+            className="btn btn-primary"
+            style={{ flex: 1, minHeight: 56 }}
+            onClick={() => decide(question.suggested ?? question.typed)}
+            aria-label={
+              question.suggested
+                ? `Yes, save ${question.suggested}`
+                : `Keep ${question.typed} on my allergy list`
+            }
+          >
+            {question.suggested ? `Yes, ${question.suggested}` : 'Keep it'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{ flex: 1, minHeight: 56 }}
+            onClick={() => decide(question.suggested ? question.typed : null)}
+            aria-label={
+              question.suggested
+                ? `No, keep ${question.typed} exactly as I entered it`
+                : `Remove ${question.typed} from my allergy list`
+            }
+          >
+            {question.suggested ? `Keep "${question.typed}"` : 'Remove it'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
