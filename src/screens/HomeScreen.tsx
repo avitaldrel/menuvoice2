@@ -59,24 +59,13 @@ export default function HomeScreen({ navigate }: ScreenProps) {
       <div className="col home-actions stagger">
         <Tile
           primary
-          title="Scan a Menu"
-          sub="Use your camera to read a paper menu"
-          onClick={go({ name: 'capture' })}
+          title="Read a Menu"
+          sub="Scan it with your camera, or find it by name"
+          onClick={go({ name: 'getMenu' })}
           icon={
             <svg width="26" height="26" viewBox="0 0 24 24" {...stroke}>
               <path d="M3 9V7a2 2 0 012-2h2M17 5h2a2 2 0 012 2v2M21 15v2a2 2 0 01-2 2h-2M7 19H5a2 2 0 01-2-2v-2" />
               <circle cx="12" cy="12" r="3.2" />
-            </svg>
-          }
-        />
-        <Tile
-          title="Find a Menu"
-          sub="Search by restaurant name or paste a link"
-          onClick={go({ name: 'find' })}
-          icon={
-            <svg width="26" height="26" viewBox="0 0 24 24" {...stroke}>
-              <circle cx="11" cy="11" r="7" />
-              <path d="M20 20l-3.2-3.2" />
             </svg>
           }
         />
