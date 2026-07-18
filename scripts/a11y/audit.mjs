@@ -1,6 +1,6 @@
 /**
  * WCAG 2.1 AA accessibility audit for MenuVoice PWA.
- * Renders 7 screens with mocked localStorage, runs axe-core, saves results.
+ * Renders the primary screens with mocked localStorage, runs axe-core, saves results.
  */
 
 import { chromium } from '@playwright/test';
@@ -33,8 +33,9 @@ const SCREENS = [
   { name: 'login',      ls: {} },
   { name: 'onboarding', ls: { 'menuvoice.profile.v1': testProfileJson({ onboarded: false }) } },
   { name: 'home',       ls: { 'menuvoice.profile.v1': PROFILE } },
-  { name: 'capture',    ls: { 'menuvoice.profile.v1': PROFILE }, click: 'Scan a Menu' },
-  { name: 'find',       ls: { 'menuvoice.profile.v1': PROFILE }, click: 'Find a Menu' },
+  { name: 'getMenu',    ls: { 'menuvoice.profile.v1': PROFILE }, clicks: ['Read a Menu'] },
+  { name: 'capture',    ls: { 'menuvoice.profile.v1': PROFILE }, clicks: ['Read a Menu', 'Scan a Menu'] },
+  { name: 'find',       ls: { 'menuvoice.profile.v1': PROFILE }, clicks: ['Read a Menu', 'Find a Menu'] },
   { name: 'saved',      ls: { 'menuvoice.profile.v1': PROFILE, 'menuvoice.savedRestaurants.v1': SAVED }, click: 'Saved Restaurants' },
   { name: 'settings',   ls: { 'menuvoice.profile.v1': PROFILE }, click: 'Settings' },
 ];
@@ -67,15 +68,16 @@ async function auditScreen(browser, screen) {
     console.warn(`  [warn] main.screen not found for screen: ${screen.name}`);
   }
 
-  // Click navigation target if needed
-  if (screen.click) {
+  // Click navigation targets if needed.
+  const clicks = screen.clicks ?? (screen.click ? [screen.click] : []);
+  for (const click of clicks) {
     try {
-      // Find by accessible name (button text / aria-label)
-      const btn = page.getByRole('button', { name: screen.click }).first();
+      const btn = page.getByRole('button', { name: click }).first();
       await btn.click({ timeout: 5000 });
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(750);
     } catch (e) {
-      console.warn(`  [warn] Could not click "${screen.click}" on ${screen.name}: ${e.message}`);
+      console.warn(`  [warn] Could not click "${click}" on ${screen.name}: ${e.message}`);
+      break;
     }
   }
 

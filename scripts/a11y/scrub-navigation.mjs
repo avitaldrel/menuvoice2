@@ -76,6 +76,7 @@ async function verifyBackNavigation(browserType, browserName) {
     // Capture arrival must not queue the previous Home instructions, every
     // camera control, or a second explanatory paragraph. The focused landmark
     // gives VoiceOver one action and then waits for live camera coaching.
+    await page.getByRole('button', { name: 'Read a Menu' }).click();
     await page.getByRole('button', { name: 'Scan a Menu' }).click();
     await dialog.waitFor({ state: 'visible' });
     assert.equal(await dialog.getAttribute('aria-label'), 'Capture menu');

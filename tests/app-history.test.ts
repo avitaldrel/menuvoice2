@@ -15,6 +15,11 @@ test('preserves the tutorial route in browser history', () => {
   assert.deepEqual(readAppHistoryEntry(entry), entry);
 });
 
+test('preserves the Read a Menu chooser in browser history', () => {
+  const entry = createAppHistoryEntry({ name: 'getMenu' }, 1);
+  assert.deepEqual(readAppHistoryEntry(entry), entry);
+});
+
 test('rejects unrelated or malformed browser-history state', () => {
   assert.equal(readAppHistoryEntry(null), null);
   assert.equal(readAppHistoryEntry({ key: 'another-app', version: 1, position: 0 }), null);
