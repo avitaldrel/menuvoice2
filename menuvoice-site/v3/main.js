@@ -8,7 +8,7 @@
   function initWave(canvas, opts) {
     if (!canvas || !canvas.getContext) return;
     var ctx = canvas.getContext('2d');
-    var t = 0, raf;
+    var t = 0, raf, visible = true;
     opts = opts || {};
     var layers = opts.layers || [
       { freq: 0.008, amp: 0.16, speed: 0.014, alpha: 0.52, w: 1.8 },
@@ -56,7 +56,17 @@
       });
 
       t++;
-      raf = requestAnimationFrame(draw);
+      if (visible) raf = requestAnimationFrame(draw);
+    }
+
+    if (!reduce && 'IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          var was = visible;
+          visible = e.isIntersecting;
+          if (visible && !was) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+        });
+      }, { threshold: 0.05 }).observe(canvas);
     }
 
     resize();
@@ -120,7 +130,18 @@
       }
 
       t++;
-      requestAnimationFrame(draw);
+      if (!reduce && visible) raf = requestAnimationFrame(draw);
+    }
+
+    var raf, visible = true;
+    if (!reduce && 'IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          var was = visible;
+          visible = e.isIntersecting;
+          if (visible && !was) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+        });
+      }, { threshold: 0.05 }).observe(canvas);
     }
 
     resize();
@@ -135,7 +156,7 @@
     { r: 'u', plain: 'Something vegetarian, nothing pricey.', html: null },
     { r: 'a', plain: 'Three under twelve pounds: squash risotto, halloumi flatbread, or the lentil dahl.', html: null },
     { r: 'u', plain: 'Which would you order?', html: null },
-    { r: 'a', plain: 'The dahl \u2014 it\u2019s the kitchen\u2019s best-rated dish tonight.', html: 'The <b>dahl</b> \u2014 it\u2019s the kitchen\u2019s best-rated dish tonight.' },
+    { r: 'a', plain: 'The dahl. Hearty, vegetarian, and at ten pounds it leaves room for dessert.', html: 'The <b>dahl</b>. Hearty, vegetarian, and at ten pounds it leaves room for dessert.' },
     { r: 'u', plain: 'Perfect. The dahl, please.', html: null },
   ];
 

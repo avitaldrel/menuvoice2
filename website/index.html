@@ -3,8 +3,25 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MenuVoice · Read me the menu</title>
-<meta name="description" content="Point your phone at a menu. MenuVoice reads it aloud, checks ingredients and allergens, and lets you ask follow-up questions by voice." />
+<title>MenuVoice · The app that reads restaurant menus aloud</title>
+<meta name="description" content="MenuVoice reads restaurant menus aloud for blind and low-vision diners. Scan with your camera, hear every dish, check allergens, and ask questions by voice." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="MenuVoice" />
+<meta property="og:title" content="MenuVoice · The app that reads restaurant menus aloud" />
+<meta property="og:description" content="Scan a restaurant menu with your camera. MenuVoice reads every dish aloud, checks allergens, and answers questions by voice. Built for blind and low-vision diners." />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="MenuVoice · The app that reads restaurant menus aloud" />
+<meta name="twitter:description" content="Scan a restaurant menu with your camera. MenuVoice reads every dish aloud, checks allergens, and answers questions by voice." />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "MenuVoice",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Web browser",
+  "description": "MenuVoice reads restaurant menus aloud for blind and low-vision diners. It captures a menu by camera or link, speaks every dish, flags allergens against the diner's own allergy list, and answers questions about the food by voice."
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -54,6 +71,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
@@ -151,6 +169,12 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
   transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
 }
 .btn:active { transform: translateY(1px); }
+/* Match the email input's focus treatment so keyboard focus is equally
+   visible on every interactive element, not just the form field. */
+.btn:focus-visible, .nav-links a:focus-visible, .foot-grid .links a:focus-visible, .brand:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
 .btn-primary  { background: var(--accent); color: var(--accent-text); box-shadow: 0 10px 30px -12px var(--accent-glow); }
 .btn-primary:hover  { background: var(--accent-warm); }
 .btn-secondary { background: transparent; color: var(--text-primary); border-color: var(--border); }
@@ -171,7 +195,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 }
 .site-head[data-stuck="1"] { border-bottom-color: var(--border-soft); }
 .nav { max-width: var(--maxw); margin: 0 auto; padding: 14px var(--gutter); display: flex; align-items: center; gap: 28px; }
-.brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: var(--text-primary); font-family: var(--font-display); font-size: 23px; font-weight: 600; letter-spacing: -0.02em; }
+.brand { display: inline-flex; align-items: center; gap: 11px; min-height: 44px; text-decoration: none; color: var(--text-primary); font-family: var(--font-display); font-size: 23px; font-weight: 600; letter-spacing: -0.02em; }
 .brand .mark { position: relative; width: 30px; height: 30px; border-radius: 9px; background: var(--surface-high); border: 1px solid var(--border); display: grid; place-items: center; flex-shrink: 0; }
 .brand .mark i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); box-shadow: -7px 0 0 -1px var(--accent), 7px 0 0 -1px var(--accent); }
 .brand .v { color: var(--accent); }
@@ -506,9 +530,9 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 /* ── Footer ── */
 .site-foot { border-top:1px solid var(--border-soft);padding-block:48px; }
 .foot-grid { display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap; }
-.foot-grid .links { display:flex;gap:22px;flex-wrap:wrap; }
-.foot-grid .links a { color:var(--text-muted);text-decoration:none;font-size:14px; }
-.foot-grid .links a:hover { color:var(--text-secondary); }
+.foot-grid .links { display:flex;gap:2px;flex-wrap:wrap; }
+.foot-grid .links a { color:var(--text-muted);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;min-height:44px;padding:0 11px;border-radius:9px; }
+.foot-grid .links a:hover { color:var(--text-secondary);background:var(--surface); }
 .foot-note { margin-top:22px;font-size:13px;color:var(--text-muted);max-width:60ch;line-height:1.5; }
 
 /* ── Reveal ── */
@@ -730,15 +754,15 @@ html[data-a11y-font="readable"] {
 
         <div class="hero-copy">
           <p class="eyebrow reveal">Voice-first menu access</p>
-          <h1 class="display reveal" data-d="1" id="hero-h">Read me<br/>the <em>menu.</em></h1>
-          <p class="lede reveal" data-d="2">Point your phone at a menu. MenuVoice reads it aloud, checks ingredients and allergens, and lets you ask follow-up questions by voice.</p>
+          <h1 class="display reveal" data-d="1" id="hero-h">Read me <br/>the <em>menu.</em></h1>
+          <p class="lede reveal" data-d="2">Point your phone at any restaurant menu. MenuVoice reads it aloud, checks ingredients against your allergies, and answers your questions by voice.</p>
           <div class="hero-cta reveal" data-d="3">
             <a class="btn btn-primary btn-lg" href="#waitlist">Request a demo <span class="arrow">→</span></a>
             <a class="btn btn-ghost btn-lg" href="#demo-section">See how it works <span class="arrow">→</span></a>
           </div>
           <p class="hero-note reveal" data-d="3">
             <span class="hbars" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></span>
-            <span><strong>Built for independent ordering</strong></span>
+            <span><strong>Built for blind and low-vision diners</strong></span>
           </p>
         </div>
 
@@ -772,8 +796,8 @@ html[data-a11y-font="readable"] {
   <!-- ═══════════════════════ WHY ═══════════════════════ -->
   <section class="section-pad" id="why" aria-labelledby="why-h">
     <div class="wrap">
-      <p class="eyebrow reveal">The problem</p>
-      <blockquote class="manifesto-quote reveal" data-d="1" id="why-h">
+      <h2 class="eyebrow reveal" id="why-h">The problem</h2>
+      <blockquote class="manifesto-quote reveal" data-d="1">
         A menu assumes you can read it. If you cannot, dinner often starts by asking someone else to read, filter, and choose with you.
       </blockquote>
       <dl class="openrow reveal" data-d="2">
@@ -787,7 +811,8 @@ html[data-a11y-font="readable"] {
   <hr class="rule" />
 
   <!-- ═══════════════════════ SCROLL DEMO ═══════════════════════ -->
-  <section class="demo-section" id="demo-section" aria-label="How MenuVoice works">
+  <section class="demo-section" id="demo-section" aria-labelledby="demo-h">
+    <h2 class="sr-only" id="demo-h">How it works</h2>
     <div class="demo-sticky" id="demo-sticky">
 
       <!-- LEFT: minimal labels that stay once shown -->
@@ -954,7 +979,7 @@ html[data-a11y-font="readable"] {
         <a href="#waitlist">Request a demo</a>
       </div>
     </div>
-    <p class="foot-note">MenuVoice is an independent, voice-first prototype for blind and low-vision diners. Order on your own terms.</p>
+    <p class="foot-note">MenuVoice is an independent, voice-first prototype that reads restaurant menus aloud for blind and low-vision diners. Order on your own terms.</p>
   </div>
 </footer>
 
@@ -1219,7 +1244,7 @@ html[data-a11y-font="readable"] {
   function initWave(canvas, opts) {
     if (!canvas || !canvas.getContext) return;
     var ctx = canvas.getContext('2d');
-    var t = 0, raf;
+    var t = 0, raf, visible = true;
     opts = opts || {};
     var layers = opts.layers || [
       { freq: 0.008, amp: 0.16, speed: 0.014, alpha: 0.52, w: 1.8 },
@@ -1267,7 +1292,21 @@ html[data-a11y-font="readable"] {
       });
 
       t++;
-      raf = requestAnimationFrame(draw);
+      // Pause the loop while scrolled out of view; resumes via the observer.
+      if (visible) raf = requestAnimationFrame(draw);
+    }
+
+    // Animate by default; IO only PAUSES when it positively reports the canvas
+    // off screen. IO callbacks never fire in some embedded/iframe contexts (see
+    // the reveal fallback below), so pausing must never be the initial state.
+    if (!reduce && 'IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          var was = visible;
+          visible = e.isIntersecting;
+          if (visible && !was) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+        });
+      }, { threshold: 0.05 }).observe(canvas);
     }
 
     resize();
@@ -1331,7 +1370,23 @@ html[data-a11y-font="readable"] {
       }
 
       t++;
-      requestAnimationFrame(draw);
+      // Static bars need one paint, not a 60fps loop redrawing the same frame.
+      if (!reduce && visible) raf = requestAnimationFrame(draw);
+    }
+
+    // Only animate while on screen; a hidden or scrolled-away canvas burning
+    // frames is pure battery cost on the phones this audience actually uses.
+    // Animate by default; IO only PAUSES on a positive off-screen report,
+    // because IO callbacks never fire in some embedded/iframe contexts.
+    var raf, visible = true;
+    if (!reduce && 'IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          var was = visible;
+          visible = e.isIntersecting;
+          if (visible && !was) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+        });
+      }, { threshold: 0.05 }).observe(canvas);
     }
 
     resize();
@@ -1346,7 +1401,7 @@ html[data-a11y-font="readable"] {
     { r: 'u', plain: 'Something vegetarian, nothing pricey.', html: null },
     { r: 'a', plain: 'Three under twelve pounds: squash risotto, halloumi flatbread, or the lentil dahl.', html: null },
     { r: 'u', plain: 'Which would you order?', html: null },
-    { r: 'a', plain: 'The dahl \u2014 it\u2019s the kitchen\u2019s best-rated dish tonight.', html: 'The <b>dahl</b> \u2014 it\u2019s the kitchen\u2019s best-rated dish tonight.' },
+    { r: 'a', plain: 'The dahl. Hearty, vegetarian, and at ten pounds it leaves room for dessert.', html: 'The <b>dahl</b>. Hearty, vegetarian, and at ten pounds it leaves room for dessert.' },
     { r: 'u', plain: 'Perfect. The dahl, please.', html: null },
   ];
 
