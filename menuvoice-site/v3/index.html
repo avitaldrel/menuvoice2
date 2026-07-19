@@ -3,7 +3,25 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MenuVoice v3 · Read me the menu</title>
+<title>MenuVoice · The app that reads restaurant menus aloud</title>
+<meta name="description" content="MenuVoice reads restaurant menus aloud for blind and low-vision diners. Scan with your camera, hear every dish, check allergens, and ask questions by voice." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="MenuVoice" />
+<meta property="og:title" content="MenuVoice · The app that reads restaurant menus aloud" />
+<meta property="og:description" content="Scan a restaurant menu with your camera. MenuVoice reads every dish aloud, checks allergens, and answers questions by voice. Built for blind and low-vision diners." />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="MenuVoice · The app that reads restaurant menus aloud" />
+<meta name="twitter:description" content="Scan a restaurant menu with your camera. MenuVoice reads every dish aloud, checks allergens, and answers questions by voice." />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "MenuVoice",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Web browser",
+  "description": "MenuVoice reads restaurant menus aloud for blind and low-vision diners. It captures a menu by camera or link, speaks every dish, flags allergens against the diner's own allergy list, and answers questions about the food by voice."
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -36,15 +54,15 @@
 
         <div class="hero-copy">
           <p class="eyebrow reveal">Voice-first menu access</p>
-          <h1 class="display reveal" data-d="1" id="hero-h">Read me<br/>the <em>menu.</em></h1>
-          <p class="lede reveal" data-d="2">Point your phone at a menu. MenuVoice reads it aloud, checks ingredients and allergens, and lets you ask follow-up questions by voice.</p>
+          <h1 class="display reveal" data-d="1" id="hero-h">Read me <br/>the <em>menu.</em></h1>
+          <p class="lede reveal" data-d="2">Point your phone at any restaurant menu. MenuVoice reads it aloud, checks ingredients against your allergies, and answers your questions by voice.</p>
           <div class="hero-cta reveal" data-d="3">
             <a class="btn btn-primary btn-lg" href="#waitlist">Request a demo <span class="arrow">→</span></a>
             <a class="btn btn-ghost btn-lg" href="#demo-section">See how it works <span class="arrow">→</span></a>
           </div>
           <p class="hero-note reveal" data-d="3">
             <span class="hbars" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></span>
-            <span><strong>Built for independent ordering</strong></span>
+            <span><strong>Built for blind and low-vision diners</strong></span>
           </p>
         </div>
 
@@ -78,8 +96,8 @@
   <!-- ═══════════════════════ WHY ═══════════════════════ -->
   <section class="section-pad" id="why" aria-labelledby="why-h">
     <div class="wrap">
-      <p class="eyebrow reveal">The problem</p>
-      <blockquote class="manifesto-quote reveal" data-d="1" id="why-h">
+      <h2 class="eyebrow reveal" id="why-h">The problem</h2>
+      <blockquote class="manifesto-quote reveal" data-d="1">
         A menu assumes you can read it. If you cannot, dinner often starts by asking someone else to read, filter, and choose with you.
       </blockquote>
       <dl class="openrow reveal" data-d="2">
@@ -93,7 +111,8 @@
   <hr class="rule" />
 
   <!-- ═══════════════════════ SCROLL DEMO ═══════════════════════ -->
-  <section class="demo-section" id="demo-section" aria-label="How MenuVoice works">
+  <section class="demo-section" id="demo-section" aria-labelledby="demo-h">
+    <h2 class="sr-only" id="demo-h">How it works</h2>
     <div class="demo-sticky" id="demo-sticky">
 
       <!-- LEFT: minimal labels that stay once shown -->
@@ -259,7 +278,7 @@
         <a href="#waitlist">Request a demo</a>
       </div>
     </div>
-    <p class="foot-note">MenuVoice is an independent, voice-first prototype for blind and low-vision diners. Order on your own terms.</p>
+    <p class="foot-note">MenuVoice is an independent, voice-first prototype that reads restaurant menus aloud for blind and low-vision diners. Order on your own terms.</p>
   </div>
 </footer>
 
