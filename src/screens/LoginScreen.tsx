@@ -8,7 +8,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { Screen, Title, Heading, Body, PrimaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
-import { restoreFromCloud } from '../lib/storage';
+import { restoreFromCloud, isDifferentUser, clearLocalUserData } from '../lib/storage';
 import { track } from '../lib/telemetry';
 
 interface GoogleJwt {
@@ -32,6 +32,10 @@ export default function LoginScreen() {
       announce('Please enter your email address first.');
       return;
     }
+    // Signing in as a different account: drop the previous user's local saves
+    // first, so if this user has no cloud copy they start clean rather than
+    // inheriting someone else's saved restaurants.
+    if (await isDifferentUser(trimmed)) clearLocalUserData();
     const restored = await restoreFromCloud(trimmed);
     const base = restored ?? { email: trimmed };
     await update(name ? { ...base, name } : base);

@@ -9,6 +9,34 @@ const PROFILE_KEY = 'menuvoice.profile.v1';
 const SAVED_KEY = 'menuvoice.savedRestaurants.v1';
 const MAX_DINING_HISTORY = 100;
 
+// localStorage keys holding one signed-in user's private data. Cleared on
+// sign-out and when a different user signs in, so a shared browser never leaks
+// one person's saved restaurants or profile to the next.
+const USER_SCOPED_KEYS = [PROFILE_KEY, SAVED_KEY];
+
+/** Wipe the current user's private data from this device. */
+export function clearLocalUserData(): void {
+  for (const key of USER_SCOPED_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore storage access errors — nothing to clear if it is unavailable
+    }
+  }
+}
+
+/**
+ * True when `email` is a different account than the one whose data is currently
+ * on this device. Callers clear local data before restoring so the new user
+ * never inherits the previous user's saves when their own cloud copy is empty.
+ */
+export async function isDifferentUser(email: string): Promise<boolean> {
+  const current = await loadProfile();
+  const prev = (current.email ?? '').trim().toLowerCase();
+  const next = email.trim().toLowerCase();
+  return prev !== '' && prev !== next;
+}
+
 export function menuStats(menu: ParsedMenu): { categoryCount: number; itemCount: number } {
   const categoryCount = Array.isArray(menu.categories) ? menu.categories.length : 0;
   const itemCount = Array.isArray(menu.categories)

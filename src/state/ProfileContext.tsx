@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { UserProfile, EMPTY_PROFILE } from '../types';
-import { loadProfile, saveProfile } from '../lib/storage';
+import { loadProfile, saveProfile, clearLocalUserData } from '../lib/storage';
 import { track } from '../lib/telemetry';
 import { setSpeechRate } from '../lib/speech';
 
@@ -61,6 +61,10 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reset = useCallback(async () => {
+    // Clear this user's saved restaurants and profile from the device so the
+    // next person to use this browser cannot see them. saveProfile below then
+    // writes a fresh empty profile.
+    clearLocalUserData();
     applyAppearance(EMPTY_PROFILE);
     setProfile({ ...EMPTY_PROFILE });
     await saveProfile({ ...EMPTY_PROFILE });
