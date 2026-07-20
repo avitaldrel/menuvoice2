@@ -12,7 +12,7 @@ export interface UserProfile {
   onboarded: boolean;
   imageLogging: boolean;
   // Accessibility preferences.
-  theme?: AppTheme; // color scheme (default 'light': black-on-white for low vision)
+  theme?: AppTheme; // color scheme (default 'dark': warm amber on near-black)
   textScale?: TextScale; // global text size (default 'large')
   speechRate?: number; // Conversation Mode speaking speed multiplier (default 1)
   tutorialSeen?: boolean; // first-run tutorial shown once, then never auto-shown
@@ -128,9 +128,9 @@ export const EMPTY_PROFILE: UserProfile = {
   ttsVoice: 'shimmer',
   onboarded: false,
   imageLogging: false,
-  // Research-backed low-vision defaults: black text on white, large type.
-  // Dark and High-contrast schemes stay one tap away in Settings.
-  theme: 'light',
+  // Default to the warm dark theme; Light and High-contrast stay one tap away
+  // in Settings, and any theme a user has already saved is preserved on load.
+  theme: 'dark',
   textScale: 'large',
   speechRate: 1,
 };

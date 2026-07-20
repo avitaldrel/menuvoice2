@@ -22,7 +22,7 @@ type RecState = 'idle' | 'recording' | 'working';
 const THEME_OPTIONS: { value: AppTheme; label: string; hint: string }[] = [
   { value: 'dark', label: 'Dark', hint: 'Light text on a near-black background. Easiest on the eyes in low light.' },
   { value: 'light', label: 'Light', hint: 'Dark text on a white background. Highest edge contrast.' },
-  { value: 'high-contrast', label: 'High contrast', hint: 'Bright yellow on pure black. Maximum contrast.' },
+  { value: 'high-contrast', label: 'High contrast', hint: 'White text and orange accents on pure black. Maximum contrast.' },
 ];
 const TEXT_SIZES: { value: TextScale; label: string }[] = [
   { value: 'normal', label: 'Normal' },
@@ -223,7 +223,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
   const anyMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
 
-  const currentTheme: AppTheme = profile.theme ?? 'light';
+  const currentTheme: AppTheme = profile.theme ?? 'dark';
   const currentScale: TextScale = profile.textScale ?? 'large';
   const currentRate = profile.speechRate ?? 1;
   const themeHint = THEME_OPTIONS.find((t) => t.value === currentTheme)?.hint ?? '';
