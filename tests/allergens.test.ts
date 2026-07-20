@@ -88,3 +88,64 @@ test('dishSpokenLabel includes ingredients after the warning', () => {
   assert.ok(label.startsWith('Pad Thai. Allergen warning.'), label);
   assert.ok(label.indexOf('Allergen warning') < label.indexOf('Ingredients:'));
 });
+
+// ── Bug #2a: detection groups for corn, garlic, onion, cinnamon ──
+// The profile accepts these canonical allergens (util.ts CANONICAL_ALLERGENS),
+// so each must have a detection path. Positive, negative, and ambiguous cases.
+
+test('garlic profile allergy blocks a garlic dish with a warning', () => {
+  const item: MenuItem = { name: 'Garlic butter shrimp', price: '$14' };
+  const info = analyzeItemAllergens(item, ['garlic']);
+  assert.equal(info.blocked, true);
+  assert.ok(info.blockedBy.some((f) => f.label === 'garlic'));
+  // Warning must precede price in the spoken label.
+  const label = dishSpokenLabel(item, info.blockedBy);
+  assert.ok(label.indexOf('Allergen warning') < label.indexOf('Price $14'), label);
+});
+
+test('garlic allium term (aioli) is detected for a garlic-allergic guest', () => {
+  const item: MenuItem = { name: 'Fries', description: 'served with aioli' };
+  const info = analyzeItemAllergens(item, ['garlic']);
+  assert.equal(info.blocked, true);
+});
+
+test('onion allergy also catches the wider allium family (shallot, scallion)', () => {
+  const shallot = analyzeItemAllergens({ name: 'Salad', description: 'shallot vinaigrette' }, ['onion']);
+  assert.equal(shallot.blocked, true);
+  const scallion = analyzeItemAllergens({ name: 'Ramen', ingredients: ['scallions'] }, ['onion']);
+  assert.equal(scallion.blocked, true);
+});
+
+test('corn allergy blocks polenta and popcorn but not corned beef', () => {
+  assert.equal(analyzeItemAllergens({ name: 'Creamy polenta' }, ['corn']).blocked, true);
+  assert.equal(analyzeItemAllergens({ name: 'Popcorn shrimp' }, ['corn']).blocked, true);
+  // "corned beef" contains no corn — word boundaries must not false-match.
+  assert.equal(analyzeItemAllergens({ name: 'Corned beef hash' }, ['corn']).blocked, false);
+});
+
+test('cinnamon allergy blocks churros and chai', () => {
+  assert.equal(analyzeItemAllergens({ name: 'Cinnamon churros' }, ['cinnamon']).blocked, true);
+  assert.equal(analyzeItemAllergens({ name: 'Chai latte' }, ['cinnamon']).blocked, true);
+});
+
+test('negative: a plain dish does not block for these allergies', () => {
+  const item: MenuItem = { name: 'Grilled salmon', description: 'with lemon' };
+  for (const allergy of ['garlic', 'onion', 'corn', 'cinnamon']) {
+    assert.equal(analyzeItemAllergens(item, [allergy]).blocked, false, `${allergy} should not match`);
+  }
+});
+
+test('personal-only groups do not pollute other-allergen disclosure', () => {
+  // A garlic-heavy dish, but the guest is only allergic to peanuts: garlic and
+  // onion must NOT appear in otherAllergens (they are personal-only).
+  const item: MenuItem = { name: 'Garlic and onion flatbread', description: 'caramelized onion, roasted garlic' };
+  const info = analyzeItemAllergens(item, ['peanuts']);
+  assert.ok(!info.otherAllergens.some((f) => f.label === 'garlic'));
+  assert.ok(!info.otherAllergens.some((f) => f.label === 'onion'));
+});
+
+test('explicit declaration still applies to the new groups', () => {
+  const item: MenuItem = { name: 'Spice blend', description: 'Contains cinnamon' };
+  const info = analyzeItemAllergens(item, ['cinnamon']);
+  assert.ok(info.blockedBy.some((f) => f.label === 'cinnamon' && f.confidence === 'explicit'));
+});
