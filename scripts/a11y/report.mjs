@@ -65,7 +65,7 @@ for (const impact of ['critical', 'serious', 'moderate', 'minor']) {
 const uniqueRules = [...new Map(violations.map((v) => [v.id, v])).values()];
 
 const lines = [
-  `# MenuVoice WCAG 2.1 AA Accessibility Report`,
+  `# Meet My Menu WCAG 2.1 AA Accessibility Report`,
   ``,
   `**Generated:** ${timestamp}`,
   `**Screens audited:** ${SCREENS.length}`,

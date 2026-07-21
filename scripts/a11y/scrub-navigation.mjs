@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { chromium, webkit } from '@playwright/test';
 import { resolveA11yBaseUrl, testProfileJson } from './test-config.mjs';
 
-const PROFILE = testProfileJson({ email: 'scrub-test@menuvoice.app', name: 'Scrub Test' });
+const PROFILE = testProfileJson({ email: 'scrub-test@meetmymenu.com', name: 'Scrub Test' });
 const BASE_URL = resolveA11yBaseUrl();
 
 async function verifyBackNavigation(browserType, browserName) {
@@ -38,8 +38,8 @@ async function verifyBackNavigation(browserType, browserName) {
 
     // Build a two-entry stack so dismissing a nested route proves that Back
     // restores the preceding non-home dialog instead of skipping to Home.
-    await page.getByRole('button', { name: 'How MenuVoice works' }).click();
-    const tutorialHeading = page.getByRole('heading', { name: 'How MenuVoice works', level: 1 });
+    await page.getByRole('button', { name: 'How Meet My Menu works' }).click();
+    const tutorialHeading = page.getByRole('heading', { name: 'How Meet My Menu works', level: 1 });
     await tutorialHeading.waitFor();
     assert.equal(await page.evaluate(() => history.state?.position), 2);
     assert.equal(await page.getByRole('main').evaluate((element) => element === document.activeElement), true);
@@ -52,7 +52,7 @@ async function verifyBackNavigation(browserType, browserName) {
       element.dispatchEvent(new Event('cancel', { cancelable: true }));
       element.dispatchEvent(new Event('cancel', { cancelable: true }));
     });
-    await page.getByRole('button', { name: 'How MenuVoice works' }).waitFor();
+    await page.getByRole('button', { name: 'How Meet My Menu works' }).waitFor();
     assert.equal(await page.evaluate(() => history.state?.position), 1);
     assert.equal(await dialog.evaluate((element) => element.open), true);
     assert.equal(

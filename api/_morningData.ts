@@ -120,7 +120,7 @@ export function resolveRecipients(): string {
 export function analyticsUrl(path: string): string | undefined {
   const key = process.env.REPORT_KEY?.trim();
   if (!key) return undefined;
-  const base = process.env.REPORT_PUBLIC_HOST || 'menuvoice-sigma.vercel.app';
+  const base = process.env.REPORT_PUBLIC_HOST || 'meetmymenu.com';
   return `https://${base}${path}?key=${encodeURIComponent(key)}`;
 }
 
@@ -537,20 +537,20 @@ export function renderText(d: MorningData): string {
   const t = d.totals;
   const lines: string[] = [];
   const appUsed = t.users > 0;
-  lines.push(`MenuVoice morning report  (${d.windowLabel})`);
+  lines.push(`Meet My Menu morning report  (${d.windowLabel})`);
   lines.push(`generated ${d.generated}`);
   lines.push('');
   if (!d.anyoneUsed) {
-    lines.push('No one used MenuVoice in this window.');
+    lines.push('No one used Meet My Menu in this window.');
   } else {
     if (appUsed) {
-      lines.push(`Yes, the MenuVoice app was used by ${t.users} ${t.users === 1 ? 'person' : 'people'}.`);
+      lines.push(`Yes, the Meet My Menu app was used by ${t.users} ${t.users === 1 ? 'person' : 'people'}.`);
       lines.push(`  ${t.sessions} session(s), ${t.events} event(s), ${t.failures} failure(s)`);
       lines.push(`  vs ${comparePeriod(d)}: users ${signed(d.deltas.users)}, actions ${signed(d.deltas.events)}, new users ${signed(d.deltas.newUsers)}`);
       const funnelTxt = renderFunnelText(d.funnel);
       if (funnelTxt) { lines.push(''); lines.push(funnelTxt); }
     } else {
-      lines.push('No identified users used the MenuVoice app in this window.');
+      lines.push('No identified users used the Meet My Menu app in this window.');
     }
     lines.push('');
     lines.push(renderWebsiteText(d.website));
@@ -627,7 +627,7 @@ export function renderCartesiaEmailHtml(status: CartesiaStatus, ff: string): str
   const used = status.keys.filter((k) => k.status === 'exhausted');
   const breakdown = status.keys.map((key) => {
     const account = key.email ? `${key.email} (${key.label})` : key.label;
-    const source = key.credits.state === 'tracked' ? 'MenuVoice tracked estimate' : 'Cartesia usage API';
+    const source = key.credits.state === 'tracked' ? 'Meet My Menu tracked estimate' : 'Cartesia usage API';
     const remaining = key.credits.remaining == null ? 'unknown' : key.credits.remaining.toLocaleString('en-US');
     const usedCredits = key.credits.used == null ? 'unknown' : key.credits.used.toLocaleString('en-US');
     const limit = key.credits.limit == null ? 'unknown' : key.credits.limit.toLocaleString('en-US');
@@ -856,7 +856,7 @@ export function renderEmailHtml(d: MorningData, links?: { dashboard?: string; re
 
         <!-- header -->
         <tr><td style="background:${C.green};border-radius:14px 14px 0 0;padding:20px 22px;font-family:${ff}">
-          <div style="font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#d6f5e6">MenuVoice</div>
+          <div style="font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#d6f5e6">Meet My Menu</div>
           <div style="font-size:22px;font-weight:800;color:#ffffff;margin-top:2px">Morning report</div>
           <div style="font-size:12px;color:#c7efdb;margin-top:4px">${esc(d.windowLabel)} &middot; generated ${esc(d.generated)}</div>
         </td></tr>
@@ -883,7 +883,7 @@ export function renderEmailHtml(d: MorningData, links?: { dashboard?: string; re
             <tr><td style="padding-top:8px" align="center"><span style="font-family:${ff};font-size:11px;color:${C.sub}">These links include your private access key — no sign-in needed.</span></td></tr>` : ''}
             <tr><td style="padding-top:18px;font-family:${ff};font-size:11px;color:${C.sub};line-height:1.5">
               ${d.excluded.length ? `Internal/test accounts hidden: ${esc(d.excluded.join(', '))}.<br>` : ''}
-              "New" = first-ever use in this window. "Returning" = used MenuVoice before and came back.
+              "New" = first-ever use in this window. "Returning" = used Meet My Menu before and came back.
             </td></tr>
             ${renderCartesiaEmailHtml(d.cartesia, ff)}
           </table>
@@ -902,7 +902,7 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
   const { to, subject, html, text } = opts;
 
   if (process.env.RESEND_API_KEY) {
-    const from = process.env.RESEND_FROM ?? 'MenuVoice <onboarding@resend.dev>';
+    const from = process.env.RESEND_FROM ?? 'Meet My Menu <onboarding@resend.dev>';
     // Resend wants an array of addresses; our `to` may be a comma-joined list.
     const toList = to.split(',').map((e) => e.trim()).filter(Boolean);
     const r = await fetch('https://api.resend.com/emails', {

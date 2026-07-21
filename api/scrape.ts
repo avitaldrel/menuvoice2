@@ -67,7 +67,7 @@ async function fetchWithBrowserless(url: string): Promise<string> {
   });
   if (res.status === 429 || res.status === 402) {
     // Log loudly so this shows up in Vercel error logs and triggers any alerts.
-    console.error('[MenuVoice] BROWSERLESS_CREDITS_EXHAUSTED — headless fallback disabled until plan is renewed.');
+    console.error('[Meet My Menu] BROWSERLESS_CREDITS_EXHAUSTED — headless fallback disabled until plan is renewed.');
     throw new Error('credits_exhausted');
   }
   if (!res.ok) throw new Error(`Browserless error (${res.status})`);
@@ -93,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; MenuVoice/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; MeetMyMenu/1.0; +https://meetmymenu.com)',
         Accept: 'text/html,application/xhtml+xml',
       },
       signal: AbortSignal.timeout(12000),

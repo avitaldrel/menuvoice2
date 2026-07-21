@@ -294,7 +294,7 @@ async function fetchWithBrowserless(url: string): Promise<string> {
     signal: AbortSignal.timeout(25000),
   });
   if (res.status === 429 || res.status === 402) {
-    console.error('[MenuVoice] BROWSERLESS_CREDITS_EXHAUSTED — headless fallback disabled until plan is renewed.');
+    console.error('[Meet My Menu] BROWSERLESS_CREDITS_EXHAUSTED — headless fallback disabled until plan is renewed.');
     throw new Error('credits_exhausted');
   }
   if (!res.ok) throw new Error(`Browserless error (${res.status})`);
@@ -315,7 +315,7 @@ async function renderViaReader(url: string): Promise<string> {
     // Ask the reader for markdown; it strips boilerplate and keeps menu text/tables.
     'X-Return-Format': 'markdown',
     Accept: 'text/plain',
-    'User-Agent': 'MenuVoice/1.0 (+menu reader)',
+    'User-Agent': 'MeetMyMenu/1.0 (+https://meetmymenu.com; menu reader)',
   };
   if (process.env.JINA_API_KEY) headers.Authorization = `Bearer ${process.env.JINA_API_KEY}`;
   // Jina URL form is https://r.jina.ai/<full target url>. Cap at 18s so the
@@ -471,7 +471,7 @@ async function openaiChat(body: object): Promise<any> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    console.error('[MenuVoice] OpenAI parse error:', res.status, text.slice(0, 500));
+    console.error('[Meet My Menu] OpenAI parse error:', res.status, text.slice(0, 500));
     throw new FriendlyError('Something went wrong reading that menu. Please try again in a moment.', 502);
   }
   return res.json();

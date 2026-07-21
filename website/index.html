@@ -3,23 +3,23 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MenuVoice · The app that reads restaurant menus aloud</title>
-<meta name="description" content="MenuVoice reads restaurant menus aloud for blind and low-vision diners. Scan with your camera, hear every dish, check allergens, and ask questions by voice." />
+<title>Meet My Menu · The app that reads restaurant menus aloud</title>
+<meta name="description" content="Meet My Menu reads restaurant menus aloud for blind and low-vision diners. Scan with your camera, hear every dish, check allergens, and ask questions by voice." />
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="MenuVoice" />
-<meta property="og:title" content="MenuVoice · The app that reads restaurant menus aloud" />
-<meta property="og:description" content="Scan a restaurant menu with your camera. MenuVoice reads every dish aloud, checks allergens, and answers questions by voice. Built for blind and low-vision diners." />
+<meta property="og:site_name" content="Meet My Menu" />
+<meta property="og:title" content="Meet My Menu · The app that reads restaurant menus aloud" />
+<meta property="og:description" content="Scan a restaurant menu with your camera. Meet My Menu reads every dish aloud, checks allergens, and answers questions by voice. Built for blind and low-vision diners." />
 <meta name="twitter:card" content="summary" />
-<meta name="twitter:title" content="MenuVoice · The app that reads restaurant menus aloud" />
-<meta name="twitter:description" content="Scan a restaurant menu with your camera. MenuVoice reads every dish aloud, checks allergens, and answers questions by voice." />
+<meta name="twitter:title" content="Meet My Menu · The app that reads restaurant menus aloud" />
+<meta name="twitter:description" content="Scan a restaurant menu with your camera. Meet My Menu reads every dish aloud, checks allergens, and answers questions by voice." />
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "MenuVoice",
+  "name": "Meet My Menu",
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Web browser",
-  "description": "MenuVoice reads restaurant menus aloud for blind and low-vision diners. It captures a menu by camera or link, speaks every dish, flags allergens against the diner's own allergy list, and answers questions about the food by voice."
+  "description": "Meet My Menu reads restaurant menus aloud for blind and low-vision diners. It captures a menu by camera or link, speaks every dish, flags allergens against the diner's own allergy list, and answers questions about the food by voice."
 }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -27,7 +27,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 /* ============================================================
-   MenuVoice v3 — Cinematic, scroll-driven demo
+   Meet My Menu — Cinematic, scroll-driven demo
    New vs v2:
    · Canvas oscilloscope waveform in hero + CTA
    · Scroll-driven phone sequence (scan → read → convo)
@@ -355,7 +355,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 }
 .cv-conv::-webkit-scrollbar { display:none; }
 
-/* Voice-pulse bars — play before each MenuVoice message */
+/* Voice-pulse bars — play before each Meet My Menu message */
 .vp {
   align-self: flex-start;
   display: flex; align-items: center; gap: 4px;
@@ -731,9 +731,9 @@ html[data-a11y-font="readable"] {
 
 <header class="site-head" id="head">
   <nav class="nav">
-    <a class="brand" href="#top" aria-label="MenuVoice home">
+    <a class="brand" href="#top" aria-label="Meet My Menu home">
       <span class="mark" aria-hidden="true"><i></i></span>
-      <span><b>Menu</b><span class="v">Voice</span></span>
+      <span><b>Meet My</b><span class="v"> Menu</span></span>
     </a>
     <div class="nav-links">
       <a href="#demo-section">How it works</a>
@@ -755,7 +755,7 @@ html[data-a11y-font="readable"] {
         <div class="hero-copy">
           <p class="eyebrow reveal">Voice-first menu access</p>
           <h1 class="display reveal" data-d="1" id="hero-h">Read me <br/>the <em>menu.</em></h1>
-          <p class="lede reveal" data-d="2">Point your phone at any restaurant menu. MenuVoice reads it aloud, checks ingredients against your allergies, and answers your questions by voice.</p>
+          <p class="lede reveal" data-d="2">Point your phone at any restaurant menu. Meet My Menu reads it aloud, checks ingredients against your allergies, and answers your questions by voice.</p>
           <div class="hero-cta reveal" data-d="3">
             <a class="btn btn-primary btn-lg" href="#waitlist">Request a demo <span class="arrow">→</span></a>
             <a class="btn btn-ghost btn-lg" href="#demo-section">See how it works <span class="arrow">→</span></a>
@@ -768,17 +768,17 @@ html[data-a11y-font="readable"] {
 
         <div class="hero-phone-wrap reveal" data-d="2">
           <div class="glow-ring" aria-hidden="true"></div>
-          <div class="phone" role="img" aria-label="MenuVoice chat: allergen check on carbonara">
+          <div class="phone" role="img" aria-label="Meet My Menu chat: allergen check on carbonara">
             <div class="phone-notch" aria-hidden="true"></div>
             <div class="phone-screen">
               <div class="status-bar"><span>7:24</span><span class="dots" aria-hidden="true"><i class="sig"></i><i class="wifi"></i><i class="batt"></i></span></div>
               <div class="app">
                 <p class="app-heading">Trattoria Nove</p>
-                <div class="phase"><span class="pdot"></span>MenuVoice is speaking…</div>
+                <div class="phase"><span class="pdot"></span>Meet My Menu is speaking…</div>
                 <div class="transcript">
-                  <div class="turn a"><div class="who">MenuVoice</div><div class="txt">Four sections: antipasti, pasta, secondi, dolci. Want me to start with pastas?</div></div>
+                  <div class="turn a"><div class="who">Meet My Menu</div><div class="txt">Four sections: antipasti, pasta, secondi, dolci. Want me to start with pastas?</div></div>
                   <div class="turn u"><div class="who">You</div><div class="txt">Carbonara. Safe with a shellfish allergy?</div></div>
-                  <div class="turn a flag"><div class="who">MenuVoice</div><div class="txt"><b>No shellfish in the carbonara.</b> Guanciale, egg, pecorino, pepper.</div></div>
+                  <div class="turn a flag"><div class="who">Meet My Menu</div><div class="txt"><b>No shellfish in the carbonara.</b> Guanciale, egg, pecorino, pepper.</div></div>
                 </div>
                 <div class="speak-bar" aria-hidden="true"><i style="width:58%"></i></div>
                 <div class="app-toggle">⦿ Conversational: ON</div>
@@ -839,7 +839,7 @@ html[data-a11y-font="readable"] {
 
       <!-- CENTER: phone -->
       <div class="demo-phone-col">
-        <div class="phone demo-phone" id="demo-phone" role="img" aria-label="Animated MenuVoice demo">
+        <div class="phone demo-phone" id="demo-phone" role="img" aria-label="Animated Meet My Menu demo">
           <div class="phone-notch" aria-hidden="true"></div>
           <div class="phone-screen">
             <div class="status-bar"><span>7:22</span><span class="dots" aria-hidden="true"><i class="sig"></i><i class="wifi"></i><i class="batt"></i></span></div>
@@ -879,8 +879,8 @@ html[data-a11y-font="readable"] {
 
               <!-- Conversation -->
               <div class="pscreen" id="ps-convo" style="display:none">
-                <div class="phase" id="cv-phase"><span class="pdot"></span><span id="cv-phase-txt">MenuVoice is speaking…</span></div>
-                <div class="cv-conv" id="cv-conv" aria-label="Example MenuVoice conversation"></div>
+                <div class="phase" id="cv-phase"><span class="pdot"></span><span id="cv-phase-txt">Meet My Menu is speaking…</span></div>
+                <div class="cv-conv" id="cv-conv" aria-label="Example Meet My Menu conversation"></div>
                 <div class="speak-bar" aria-hidden="true"><i id="cv-bar-fill" style="width:0%"></i></div>
               </div>
 
@@ -913,7 +913,7 @@ html[data-a11y-font="readable"] {
     <div class="wrap">
       <p class="eyebrow reveal">For partners</p>
       <h2 class="display reveal" data-d="1" id="part-h">Two ways to <em>be part of it.</em></h2>
-      <p class="lede reveal" data-d="2">Help test MenuVoice with diners, or make your menu easier to read by voice.</p>
+      <p class="lede reveal" data-d="2">Help test Meet My Menu with diners, or make your menu easier to read by voice.</p>
       <div class="aud reveal" data-d="2">
         <div class="aud-col">
           <span class="tag">Funders &amp; accessibility orgs</span>
@@ -968,9 +968,9 @@ html[data-a11y-font="readable"] {
 <footer class="site-foot">
   <div class="wrap">
     <div class="foot-grid">
-      <a class="brand" href="#top" aria-label="MenuVoice home">
+      <a class="brand" href="#top" aria-label="Meet My Menu home">
         <span class="mark" aria-hidden="true"><i></i></span>
-        <span><b>Menu</b><span class="v">Voice</span></span>
+        <span><b>Meet My</b><span class="v"> Menu</span></span>
       </a>
       <div class="links">
         <a href="#why">The problem</a>
@@ -979,12 +979,12 @@ html[data-a11y-font="readable"] {
         <a href="#waitlist">Request a demo</a>
       </div>
     </div>
-    <p class="foot-note">MenuVoice is an independent, voice-first prototype that reads restaurant menus aloud for blind and low-vision diners. Order on your own terms.</p>
+    <p class="foot-note">Meet My Menu is an independent, voice-first prototype that reads restaurant menus aloud for blind and low-vision diners. Order on your own terms.</p>
   </div>
 </footer>
 
 <script>
-/* MenuVoice v3 — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
+/* Meet My Menu — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
 (function () {
   'use strict';
 
@@ -1512,14 +1512,14 @@ html[data-a11y-font="readable"] {
       cvConv.appendChild(turn);
 
       turn.innerHTML =
-        '<div class="who">' + (msg.r === 'a' ? 'MenuVoice' : 'You') + '</div>' +
+        '<div class="who">' + (msg.r === 'a' ? 'Meet My Menu' : 'You') + '</div>' +
         '<div class="txt">' + (msg.html || msg.plain) + '</div>';
 
       // Update phase indicator
       if (!instant) {
         if (msg.r === 'a') {
           if (cvPhase) cvPhase.classList.remove('idle');
-          if (cvPhaseTxt) cvPhaseTxt.textContent = 'MenuVoice is speaking\u2026';
+          if (cvPhaseTxt) cvPhaseTxt.textContent = 'Meet My Menu is speaking\u2026';
           if (cvBarFill) cvBarFill.style.width = (30 + Math.random() * 55) + '%';
         } else {
           if (cvPhase) cvPhase.classList.add('idle');

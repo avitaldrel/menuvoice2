@@ -5,7 +5,7 @@
 //   - luminance      mean brightness (too dark?)
 //   - glareFrac      fraction of blown-out pixels (glare/reflection — a mean
 //                    brightness check misses glare on an otherwise dim photo)
-//   - sharpness      Laplacian variance (blur — from menuvoice 3)
+//   - sharpness      Laplacian variance (blur — from the earlier scanner prototype)
 //   - edgeDensity    how much text-like detail is in frame (is a menu there?)
 //   - centroid       where the detail is (directional "move the menu left" hints)
 //   - motion         inter-frame difference (steadiness)

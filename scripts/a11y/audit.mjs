@@ -1,5 +1,5 @@
 /**
- * WCAG 2.1 AA accessibility audit for MenuVoice PWA.
+ * WCAG 2.1 AA accessibility audit for Meet My Menu PWA.
  * Renders the primary screens with mocked localStorage, runs axe-core, saves results.
  */
 
@@ -72,7 +72,8 @@ async function auditScreen(browser, screen) {
   const clicks = screen.clicks ?? (screen.click ? [screen.click] : []);
   for (const click of clicks) {
     try {
-      const btn = page.getByRole('button', { name: click }).first();
+      const escapedName = click.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const btn = page.getByRole('button', { name: new RegExp(`^${escapedName}`) }).first();
       await btn.click({ timeout: 5000 });
       await page.waitForTimeout(750);
     } catch (e) {
@@ -119,7 +120,7 @@ async function auditScreen(browser, screen) {
 }
 
 async function main() {
-  console.log('Starting MenuVoice WCAG 2.1 AA audit…\n');
+  console.log('Starting Meet My Menu WCAG 2.1 AA audit…\n');
 
   const launchOptions = {
     headless: true,

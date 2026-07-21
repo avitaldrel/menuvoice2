@@ -5,7 +5,7 @@ import {
   readAppHistoryEntry,
 } from '../src/lib/appHistory.ts';
 
-test('creates and reads a MenuVoice browser-history entry', () => {
+test('creates and reads a Meet My Menu browser-history entry', () => {
   const entry = createAppHistoryEntry({ name: 'settings' }, 2);
   assert.deepEqual(readAppHistoryEntry(entry), entry);
 });
