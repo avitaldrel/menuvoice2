@@ -129,6 +129,20 @@ export function reviewAllergenInput(items: string[]): AllergenReviewResult {
   return { accepted, corrections, unknown };
 }
 
+/**
+ * Drop one entry (case-insensitive) from a comma-separated list, keeping every
+ * other entry intact. Used when a user removes an unrecognized allergy so they
+ * can retype it without losing the rest of their list.
+ */
+export function removeFromList(text: string, word: string): string {
+  const target = word.trim().toLowerCase();
+  return text
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry && entry.toLowerCase() !== target)
+    .join(', ');
+}
+
 export function normalizeAllergens(items: string[]): { list: string[]; corrections: Array<[string, string]> } {
   const seen = new Set<string>();
   const list: string[] = [];

@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton, AllergenReviewPanel, type AllergenQuestion } from '../components';
 import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
-import { splitList, reviewAllergenInput } from '../util';
+import { splitList, reviewAllergenInput, removeFromList } from '../util';
 import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
 import { transcribeAudio } from '../lib/openai';
 import { setSpeechRate } from '../lib/speech';
@@ -74,6 +74,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const shortcutUrl = configuredAppleShortcutUrl();
   const showAppleShortcut = !!shortcutUrl && isAppleMobileDevice();
   const [allergies, setAllergies] = useState(profile.allergies.join(', '));
+  const allergyInputRef = useRef<HTMLInputElement>(null);
   const [cuisines, setCuisines] = useState(profile.cuisinesLiked.join(', '));
   const [saved, setSaved] = useState(false);
   const [nameVal, setNameVal] = useState(profile.name);
@@ -115,6 +116,18 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       : 'Saved. No allergies set.';
     announce(msg);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  /**
+   * The user removed a word we did not recognize. Drop just that word, keep the
+   * rest of the list, and return focus to the allergy field so they can retype
+   * it rather than having Settings save without that allergy.
+   */
+  const removeAndRetype = (removed: string) => {
+    setAllergies((current) => removeFromList(current, removed));
+    setAllergyReview(null);
+    announce(`Removed ${removed}. Type it again, spelled differently, or leave it out.`);
+    window.setTimeout(() => allergyInputRef.current?.focus(), 0);
   };
 
   const persist = async () => {
@@ -462,6 +475,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       <input
         className="input"
         type="text"
+        ref={allergyInputRef}
         value={allergies}
         onChange={(e) => setAllergies(e.target.value)}
         placeholder="e.g. shellfish, peanuts"
@@ -485,6 +499,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
             setAllergyReview(null);
             saveAllergyList([...reviewAcceptedRef.current, ...kept]);
           }}
+          onRetype={removeAndRetype}
         />
       )}
 

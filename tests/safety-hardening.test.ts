@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { apiErrorMessage, friendlyError } from '../src/lib/errors.ts';
 import { sanitizeMenu } from '../src/lib/menuSanitizer.ts';
-import { reviewAllergenInput } from '../src/util.ts';
+import { reviewAllergenInput, removeFromList } from '../src/util.ts';
 
 test('sanitizeMenu keeps usable fields and removes malformed menu data', () => {
   const menu = sanitizeMenu({
@@ -51,6 +51,28 @@ test('sanitizeMenu caps untrusted menu size before it reaches the UI', () => {
   };
 
   assert.equal(sanitizeMenu(oversized)?.categories[0].items.length, 500);
+});
+
+// Bug #2b: removing an unrecognized allergy must not be a dead end — the word
+// is dropped, every other allergy survives, and the user can retype it.
+test('removeFromList drops only the named entry and keeps the rest', () => {
+  assert.equal(removeFromList('shellfish, blorf, peanuts', 'blorf'), 'shellfish, peanuts');
+  assert.equal(removeFromList('shellfish, BLORF, peanuts', 'blorf'), 'shellfish, peanuts');
+  assert.equal(removeFromList('  blorf  ', 'blorf'), '');
+});
+
+test('removeFromList leaves an untouched list alone and tidies spacing', () => {
+  assert.equal(removeFromList('shellfish,peanuts', 'corn'), 'shellfish, peanuts');
+  assert.equal(removeFromList('', 'corn'), '');
+});
+
+test('every other allergy survives a removal, so nothing is silently lost', () => {
+  const typed = 'peanuts, blorf, shellfish';
+  const afterRemoval = removeFromList(typed, 'blorf');
+  const review = reviewAllergenInput(afterRemoval.split(','));
+
+  assert.deepEqual(review.accepted, ['peanuts', 'shellfish']);
+  assert.deepEqual(review.unknown, []);
 });
 
 test('reviewAllergenInput never applies a spelling suggestion silently', () => {
