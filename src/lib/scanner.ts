@@ -39,6 +39,8 @@ export interface ScannerCallbacks {
   onStruggle?: () => void;
   onState?: (state: ScanState, detail?: string) => void;
   onProgress?: (state: ScanState, steadyCount: number, steadyMax: number) => void;
+  /** Return true when the camera accepted an automatic zoom step. */
+  onAutoZoom?: (direction: 1 | -1) => boolean;
 }
 
 const W = 160;
@@ -68,6 +70,7 @@ const ESCALATE_MS = 5500;     // second-stage message after this long in a state
 const BEST_SHOT_MS = 5000;    // content+light OK this long -> capture anyway
 const STRUGGLE_MS = 20000;    // no capture at all -> hand over to manual
 const HEARTBEAT_MS = 6000;    // reassure during long silence
+const AUTO_ZOOM_MS = 700;     // require persistent bad framing between zoom steps
 
 const COUNTDOWN: Record<number, string> = {
   1: 'Hold still. Three.',
@@ -229,6 +232,9 @@ export class MenuScanner {
   private coachStage = 0;
   private stateAt = 0;
   private lastCoachAt = 0;
+  private lastAutoZoomAt = 0;
+  private analysisZoom = 1;
+  private announcedAutoZoom: 1 | -1 | 0 = 0;
 
   constructor() {
     this.canvas.width = W;
@@ -250,7 +256,15 @@ export class MenuScanner {
     this.stateAt = Date.now();
     this.lastCoachAt = Date.now();
     this.armedAt = Date.now();
+    this.lastAutoZoomAt = 0;
+    this.announcedAutoZoom = 0;
     this.timer = setInterval(() => this.tick(), TICK_MS);
+  }
+
+  /** Match scanner analysis to the centered crop used by software zoom. */
+  setAnalysisZoom(value: number) {
+    this.analysisZoom = Math.max(1, value);
+    this.prev = null;
   }
 
   stop() {
@@ -305,7 +319,15 @@ export class MenuScanner {
   private analyze(): FrameMetrics | null {
     const v = this.video;
     if (!v || !this.ctx || v.videoWidth === 0) return null;
-    this.ctx.drawImage(v, 0, 0, W, H);
+    if (this.analysisZoom === 1) {
+      this.ctx.drawImage(v, 0, 0, W, H);
+    } else {
+      const sourceWidth = v.videoWidth / this.analysisZoom;
+      const sourceHeight = v.videoHeight / this.analysisZoom;
+      const sourceX = (v.videoWidth - sourceWidth) / 2;
+      const sourceY = (v.videoHeight - sourceHeight) / 2;
+      this.ctx.drawImage(v, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, W, H);
+    }
     const rgba = this.ctx.getImageData(0, 0, W, H).data;
 
     const gray = new Float32Array(W * H);
@@ -325,6 +347,21 @@ export class MenuScanner {
     this.emit(reason === 'steady' ? 'Capturing now.' : 'Good enough. Taking the photo now.');
     this.cb?.onProgress?.('steadying', STEADY_TICKS, STEADY_TICKS);
     this.cb?.onCapture();
+  }
+
+  private tryAutoZoom(direction: 1 | -1): 'adjusted' | 'waiting' | 'unavailable' {
+    const now = Date.now();
+    if (now - this.stateAt < AUTO_ZOOM_MS || now - this.lastAutoZoomAt < AUTO_ZOOM_MS) return 'waiting';
+    if (!this.cb?.onAutoZoom?.(direction)) return 'unavailable';
+    this.lastAutoZoomAt = now;
+    this.prev = null;
+    if (this.announcedAutoZoom !== direction) {
+      this.announcedAutoZoom = direction;
+      this.emit(direction > 0
+        ? 'The menu looks small. Adjusting zoom in.'
+        : 'The menu is too close. Adjusting zoom out.');
+    }
+    return 'adjusted';
   }
 
   private tick() {
@@ -405,7 +442,10 @@ export class MenuScanner {
       this.steady = 0;
       this.goodSince = 0;
       this.setState('tooClose', `bbox=${(m.bboxWidthFrac * 100).toFixed(0)}x${(m.bboxHeightFrac * 100).toFixed(0)}%`);
-      this.coachFor('tooClose');
+      const zoomResult = this.tryAutoZoom(-1);
+      if (zoomResult === 'unavailable') {
+        this.coachFor('tooClose');
+      }
       this.cb.onProgress?.('tooClose', 0, STEADY_TICKS);
       return;
     }
@@ -414,7 +454,10 @@ export class MenuScanner {
       this.steady = 0;
       this.goodSince = 0;
       this.setState('tooFar', `bbox=${(m.bboxWidthFrac * 100).toFixed(0)}x${(m.bboxHeightFrac * 100).toFixed(0)}%`);
-      this.coachFor('tooFar');
+      const zoomResult = this.tryAutoZoom(1);
+      if (zoomResult === 'unavailable') {
+        this.coachFor('tooFar');
+      }
       this.cb.onProgress?.('tooFar', 0, STEADY_TICKS);
       return;
     }
@@ -427,6 +470,8 @@ export class MenuScanner {
       this.cb.onProgress?.('skewed', 0, STEADY_TICKS);
       return;
     }
+
+    this.announcedAutoZoom = 0;
 
     // From here on lighting + content are OK — start the best-shot clock.
     if (!this.goodSince) this.goodSince = Date.now();

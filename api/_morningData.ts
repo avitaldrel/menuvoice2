@@ -520,7 +520,7 @@ export function renderWebsiteText(w: WebsiteReport): string {
   if (!w.available) return 'WEBSITE:\n  Not connected to the waitlist Redis store in this deployment.';
   const lines: string[] = [];
   lines.push('WEBSITE:');
-  lines.push(`  ${w.visits} visit(s), ${w.sessions} site session(s), ${w.signups} waitlist/demo request(s)`);
+  lines.push(`  ${w.sessions} unique site visitor(s), ${w.visits} page view(s), ${w.signups} waitlist/demo request(s)`);
   if (w.referrers.length) {
     lines.push(`  Referrers: ${w.referrers.map((r) => `${r.referrer} ${r.count}`).join(', ')}`);
   }
@@ -767,8 +767,8 @@ export function renderWebsiteHtml(w: WebsiteReport, ff: string): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:1px solid ${C.line};border-radius:12px">
       <tr><td style="padding:14px 16px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td style="font-family:${ff};font-size:13px;color:${C.sub};padding-right:10px"><div style="font-size:26px;font-weight:800;color:${C.ink};line-height:1">${w.visits}</div>visits</td>
-          <td style="font-family:${ff};font-size:13px;color:${C.sub};padding-right:10px"><div style="font-size:26px;font-weight:800;color:${C.ink};line-height:1">${w.sessions}</div>site sessions</td>
+          <td style="font-family:${ff};font-size:13px;color:${C.sub};padding-right:10px"><div style="font-size:26px;font-weight:800;color:${C.ink};line-height:1">${w.sessions}</div>unique site visitors</td>
+          <td style="font-family:${ff};font-size:13px;color:${C.sub};padding-right:10px"><div style="font-size:26px;font-weight:800;color:${C.ink};line-height:1">${w.visits}</div>page views</td>
           <td style="font-family:${ff};font-size:13px;color:${C.sub}"><div style="font-size:26px;font-weight:800;color:${C.greenDk};line-height:1">${w.signups}</div>requests</td>
         </tr></table>
         ${unavailable}
