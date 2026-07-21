@@ -48,6 +48,8 @@ async function ensureSnapshotSchema() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    await client.query('ALTER TABLE user_state_snapshots ENABLE ROW LEVEL SECURITY');
+    await client.query('REVOKE ALL ON TABLE user_state_snapshots FROM anon, authenticated');
     await Promise.all([
       client.query('CREATE INDEX IF NOT EXISTS idx_user_state_updated_at ON user_state_snapshots (updated_at DESC)'),
       client.query('CREATE INDEX IF NOT EXISTS idx_user_state_last_opened_at ON user_state_snapshots (last_opened_restaurant_at DESC)'),

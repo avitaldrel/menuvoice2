@@ -161,7 +161,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       <Title>Settings</Title>
 
       <SecondaryButton
-        label="How MenuVoice works"
+        label="How Meet My Menu AI works"
         hint="Open the step by step tutorial"
         onClick={() => navigate({ name: 'tutorial' })}
       />
@@ -266,7 +266,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       {pastOrders.length > 0 && (
         <>
           <Heading>Dishes you've ordered before</Heading>
-          <Body>MenuVoice remembers these to make better recommendations. Remove any that don't belong.</Body>
+          <Body>Meet My Menu AI remembers these to make better recommendations. Remove any that don't belong.</Body>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {pastOrders.map((item) => (
               <div key={item} className="row" style={{ alignItems: 'center', gap: 8 }}>
@@ -292,8 +292,8 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
       {showAppleShortcut && (
         <section className="card" aria-labelledby="apple-shortcut-heading">
-          <Heading><span id="apple-shortcut-heading">Open MenuVoice with Siri</span></Heading>
-          <Body>Create a Shortcut so saying “Siri, launch MenuVoice” opens this app.</Body>
+          <Heading><span id="apple-shortcut-heading">Open Meet My Menu AI with Siri</span></Heading>
+          <Body>Create a Shortcut so saying “Siri, launch Meet My Menu AI” opens this app.</Body>
           <a
             className="btn btn-secondary"
             href={shortcutUrl}

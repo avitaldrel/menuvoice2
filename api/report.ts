@@ -173,7 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MenuVoice analytics (${esc(windowLabel)})</title>
+<title>Meet My Menu AI analytics (${esc(windowLabel)})</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 1.5rem; max-width: 1100px; }
@@ -196,7 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 </style>
 </head>
 <body>
-<h1>MenuVoice analytics</h1>
+<h1>Meet My Menu AI analytics</h1>
 <p class="meta">Window: <strong>${esc(windowLabel)}</strong> &middot; generated ${esc(fmtTs(new Date().toISOString()))}
  &middot; data ${esc(fmtTs(h.first_ts))} &rarr; ${esc(fmtTs(h.last_ts))}</p>
 <p class="nav">View:

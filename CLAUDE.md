@@ -1,6 +1,6 @@
 ## Project Context / Accessibility
 
-This is a voice-first accessibility app (MenuVoice) for blind/visually-impaired users. Always prioritize audio guidance and VoiceOver compatibility over visual-only solutions (color overlays, visual cues). Remove emojis from user-facing speech output.
+This is a voice-first accessibility app (Meet My Menu, formerly MenuVoice) for blind/visually-impaired users. Always prioritize audio guidance and VoiceOver compatibility over visual-only solutions (color overlays, visual cues). Remove emojis from user-facing speech output.
 
 ## Deployment
 
@@ -12,7 +12,7 @@ When writing user-facing copy (emails, newsletters, taglines, postings), avoid A
 
 ## Project Memory
 
-MenuVoice is a voice-first accessibility web app for blind and low-vision users. The app is a React + Vite site that gets pushed to GitHub, auto-deploys on Vercel, and uses Vercel serverless functions for anything that needs a backend.
+Meet My Menu is a voice-first accessibility web app for blind and low-vision users. The app is a React + Vite site that gets pushed to GitHub, auto-deploys on Vercel, and uses Vercel serverless functions for anything that needs a backend.
 
 Most user state lives locally first in the browser. Profile data and saved restaurants sync through `api/sync` and Vercel KV. Telemetry goes through `api/events` into Vercel Postgres, and the reporting/dashboard endpoints read from that same events table. Optional menu photo uploads use Vercel Blob.
 

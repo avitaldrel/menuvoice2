@@ -1,4 +1,4 @@
-// Bug #11: order specification must stay optional and natural. MenuVoice
+// Bug #11: order specification must stay optional and natural. Meet My Menu AI
 // must never force a guest to confirm what they ordered before leaving.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ const MENU: ParsedMenu = {
   categories: [{ name: 'Mains', items: [{ name: 'Salmon', price: '$18' }] }],
 };
 
-test('the system prompt never instructs MenuVoice to proactively ask what the guest decided', () => {
+test('the system prompt never instructs Meet My Menu AI to proactively ask what the guest decided', () => {
   const prompt = buildSystemPrompt(MENU, EMPTY_PROFILE);
   // The old, removed instruction that forced a question near the end of every
   // conversation. Must not reappear.
@@ -20,7 +20,7 @@ test('the system prompt never instructs MenuVoice to proactively ask what the gu
   assert.match(prompt, /Do NOT ask what the guest has decided to order/);
 });
 
-test('the system prompt tells MenuVoice to briefly confirm only when the guest brings it up', () => {
+test('the system prompt tells Meet My Menu AI to briefly confirm only when the guest brings it up', () => {
   const prompt = buildSystemPrompt(MENU, EMPTY_PROFILE);
   assert.match(prompt, /briefly and warmly confirm/i);
   assert.match(prompt, /Got it, I'll remember the salmon/);

@@ -3,7 +3,7 @@ import { withCartesiaKey } from './_cartesia.js';
 import { enforceRateLimit } from './_rateLimit.js';
 
 const CARTESIA_VERSION = '2026-03-01';
-// Cartesia has temporarily disabled speed control on Sonic 3.5. MenuVoice
+// Cartesia has temporarily disabled speed control on Sonic 3.5. Meet My Menu AI
 // exposes a speaking-speed setting, so default to Sonic 3 where the
 // generation_config.speed value is honored. An explicit environment override
 // remains available for deployments that prioritize a different model.

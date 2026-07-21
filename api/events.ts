@@ -34,6 +34,9 @@ async function ensureSchema() {
         user_agent   TEXT
       )
     `);
+    await client.query('ALTER TABLE events ENABLE ROW LEVEL SECURITY');
+    await client.query('REVOKE ALL ON TABLE events FROM anon, authenticated');
+    await client.query('REVOKE ALL ON SEQUENCE events_id_seq FROM anon, authenticated');
     await Promise.all([
       client.query('CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events (user_email, ts DESC)'),
       client.query('CREATE INDEX IF NOT EXISTS idx_events_type_ts ON events (event_type, event_name, ts DESC)'),

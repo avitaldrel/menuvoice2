@@ -1,7 +1,7 @@
 // POST /api/auth-session  { idToken }  ->  { sessionToken, email }
 //
 // Exchanges a fresh Google ID token (received client-side from Sign-In) for a
-// longer-lived MenuVoice session token. The client calls this once right
+// longer-lived Meet My Menu AI session token. The client calls this once right
 // after Google sign-in, then sends the returned sessionToken as
 // `Authorization: Bearer <token>` on every /api/sync call — see api/_auth.ts
 // for why the exchange exists (Google ID tokens expire in ~1 hour).
@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sessionToken = await createSessionToken(identity.email);
     return res.status(200).json({ sessionToken, email: identity.email });
   } catch (e) {
-    console.error('[MenuVoice] session token creation failed:', e);
+    console.error('[Meet My Menu AI] session token creation failed:', e);
     return res.status(500).json({ error: 'Sign-in is not fully configured on the server.' });
   }
 }

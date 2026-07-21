@@ -8,7 +8,7 @@
 //   - an unconfirmed recommendation is NOT saved as a decided order
 //   - explicit "remember that I chose X" phrasing is captured
 //   - a later, unrelated restaurant references a past order naturally, not forcibly
-//   - MenuVoice briefly confirms in-conversation when the guest decides
+//   - Meet My Menu AI briefly confirms in-conversation when the guest decides
 //
 // Run: node scripts/verify-order-learning.mjs
 //
@@ -65,14 +65,14 @@ const EXTRACTION_PROMPT =
   'Respond ONLY with JSON: {"orders":string[],"likes":string[],"dislikes":string[]}. ' +
   'orders = ONLY dishes the guest clearly decided on or committed to ordering (e.g. "I\'ll get the salmon", ' +
   '"let\'s go with the pasta", "remember that I chose the carbonara") — exact dish names. ' +
-  'Merely asking about a dish, comparing two dishes, or MenuVoice recommending one does NOT count as an ' +
+  'Merely asking about a dish, comparing two dishes, or Meet My Menu AI recommending one does NOT count as an ' +
   'order unless the guest then confirmed or agreed to it. If the guest was only browsing or asking ' +
   'questions and never settled on anything, orders MUST be an empty array. ' +
   'likes = foods, cuisines, or ingredients the guest reacted positively to. ' +
   'dislikes = ones they reacted against. Use empty arrays if unclear. Never invent.';
 
 async function extract(turns) {
-  const transcript = turns.map(([role, text]) => `${role === 'assistant' ? 'MenuVoice' : 'Guest'}: ${text}`).join('\n');
+  const transcript = turns.map(([role, text]) => `${role === 'assistant' ? 'Meet My Menu AI' : 'Guest'}: ${text}`).join('\n');
   return chatJson([
     { role: 'system', content: EXTRACTION_PROMPT },
     { role: 'user', content: transcript },
@@ -80,7 +80,7 @@ async function extract(turns) {
 }
 
 const REMEMBER_INSTRUCTIONS = [
-  'You are MenuVoice, a calm voice assistant helping a guest navigate a restaurant menu by voice.',
+  'You are Meet My Menu AI, a calm voice assistant helping a guest navigate a restaurant menu by voice.',
   '- Keep answers short and conversational, spoken aloud, 1-3 sentences.',
   'REMEMBERING THEIR CHOICE:',
   '- Do NOT ask what the guest has decided to order. Many guests are only browsing, comparing dishes, or checking allergens, and a forced question feels intrusive.',
@@ -159,7 +159,7 @@ const liveConfirm = await chatText(replyMessages(
   "I'll get the pad thai.",
 ));
 check(
-  'MenuVoice briefly confirms an explicit in-conversation decision',
+  'Meet My Menu AI briefly confirms an explicit in-conversation decision',
   /pad thai/i.test(liveConfirm) && liveConfirm.split(/[.!?]/).filter(Boolean).length <= 2,
   liveConfirm,
 );

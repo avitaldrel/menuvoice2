@@ -73,7 +73,7 @@ export default function LoginScreen() {
 
   return (
     <Screen>
-      <Title>MenuVoice</Title>
+      <Title>Meet My Menu AI</Title>
       <Heading>Login</Heading>
 
       {/* ── Google Sign-In ─────────────────────────────── */}

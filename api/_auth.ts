@@ -65,7 +65,7 @@ function sessionSecretKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-/** Mint a MenuVoice session token for an already-verified email. */
+/** Mint a Meet My Menu AI session token for an already-verified email. */
 export async function createSessionToken(email: string): Promise<string> {
   return new SignJWT({ email: email.trim().toLowerCase() })
     .setProtectedHeader({ alg: 'HS256' })
@@ -75,7 +75,7 @@ export async function createSessionToken(email: string): Promise<string> {
     .sign(sessionSecretKey());
 }
 
-/** Verify a MenuVoice session token minted by createSessionToken. */
+/** Verify a Meet My Menu AI session token minted by createSessionToken. */
 export async function verifySessionToken(token: string): Promise<VerifiedIdentity | null> {
   if (!token) return null;
   try {

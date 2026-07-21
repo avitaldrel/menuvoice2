@@ -23,6 +23,12 @@ CREATE INDEX IF NOT EXISTS idx_events_type_ts  ON events (event_type, event_name
 CREATE INDEX IF NOT EXISTS idx_events_session  ON events (session_id, ts);
 CREATE INDEX IF NOT EXISTS idx_events_outcome  ON events (outcome) WHERE outcome = 'failure';
 
+-- These tables are written only by trusted server-side Postgres connections.
+-- Keep Supabase's public REST roles from reading or mutating their contents.
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE events FROM anon, authenticated;
+REVOKE ALL ON SEQUENCE events_id_seq FROM anon, authenticated;
+
 -- Current per-user app state mirrored from /api/sync.
 -- KV/Redis remains the fast restore path; this Postgres table makes profiles,
 -- saved restaurants, and learned preferences queryable without adding one row
@@ -42,6 +48,21 @@ CREATE INDEX IF NOT EXISTS idx_user_state_updated_at
   ON user_state_snapshots (updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_state_last_opened_at
   ON user_state_snapshots (last_opened_restaurant_at DESC);
+
+ALTER TABLE user_state_snapshots ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE user_state_snapshots FROM anon, authenticated;
+
+-- `partners` is managed outside this schema, but it lives in the same public
+-- Supabase schema. Harden it when present so a full provisioning pass keeps
+-- every known data table private.
+DO $$
+BEGIN
+  IF to_regclass('public.partners') IS NOT NULL THEN
+    ALTER TABLE public.partners ENABLE ROW LEVEL SECURITY;
+    REVOKE ALL ON TABLE public.partners FROM anon, authenticated;
+  END IF;
+END;
+$$;
 
 -- Example queries:
 

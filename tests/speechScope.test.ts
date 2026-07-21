@@ -1,4 +1,4 @@
-// Bug #9: MenuVoice's own text-to-speech must run ONLY on the Conversation
+// Bug #9: Meet My Menu AI's own text-to-speech must run ONLY on the Conversation
 // screen. Every other screen speaks through headings, focus movement, and
 // aria-live regions for VoiceOver instead.
 //
@@ -20,7 +20,7 @@ const ALLOWED_SCREEN = 'ConversationScreen.tsx';
 // Functions that produce audible spoken content. Everything else exported by
 // lib/speech (stopSpeaking, isSpeaking, setSpeechRate, unlockAudio) is safe
 // off Conversation: they silence, query, configure, or prime — none of them
-// make MenuVoice talk.
+// make Meet My Menu AI talk.
 const SPEECH_PRODUCING_EXPORTS = ['speak', 'createStreamingSpeech'];
 
 const IMPORT_FROM_SPEECH_MODULE =

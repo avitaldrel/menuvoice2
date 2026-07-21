@@ -95,7 +95,7 @@ test('rejects garbage input without throwing', async () => {
   assert.equal(await verifyGoogleIdToken('', publicKey), null);
 });
 
-// ── MenuVoice's own session tokens ──────────────────────────────────────
+// ── Meet My Menu AI's own session tokens ──────────────────────────────────────
 
 test('a session token round-trips to the email it was created for', async () => {
   const token = await createSessionToken('Guest@Example.com');

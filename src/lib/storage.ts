@@ -105,7 +105,7 @@ function writeSyncSession(session: SyncSession | null): void {
 }
 
 /**
- * Exchange a fresh Google ID token for a MenuVoice sync session. Call once
+ * Exchange a fresh Google ID token for a Meet My Menu AI sync session. Call once
  * right after Google Sign-In succeeds. Returns the server-verified email on
  * success (the authoritative identity for sync going forward), or null if the
  * exchange failed — callers should still let sign-in proceed locally in that

@@ -15,10 +15,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { buildMorningReport, renderText, renderEmailHtml, sendEmail, resolveRecipients, analyticsUrl } from './_morningData.js';
 
 export function shouldSendMorningReport(
-  data: { anyoneUsed: boolean; cartesia: { allExhausted: boolean } },
+  data: { totals: { users: number }; website: { sessions: number } },
   force = false,
 ): boolean {
-  return force || data.anyoneUsed || data.cartesia.allExhausted;
+  // A report-worthy visitor is either an identified app user or one distinct
+  // website browser/session. Raw page views and provider alerts do not send a
+  // scheduled morning email on their own.
+  return force || data.totals.users > 0 || data.website.sessions > 0;
 }
 
 function authorized(req: VercelRequest): boolean {
@@ -52,21 +55,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const d = await buildMorningReport(hours);
 
-    // Don't email a "nothing happened" report. If no one used MenuVoice in the
-    // window there is nothing new to say, so we skip the send entirely (a clean
-    // 200 no-op). Append ?force=1 to override (useful for manual test sends).
+    // Send only when the window contains an identified app user or a distinct
+    // website session. Append ?force=1 to override for a manual test send.
     const force = req.query.force === '1' || req.query.force === 'true';
     if (!shouldSendMorningReport(d, force)) {
-      return res.status(200).json({ ok: true, sent: false, reason: 'no activity in window — nothing new to report' });
+      return res.status(200).json({ ok: true, sent: false, reason: 'no unique visitor in window — nothing new to report' });
     }
 
     const date = new Date().toISOString().slice(0, 10);
     // Stable, unique tag so a Gmail filter can label every report reliably.
     const subject = d.cartesia.allExhausted
-      ? `[MenuVoice] Morning report ${date} — Cartesia keys exhausted`
+      ? `[Meet My Menu AI] Morning report ${date} — Cartesia keys exhausted`
       : d.anyoneUsed
-      ? `[MenuVoice] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website.visits} site visits`
-      : `[MenuVoice] Morning report ${date} — no users in window`;
+      ? `[Meet My Menu AI] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website.sessions} unique site visitors`
+      : `[Meet My Menu AI] Morning report ${date} — no users in window`;
 
     const links = {
       dashboard: analyticsUrl('/api/dashboard'),
@@ -87,6 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       window: d.windowLabel,
       new_users: d.newUsers.length,
       returning_users: d.returningUsers.length,
+      unique_site_visitors: d.website.sessions,
       anyone_used: d.anyoneUsed,
     });
   } catch (err) {

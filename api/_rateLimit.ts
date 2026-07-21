@@ -1,7 +1,7 @@
 // Burst limiting for the expensive routes (AI, search, transcription, speech).
 //
 // The job here is to stop runaway cost from a stuck control, a rapid repeated
-// tap, or abuse — NOT to ration MenuVoice. A blind diner sitting at a table
+// tap, or abuse — NOT to ration Meet My Menu AI. A blind diner sitting at a table
 // reading two menus and holding a long conversation must never hit a wall, so
 // the limits are deliberately generous and the penalty is a cool-down measured
 // in seconds, never a lockout.
@@ -227,7 +227,7 @@ export async function enforceRateLimit(
     });
     return false;
   } catch (e) {
-    console.warn('[MenuVoice] rate limit check failed, allowing request:', e);
+    console.warn('[Meet My Menu AI] rate limit check failed, allowing request:', e);
     return true;
   }
 }
@@ -268,7 +268,7 @@ export async function enforceRateLimitEdge(
       { status: 429, headers: { 'Retry-After': String(decision.retryAfterSec) } },
     );
   } catch (e) {
-    console.warn('[MenuVoice] rate limit check failed, allowing request:', e);
+    console.warn('[Meet My Menu AI] rate limit check failed, allowing request:', e);
     return null;
   }
 }

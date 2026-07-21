@@ -47,7 +47,7 @@ test('Cartesia status exposes slots without exposing API key values', () => {
   const email = renderCartesiaEmailHtml(result, 'Arial,sans-serif');
   assert.match(email, /second@example.com \(Key 2\) is active/);
   assert.match(email, /18,750 credits left of 20,000/);
-  assert.match(email, /MenuVoice tracked estimate/);
+  assert.match(email, /Meet My Menu AI tracked estimate/);
   assert.equal(JSON.stringify(result).includes('sk_car'), false);
 });
 
@@ -126,9 +126,11 @@ test('Cartesia status reports complete exhaustion and first estimated return', (
   assert.equal(report.trimEnd().endsWith('Status history is temporary until Redis/KV is configured.'), true);
 });
 
-test('complete Cartesia exhaustion overrides quiet-day report suppression', () => {
-  assert.equal(shouldSendMorningReport({ anyoneUsed: false, cartesia: { allExhausted: false } }), false);
-  assert.equal(shouldSendMorningReport({ anyoneUsed: false, cartesia: { allExhausted: true } }), true);
+test('morning report sends only for a unique visitor or an explicit manual override', () => {
+  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 0 } }), false);
+  assert.equal(shouldSendMorningReport({ totals: { users: 1 }, website: { sessions: 0 } }), true);
+  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 1 } }), true);
+  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 0 } }, true), true);
 });
 
 test('analytics dashboard shell includes the accessible Cartesia status section', async () => {

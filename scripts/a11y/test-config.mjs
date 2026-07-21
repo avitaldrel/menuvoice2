@@ -1,5 +1,5 @@
 const DEFAULT_PROFILE = {
-  email: 'audit@menuvoice.app',
+  email: 'audit@meetmymenu.com',
   name: 'Audit',
   allergies: [],
   dislikes: [],

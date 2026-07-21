@@ -20,6 +20,7 @@ import {
   enableTorch,
   disableTorch,
   getZoomRange,
+  nextZoomValue,
   setZoom as setCameraZoom,
   type ZoomRange,
 } from '../lib/camera';
@@ -90,6 +91,8 @@ export default function CaptureScreen({
   const reassureCountRef = useRef(0);
   const nextPhotoIdRef = useRef(1);
   const photosRef = useRef<CapturedPhoto[]>([]);
+  const zoomRef = useRef(1);
+  const zoomRangeRef = useRef<ZoomRange>({ min: 1, max: 3, step: 0.25, value: 1, native: false });
 
   const [photos, setPhotosState] = useState<CapturedPhoto[]>([]);
   const [confirmAnalyzeWithIssues, setConfirmAnalyzeWithIssues] = useState(false);
@@ -130,7 +133,10 @@ export default function CaptureScreen({
           // there is no way to see more than the sensor's native capture.
           const initialZoom = range.native ? Math.min(range.max, Math.max(range.min, 0.5)) : 1;
           if (range.native) await setCameraZoom(s, initialZoom);
-          setZoomRange({ ...range, value: initialZoom });
+          const initialRange = { ...range, value: initialZoom };
+          zoomRangeRef.current = initialRange;
+          zoomRef.current = initialZoom;
+          setZoomRange(initialRange);
           setZoom(initialZoom);
           setCameraReady(true);
           enableTorch(s);
@@ -212,8 +218,41 @@ export default function CaptureScreen({
           setCoachStatus(msg);
         },
         onCapture: () => {
-          addPhoto(captureFrame(videoRef.current!, 0.6, zoomRange.native ? 1 : zoom), true);
+          const range = zoomRangeRef.current;
+          addPhoto(captureFrame(videoRef.current!, 0.6, range.native ? 1 : zoomRef.current), true);
           autoRef.current?.acknowledgeCapture();
+        },
+        onAutoZoom: (direction) => {
+          const range = zoomRangeRef.current;
+          const current = zoomRef.current;
+          const next = nextZoomValue(range, current, direction);
+          if (next === current) return false;
+
+          zoomRef.current = next;
+          zoomRangeRef.current = { ...range, value: next };
+          setZoomRange(zoomRangeRef.current);
+          setZoom(next);
+          if (range.native) {
+            void setCameraZoom(streamRef.current, next).then((applied) => {
+              if (!applied) {
+                zoomRef.current = current;
+                zoomRangeRef.current = {
+                  ...range,
+                  value: current,
+                  min: direction < 0 ? current : range.min,
+                  max: direction > 0 ? current : range.max,
+                };
+                setZoomRange(zoomRangeRef.current);
+                setZoom(current);
+              }
+            });
+          } else {
+            autoRef.current?.setAnalysisZoom(next);
+          }
+          track('capture', 'zoom_adjust', {
+            metadata: { mode: 'auto', direction: direction > 0 ? 'in' : 'out', zoom: next, native: range.native },
+          });
+          return true;
         },
         onStruggle: () => {
           setAutoMode(false);
@@ -230,13 +269,14 @@ export default function CaptureScreen({
           prevSteadyRef.current = state === 'steadying' ? steady : 0;
         },
       });
+      autoRef.current.setAnalysisZoom(zoomRangeRef.current.native ? 1 : zoomRef.current);
     }
 
     return () => {
       autoRef.current?.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoMode, cameraReady, analyzing, camError, zoom, zoomRange.native, paused]);
+  }, [autoMode, cameraReady, analyzing, camError, paused]);
 
   const finishPhotoQuality = (id: number, quality: { ok: boolean; issues: PhotoQualityIssue[] }) => {
     const index = photosRef.current.findIndex((photo) => photo.id === id);
@@ -291,7 +331,7 @@ export default function CaptureScreen({
 
   const manualCapture = () => {
     if (analyzing || !videoRef.current) return;
-    addPhoto(captureFrame(videoRef.current, 0.6, zoomRange.native ? 1 : zoom), false);
+    addPhoto(captureFrame(videoRef.current, 0.6, zoomRangeRef.current.native ? 1 : zoomRef.current), false);
   };
 
   /** Remove the most recently captured/uploaded photo so the user can redo it. */
@@ -305,11 +345,21 @@ export default function CaptureScreen({
   };
 
   const changeZoom = async (direction: 1 | -1) => {
-    const next = Math.min(zoomRange.max, Math.max(zoomRange.min, Number((zoom + direction * zoomRange.step).toFixed(2))));
-    if (next === zoom) return;
+    const range = zoomRangeRef.current;
+    const current = zoomRef.current;
+    const next = nextZoomValue(range, current, direction);
+    if (next === current) return;
     const native = await setCameraZoom(streamRef.current, next);
-    setZoomRange((prev) => ({ ...prev, native: native || prev.native }));
+    if (range.native && !native) {
+      setStatus('This camera could not change zoom.');
+      return;
+    }
+    const nextRange = { ...range, value: next, native: native || range.native };
+    zoomRangeRef.current = nextRange;
+    zoomRef.current = next;
+    setZoomRange(nextRange);
     setZoom(next);
+    autoRef.current?.setAnalysisZoom(nextRange.native ? 1 : next);
     const msg = `Zoom ${next.toFixed(next % 1 === 0 ? 0 : 1)}x.`;
     setStatus(msg);
   };

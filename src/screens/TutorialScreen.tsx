@@ -17,7 +17,7 @@ interface Step {
 // what a new user needs before their first menu — how to get it, how to
 // interact with it, and the one safety reminder that matters most. Pause
 // Voice, appearance settings, and everything else lives in the fuller "How
-// MenuVoice works" screen (STEPS below), reachable anytime from Settings.
+// Meet My Menu AI works" screen (STEPS below), reachable anytime from Settings.
 const FIRST_RUN_STEPS: Step[] = [
   {
     title: 'Get the menu',
@@ -25,7 +25,7 @@ const FIRST_RUN_STEPS: Step[] = [
   },
   {
     title: 'Talk or browse, your choice',
-    body: 'Talk with MenuVoice by voice, or switch to Browse Menu to read silently with your screen reader.',
+    body: 'Talk with Meet My Menu AI by voice, or switch to Browse Menu to read silently with your screen reader.',
   },
   {
     title: 'Allergy safety',
@@ -39,7 +39,7 @@ const STEPS: Step[] = [
     body: 'Scanning your own copy is usually the most accurate. You can also search for one online or open a saved menu. Demo Menu is for practice.',
   },
   {
-    title: 'Talk with MenuVoice',
+    title: 'Talk with Meet My Menu AI',
     body: 'When a menu opens, the mic is on. Ask anything, like "What is in the carbonara?" Tap the big button to talk.',
   },
   {
@@ -78,7 +78,7 @@ export default function TutorialScreen({
 
   return (
     <Screen>
-      <Title>{firstRun ? 'Welcome to MenuVoice' : 'How MenuVoice works'}</Title>
+      <Title>{firstRun ? 'Welcome to Meet My Menu AI' : 'How Meet My Menu AI works'}</Title>
       <Body>{steps.length} quick step{steps.length === 1 ? '' : 's'}.</Body>
 
       <ol className="tutorial-list">

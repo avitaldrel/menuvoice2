@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'MenuVoice',
-        short_name: 'MenuVoice',
-        description: 'Voice-first menu navigation for blind and low-vision users',
+        name: 'Meet My Menu AI',
+        short_name: 'MeetMyMenuAI',
+        description: 'AI-powered, voice-first menu navigation for blind and low-vision users',
         theme_color: '#1a1a1a',
         background_color: '#1a1a1a',
         display: 'standalone',

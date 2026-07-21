@@ -1,4 +1,4 @@
-// MenuVoice design tokens — mirrors CSS custom properties in index.css.
+// Meet My Menu AI design tokens — mirrors CSS custom properties in index.css.
 // WCAG AAA contrast throughout. Minimum 64×64 touch targets.
 
 export const colors = {
