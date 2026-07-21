@@ -13,10 +13,30 @@ interface Step {
   body: string;
 }
 
+// First-run tutorial: three short steps, one sentence each, covering only
+// what a new user needs before their first menu — how to get it, how to
+// interact with it, and the one safety reminder that matters most. Pause
+// Voice, appearance settings, and everything else lives in the fuller "How
+// MenuVoice works" screen (STEPS below), reachable anytime from Settings.
+const FIRST_RUN_STEPS: Step[] = [
+  {
+    title: 'Get the menu',
+    body: 'Scanning your own copy is usually the most accurate — you can also search online or open a saved menu.',
+  },
+  {
+    title: 'Talk or browse, your choice',
+    body: 'Talk with MenuVoice by voice, or switch to Browse Menu to read silently with your screen reader.',
+  },
+  {
+    title: 'Allergy safety',
+    body: 'Add your allergies in Settings — risky dishes get a warning before anything else, and you should always confirm with staff.',
+  },
+];
+
 const STEPS: Step[] = [
   {
     title: 'Get a menu',
-    body: 'Scan a paper menu with your camera, search for one online, or open a saved menu. Demo Menu is for practice.',
+    body: 'Scanning your own copy is usually the most accurate. You can also search for one online or open a saved menu. Demo Menu is for practice.',
   },
   {
     title: 'Talk with MenuVoice',
@@ -54,13 +74,15 @@ export default function TutorialScreen({
     }
   }, [firstRun]);
 
+  const steps = firstRun ? FIRST_RUN_STEPS : STEPS;
+
   return (
     <Screen>
       <Title>{firstRun ? 'Welcome to MenuVoice' : 'How MenuVoice works'}</Title>
-      <Body>Six quick steps.</Body>
+      <Body>{steps.length} quick step{steps.length === 1 ? '' : 's'}.</Body>
 
       <ol className="tutorial-list">
-        {STEPS.map((step, i) => (
+        {steps.map((step, i) => (
           <li key={step.title} className="tutorial-step">
             <span className="tutorial-step__num" aria-hidden="true">{i + 1}</span>
             <div className="tutorial-step__body">
