@@ -14,15 +14,15 @@ import { apiErrorMessage } from './errors';
 
 export { sanitizeMenu } from './menuSanitizer';
 
-const DIRECT_KEY = import.meta.env.VITE_OPENAI_API_KEY ?? '';
-const AUDIO_PROVIDER = import.meta.env.VITE_AUDIO_PROVIDER ?? 'openai';
+const DIRECT_KEY = import.meta.env?.VITE_OPENAI_API_KEY ?? '';
+const AUDIO_PROVIDER = import.meta.env?.VITE_AUDIO_PROVIDER ?? 'openai';
 const VISION_MODEL = 'gpt-5.4-mini';
 const CHAT_MODEL = 'gpt-5.4-mini';
 // Latency-optimized TTS by default. `tts-1` starts generating audio markedly
 // faster than `tts-1-hd` (which is tuned for quality, not speed) — the right
 // trade for a live, back-and-forth voice conversation. Override with
 // VITE_TTS_MODEL=tts-1-hd if a warmer voice matters more than responsiveness.
-const TTS_MODEL = import.meta.env.VITE_TTS_MODEL ?? 'tts-1';
+const TTS_MODEL = import.meta.env?.VITE_TTS_MODEL ?? 'tts-1';
 const TTS_VOICE_DEFAULT = 'shimmer';
 
 // True when the direct browser→OpenAI path is available (local dev only).
@@ -164,7 +164,7 @@ function sourceNote(menu: ParsedMenu, provenance?: MenuProvenance): string {
   return `- Known facts about where this menu came from: ${facts}${guard}`;
 }
 
-function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile, provenance?: MenuProvenance): string {
+export function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile, provenance?: MenuProvenance): string {
   const allergies = profile.allergies.length ? profile.allergies.join(', ') : 'none on file';
   const dislikes = profile.dislikes.length ? profile.dislikes.join(', ') : 'none on file';
   const cuisines = profile.cuisinesLiked.length ? profile.cuisinesLiked.join(', ') : 'no strong preferences on file';
@@ -192,8 +192,9 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile, provenance?: 
     sourceNote(menu, provenance),
     '',
     'REMEMBERING THEIR CHOICE:',
-    '- Near the END of the conversation, once the guest seems to be settling on what to get, ask ONCE what they have decided to order. When they tell you, acknowledge it warmly and let them know you will remember it for next time so you can suggest things they like.',
-    '- Ask this only once, and only when they seem ready to decide. Never nag, never interrupt the middle of the conversation to ask, and never repeat the question if they already told you.',
+    '- Do NOT ask what the guest has decided to order. Many guests are only browsing, comparing dishes, or checking allergens, and a forced question feels intrusive.',
+    '- If the guest tells you naturally that they have decided — "I\'ll get the salmon", "let\'s go with the pasta", "remember that I chose the carbonara" — briefly and warmly confirm what you will remember, e.g. "Got it, I\'ll remember the salmon for next time." Keep the confirmation to one short sentence.',
+    '- If they never mention a decision, say nothing about it and never nudge them toward picking something before they leave.',
     '',
     'THE MENU (structured JSON):',
     JSON.stringify(menu),
@@ -346,7 +347,11 @@ export async function extractSessionLearnings(turns: ChatTurn[]): Promise<Sessio
           content:
             'From this restaurant menu conversation, extract what the GUEST decided. ' +
             'Respond ONLY with JSON: {"orders":string[],"likes":string[],"dislikes":string[]}. ' +
-            'orders = specific dishes the guest said they will order or have decided on (exact dish names). ' +
+            'orders = ONLY dishes the guest clearly decided on or committed to ordering (e.g. "I\'ll get the salmon", ' +
+            '"let\'s go with the pasta", "remember that I chose the carbonara") — exact dish names. ' +
+            'Merely asking about a dish, comparing two dishes, or MenuVoice recommending one does NOT count as an ' +
+            'order unless the guest then confirmed or agreed to it. If the guest was only browsing or asking ' +
+            'questions and never settled on anything, orders MUST be an empty array. ' +
             'likes = foods, cuisines, or ingredients the guest reacted positively to. ' +
             'dislikes = ones they reacted against. Use empty arrays if unclear. Never invent.',
         },

@@ -73,6 +73,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const [nameVal, setNameVal] = useState(profile.name);
   const [dislikes, setDislikes] = useState<string[]>(profile.dislikes);
   const [newDislike, setNewDislike] = useState('');
+  const [pastOrders, setPastOrders] = useState<string[]>(profile.pastOrders);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   const [srStatus, setSrStatus] = useState('');
@@ -260,6 +261,33 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
         placeholder="Add a dislike (e.g. mushrooms)"
         aria-label="Add a dislike. Press Enter to add it"
       />
+
+      {pastOrders.length > 0 && (
+        <>
+          <Heading>Dishes you've ordered before</Heading>
+          <Body>MenuVoice remembers these to make better recommendations. Remove any that don't belong.</Body>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pastOrders.map((item) => (
+              <div key={item} className="row" style={{ alignItems: 'center', gap: 8 }}>
+                <span style={{ flex: 1, fontSize: 16 }}>{item}</span>
+                <button
+                  onClick={() => {
+                    const next = pastOrders.filter((o) => o !== item);
+                    setPastOrders(next);
+                    update({ pastOrders: next });
+                    announce(`Removed ${item} from your past orders.`);
+                  }}
+                  aria-label={`Remove ${item} from past orders`}
+                  className="btn-icon"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {showAppleShortcut && (
         <section className="card" aria-labelledby="apple-shortcut-heading">

@@ -24,6 +24,7 @@ import {
   isSpeechRecognitionSupported,
 } from '../lib/speechRecognition';
 import { buildOpeningLine, chatReplyStream, extractSessionLearnings, hasApiKey } from '../lib/openai';
+import { DEMO_RESTAURANT_NAME } from '../lib/demoMenu';
 import { track } from '../lib/telemetry';
 import {
   earconStart,
@@ -517,7 +518,10 @@ export default function ConversationScreen({
     earconThinkingStop();
     stopSpeaking();
     const hasUser = turns.some((t) => t.role === 'user');
-    if (hasUser && hasApiKey()) {
+    // Practicing with the Demo Menu is not a real dining decision — never
+    // learn preferences or dining history from it.
+    const isDemo = restaurantName === DEMO_RESTAURANT_NAME;
+    if (hasUser && hasApiKey() && !isDemo) {
       setSaving(true);
       try {
         const learn = await extractSessionLearnings(turns);
