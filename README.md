@@ -1,13 +1,14 @@
-# Meet My Menu (mobile web prototype)
+# Meet My Menu AI (mobile web prototype)
 
-Production domain: [meetmymenu.com](https://meetmymenu.com)
+- Website: [meetmymenu.com](https://meetmymenu.com)
+- App: [app.meetmymenu.com](https://app.meetmymenu.com)
 
-**Meet My Menu is a voice-first menu navigation app for blind and low-vision
+**Meet My Menu AI is a voice-first menu navigation app for blind and low-vision
 diners.** Capture a menu, then talk to it: ask what's on it, what's cheap, or
 what fits your diet — with proactive allergen warnings from your saved profile
 and strict turn-taking so the app never cuts you off.
 
-You can [open Meet My Menu](https://meetmymenu.com/). To learn more about its
+You can [open Meet My Menu AI](https://app.meetmymenu.com/). To learn more about its
 founder, Avital Drel, and see more
 accessibility and product work, visit
 [AvitalDrel.com](https://avitaldrel.com/).
@@ -129,6 +130,6 @@ the top of `src/screens/ConversationScreen.tsx`.
 
 ## About the founder
 
-Meet My Menu was created by Avital Drel. Visit
+Meet My Menu AI was created by Avital Drel. Visit
 [AvitalDrel.com](https://avitaldrel.com/) to explore more accessibility and
 product work.

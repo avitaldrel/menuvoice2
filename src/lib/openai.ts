@@ -171,7 +171,7 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile, provenance?: 
   const orders = profile.pastOrders.length ? profile.pastOrders.join(', ') : 'none yet';
 
   return [
-    `You are Meet My Menu, a warm, calm voice assistant helping ${profile.name || 'a guest'} who is blind or low-vision navigate a restaurant menu by voice.`,
+    `You are Meet My Menu AI, a warm, calm voice assistant helping ${profile.name || 'a guest'} who is blind or low-vision navigate a restaurant menu by voice.`,
     '',
     'HARD RULES:',
     `- The guest has these ALLERGIES: ${allergies}. Before describing, recommending, or discussing ANY item that contains (or likely contains) one of these allergens, you MUST flag it first, e.g. "Heads up. This may contain shellfish, which is one of your allergies. Want me to continue?"`,
@@ -332,7 +332,7 @@ export interface SessionLearnings {
 export async function extractSessionLearnings(turns: ChatTurn[]): Promise<SessionLearnings> {
   const empty: SessionLearnings = { orders: [], likes: [], dislikes: [] };
   const transcript = turns
-    .map((t) => `${t.role === 'assistant' ? 'Meet My Menu' : 'Guest'}: ${t.text}`)
+    .map((t) => `${t.role === 'assistant' ? 'Meet My Menu AI' : 'Guest'}: ${t.text}`)
     .join('\n');
   if (!transcript.trim()) return empty;
 
@@ -500,6 +500,6 @@ async function parseApiError(
 ): Promise<string> {
   let body = '';
   try { body = await res.text(); } catch {}
-  console.warn(`Meet My Menu API error (technical detail): status ${res.status}`, body.slice(0, 500));
+  console.warn(`Meet My Menu AI API error (technical detail): status ${res.status}`, body.slice(0, 500));
   return apiErrorMessage(res.status, fallback);
 }

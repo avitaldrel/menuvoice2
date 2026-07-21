@@ -147,7 +147,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
   const speakName = async () => {
     if (nameRec !== 'idle') return;
-    announce('Your browser is asking for microphone permission. Choose Allow so Meet My Menu can hear you.');
+    announce('Your browser is asking for microphone permission. Choose Allow so Meet My Menu AI can hear you.');
     const ok = await requestMicPermission();
     if (!ok) { announce('Microphone access was not allowed. You can allow it in browser settings, or type instead.'); return; }
     try {
@@ -184,7 +184,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
   const speakDislike = async () => {
     if (dislikeRec !== 'idle') return;
-    announce('Your browser is asking for microphone permission. Choose Allow so Meet My Menu can hear you.');
+    announce('Your browser is asking for microphone permission. Choose Allow so Meet My Menu AI can hear you.');
     const ok = await requestMicPermission();
     if (!ok) { announce('Microphone access was not allowed. You can allow it in browser settings, or type instead.'); return; }
     try {
@@ -233,7 +233,7 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       <Title>Settings</Title>
 
       <SecondaryButton
-        label="How Meet My Menu works"
+        label="How Meet My Menu AI works"
         hint="Open the step by step tutorial"
         onClick={() => navigate({ name: 'tutorial' })}
       />
@@ -408,8 +408,8 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
 
       {showAppleShortcut && (
         <section className="card" aria-labelledby="apple-shortcut-heading">
-          <Heading><span id="apple-shortcut-heading">Open Meet My Menu with Siri</span></Heading>
-          <Body>Create a Shortcut so saying “Siri, launch Meet My Menu” opens this app.</Body>
+          <Heading><span id="apple-shortcut-heading">Open Meet My Menu AI with Siri</span></Heading>
+          <Body>Create a Shortcut so saying “Siri, launch Meet My Menu AI” opens this app.</Body>
           <a
             className="btn btn-secondary"
             href={shortcutUrl}

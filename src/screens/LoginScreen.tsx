@@ -62,7 +62,7 @@ export default function LoginScreen() {
 
   return (
     <Screen>
-      <Title>Meet My Menu</Title>
+      <Title>Meet My Menu AI</Title>
       <Heading>Login</Heading>
 
       {/* ── Google Sign-In ─────────────────────────────── */}

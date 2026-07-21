@@ -1,5 +1,5 @@
 /* ============================================================
-   Meet My Menu — Cinematic, scroll-driven demo
+   Meet My Menu AI — Cinematic, scroll-driven demo
    New vs v2:
    · Canvas oscilloscope waveform in hero + CTA
    · Scroll-driven phone sequence (scan → read → convo)
@@ -325,7 +325,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 }
 .cv-conv::-webkit-scrollbar { display:none; }
 
-/* Voice-pulse bars — play before each Meet My Menu message */
+/* Voice-pulse bars — play before each Meet My Menu AI message */
 .vp {
   align-self: flex-start;
   display: flex; align-items: center; gap: 4px;

@@ -30,7 +30,7 @@ function startPreview() {
   console.log('  Preview server started on http://localhost:4173');
 }
 
-console.log('\nMeet My Menu WCAG 2.1 AA Audit Loop');
+console.log('\nMeet My Menu AI WCAG 2.1 AA Audit Loop');
 console.log('='.repeat(50));
 
 startPreview();

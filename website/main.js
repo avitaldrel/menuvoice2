@@ -1,4 +1,4 @@
-/* Meet My Menu — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
+/* Meet My Menu AI — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
 (function () {
   'use strict';
 
@@ -289,14 +289,14 @@
       cvConv.appendChild(turn);
 
       turn.innerHTML =
-        '<div class="who">' + (msg.r === 'a' ? 'Meet My Menu' : 'You') + '</div>' +
+        '<div class="who">' + (msg.r === 'a' ? 'Meet My Menu AI' : 'You') + '</div>' +
         '<div class="txt">' + (msg.html || msg.plain) + '</div>';
 
       // Update phase indicator
       if (!instant) {
         if (msg.r === 'a') {
           if (cvPhase) cvPhase.classList.remove('idle');
-          if (cvPhaseTxt) cvPhaseTxt.textContent = 'Meet My Menu is speaking\u2026';
+          if (cvPhaseTxt) cvPhaseTxt.textContent = 'Meet My Menu AI is speaking\u2026';
           if (cvBarFill) cvBarFill.style.width = (30 + Math.random() * 55) + '%';
         } else {
           if (cvPhase) cvPhase.classList.add('idle');

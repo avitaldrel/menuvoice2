@@ -19,7 +19,7 @@ const STEPS: Step[] = [
     body: 'Scan a paper menu with your camera, search for one online, or open a saved menu. Demo Menu is for practice.',
   },
   {
-    title: 'Talk with Meet My Menu',
+    title: 'Talk with Meet My Menu AI',
     body: 'When a menu opens, the mic is on. Ask anything, like "What is in the carbonara?" Tap the big button to talk.',
   },
   {
@@ -56,7 +56,7 @@ export default function TutorialScreen({
 
   return (
     <Screen>
-      <Title>{firstRun ? 'Welcome to Meet My Menu' : 'How Meet My Menu works'}</Title>
+      <Title>{firstRun ? 'Welcome to Meet My Menu AI' : 'How Meet My Menu AI works'}</Title>
       <Body>Six quick steps.</Body>
 
       <ol className="tutorial-list">

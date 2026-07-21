@@ -24,7 +24,7 @@ const TECH_MARKERS =
 export function friendlyError(e: unknown, fallback: string): string {
   const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
   // Keep the real detail available for debugging without surfacing it.
-  if (raw) console.warn('Meet My Menu error (technical detail):', e);
+  if (raw) console.warn('Meet My Menu AI error (technical detail):', e);
   if (!raw) return fallback;
 
   const t = raw.toLowerCase();

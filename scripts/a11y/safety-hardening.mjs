@@ -51,7 +51,7 @@ try {
   assert.equal(await secondQuestion.evaluate((element) => element === document.activeElement), true);
   await page.getByRole('button', { name: 'Remove blorf from my allergy list' }).click();
 
-  await page.getByRole('heading', { name: 'Welcome to Meet My Menu', level: 1 }).waitFor();
+  await page.getByRole('heading', { name: 'Welcome to Meet My Menu AI', level: 1 }).waitFor();
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByRole('button', { name: 'Settings' }).waitFor();
 

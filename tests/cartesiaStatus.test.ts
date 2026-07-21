@@ -47,7 +47,7 @@ test('Cartesia status exposes slots without exposing API key values', () => {
   const email = renderCartesiaEmailHtml(result, 'Arial,sans-serif');
   assert.match(email, /second@example.com \(Key 2\) is active/);
   assert.match(email, /18,750 credits left of 20,000/);
-  assert.match(email, /Meet My Menu tracked estimate/);
+  assert.match(email, /Meet My Menu AI tracked estimate/);
   assert.equal(JSON.stringify(result).includes('sk_car'), false);
 });
 
