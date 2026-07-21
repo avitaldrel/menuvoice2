@@ -261,7 +261,7 @@ function shell(key: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MenuVoice live dashboard</title>
+<title>Meet My Menu live dashboard</title>
 <style>
   :root { color-scheme: light dark; --good:#1e8449; --bad:#c0392b; --accent:#2563eb; --muted:rgba(128,128,128,.5); }
   * { box-sizing: border-box; }
@@ -318,7 +318,7 @@ function shell(key: string): string {
 </head>
 <body>
 <div class="topbar">
-  <h1>MenuVoice live dashboard</h1>
+  <h1>Meet My Menu live dashboard</h1>
   <span class="meta"><span id="dot" class="dot"></span><span id="status">loading…</span></span>
 </div>
 <nav class="nav" id="nav" aria-label="Time window">
@@ -433,16 +433,16 @@ function renderCartesia(d){
   const hasLiveCredits=(c.keys||[]).some(k=>k.credits&&k.credits.state==='live');
   const hasTrackedCredits=(c.keys||[]).some(k=>k.credits&&k.credits.state==='tracked');
   const creditNote=hasLiveCredits
-    ? '<p class="small credit-note">Accounts marked Cartesia usage API use live usage totals and their configured allowance. Accounts marked MenuVoice tracked estimate start at 20,000 and subtract successful MenuVoice TTS requests at approximately one credit per character.</p>'
+    ? '<p class="small credit-note">Accounts marked Cartesia usage API use live usage totals and their configured allowance. Accounts marked Meet My Menu tracked estimate start at 20,000 and subtract successful Meet My Menu TTS requests at approximately one credit per character.</p>'
     : hasTrackedCredits
-      ? '<p class="small credit-note"><strong>Each free key starts at 20,000 credits.</strong> Credits left are a MenuVoice tracked estimate based on successful TTS requests at approximately one credit per character. Tracking begins with this deployment and cannot see usage outside MenuVoice; Cartesia may vary slightly.</p>'
+      ? '<p class="small credit-note"><strong>Each free key starts at 20,000 credits.</strong> Credits left are a Meet My Menu tracked estimate based on successful TTS requests at approximately one credit per character. Tracking begins with this deployment and cannot see usage outside Meet My Menu; Cartesia may vary slightly.</p>'
       : '<p class="small credit-note">Credit totals are unavailable.</p>';
   const creditCell=(k,field)=>{
     const cr=k.credits||{};
     if(cr.state==='live'||cr.state==='tracked') return num(cr[field]);
     return '<span class="small">'+esc(cr.message||'Unavailable')+'</span>';
   };
-  const rows=(c.keys||[]).map(k=>'<tr><td>'+esc(k.email||'Email not stored')+'</td><td>'+esc(k.label)+'</td><td class="'+(k.status==='exhausted'?'bad':k.status==='active'?'good':'')+'">'+esc(k.status)+'</td><td class="r">'+creditCell(k,'remaining')+'</td><td class="r">'+creditCell(k,'used')+'</td><td class="r">'+(k.credits&&k.credits.limit!=null?num(k.credits.limit):'')+'</td><td>'+esc(k.credits&&k.credits.state==='live'?'Cartesia usage API':k.credits&&k.credits.state==='tracked'?'MenuVoice tracked estimate':'Unavailable')+'</td><td>'+esc(k.credits&&k.credits.periodStart?fmtTs(k.credits.periodStart):'')+'</td><td>'+esc(fmtTs(k.lastSuccessAt))+'</td><td>'+esc(fmtTs(k.exhaustedAt))+'</td><td>'+esc(fmtTs(k.availableAt))+'</td></tr>').join('');
+  const rows=(c.keys||[]).map(k=>'<tr><td>'+esc(k.email||'Email not stored')+'</td><td>'+esc(k.label)+'</td><td class="'+(k.status==='exhausted'?'bad':k.status==='active'?'good':'')+'">'+esc(k.status)+'</td><td class="r">'+creditCell(k,'remaining')+'</td><td class="r">'+creditCell(k,'used')+'</td><td class="r">'+(k.credits&&k.credits.limit!=null?num(k.credits.limit):'')+'</td><td>'+esc(k.credits&&k.credits.state==='live'?'Cartesia usage API':k.credits&&k.credits.state==='tracked'?'Meet My Menu tracked estimate':'Unavailable')+'</td><td>'+esc(k.credits&&k.credits.periodStart?fmtTs(k.credits.periodStart):'')+'</td><td>'+esc(fmtTs(k.lastSuccessAt))+'</td><td>'+esc(fmtTs(k.exhaustedAt))+'</td><td>'+esc(fmtTs(k.availableAt))+'</td></tr>').join('');
   const prediction=c.projectedRunOutAt?'<p><strong>At the recent rate, '+esc(c.activeLabel)+' might run out on '+esc(c.projectedRunOutAt.slice(0,10))+'.</strong></p>':'';
   box.innerHTML=headline+summary+prediction+creditNote+'<div class="table-scroll"><table><caption class="sr-only">Cartesia account credits and key rotation breakdown</caption><thead><tr><th>Account email</th><th>Key slot</th><th>Rotation status</th><th class="r">Credits left</th><th class="r">Credits used</th><th class="r">Monthly allowance</th><th>Balance source</th><th>Tracking or period started</th><th>Last successful use</th><th>Exhausted at</th><th>Estimated return</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }

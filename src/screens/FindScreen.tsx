@@ -6,7 +6,7 @@
 //   - looks like a URL  -> parseMenuFromUrl (fetch + parse the page/PDF)
 //   - otherwise (a name) -> findMenuByName (web search + read their site)
 //
-// While searching, we explain each real stage of what MenuVoice is doing (no
+// While searching, we explain each real stage of what Meet My Menu is doing (no
 // fake percentages), let the user ask "What are you doing?" to repeat the
 // current step, and offer a clear Cancel. When a name resolves we CONFIRM the
 // branch and source with the user (official vs third-party, location-specific or
@@ -71,7 +71,7 @@ function locationPart(normalized: string): string {
 
 // Honest, ordered descriptions of what the server pipeline is actually doing.
 // These advance on a timer and STOP at the last step until the response lands;
-// they describe what MenuVoice is attempting, never claim a step succeeded, and
+// they describe what Meet My Menu is attempting, never claim a step succeeded, and
 // never show fake progress percentages. The final result corrects the story.
 function nameStages(location: string): string[] {
   return [

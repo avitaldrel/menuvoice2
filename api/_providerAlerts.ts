@@ -49,16 +49,16 @@ async function shouldSendCartesiaAlert(): Promise<boolean> {
       const first = await redis.set(key, String(Date.now()), { nx: true, ex: ttl });
       return first === 'OK';
     } catch (error) {
-      console.warn('[MenuVoice] Cartesia alert throttle unavailable:', error);
+      console.warn('[Meet My Menu] Cartesia alert throttle unavailable:', error);
     }
   }
 
-  const g = globalThis as typeof globalThis & { __menuvoiceCartesiaCreditAlertAt?: number };
+  const g = globalThis as typeof globalThis & { __meetMyMenuCartesiaCreditAlertAt?: number };
   const now = Date.now();
-  if (g.__menuvoiceCartesiaCreditAlertAt && now - g.__menuvoiceCartesiaCreditAlertAt < ttl * 1000) {
+  if (g.__meetMyMenuCartesiaCreditAlertAt && now - g.__meetMyMenuCartesiaCreditAlertAt < ttl * 1000) {
     return false;
   }
-  g.__menuvoiceCartesiaCreditAlertAt = now;
+  g.__meetMyMenuCartesiaCreditAlertAt = now;
   return true;
 }
 
@@ -75,7 +75,7 @@ export async function maybeNotifyCartesiaCreditIssue(opts: {
     const generated = new Date().toISOString();
     const detail = String(opts.detail ?? '').slice(0, 1200);
     const text = [
-      'MenuVoice detected a Cartesia credit or quota failure.',
+      'Meet My Menu detected a Cartesia credit or quota failure.',
       '',
       `Service: ${opts.service}`,
       `HTTP status: ${opts.status}`,
@@ -88,7 +88,7 @@ export async function maybeNotifyCartesiaCreditIssue(opts: {
     ].join('\n');
 
     const html = `<!doctype html><html><body>
-      <p>MenuVoice detected a Cartesia credit or quota failure.</p>
+      <p>Meet My Menu detected a Cartesia credit or quota failure.</p>
       <table cellpadding="6" cellspacing="0" style="border-collapse:collapse">
         <tr><td><strong>Service</strong></td><td>${opts.service}</td></tr>
         <tr><td><strong>HTTP status</strong></td><td>${opts.status}</td></tr>
@@ -101,12 +101,12 @@ export async function maybeNotifyCartesiaCreditIssue(opts: {
 
     const via = await sendEmail({
       to: alertRecipient(),
-      subject: 'MenuVoice Cartesia credits may be exhausted',
+      subject: 'Meet My Menu Cartesia credits may be exhausted',
       text,
       html,
     });
-    console.warn(`[MenuVoice] Cartesia credit alert sent via ${via}.`);
+    console.warn(`[Meet My Menu] Cartesia credit alert sent via ${via}.`);
   } catch (error) {
-    console.warn('[MenuVoice] Cartesia credit alert failed:', error);
+    console.warn('[Meet My Menu] Cartesia credit alert failed:', error);
   }
 }

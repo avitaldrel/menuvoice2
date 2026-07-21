@@ -14,9 +14,9 @@ Context of use: phone in hand or pocket, noisy restaurant environment, time pres
 
 ## Product Purpose
 
-MenuVoice reads restaurant menus aloud and holds a voice conversation with the user about the food, so they can decide what to order without help from another person. It captures menus by camera or URL, parses them with AI, and lets the user ask questions ("what's in the carbonara?", "anything without shellfish?") by voice. It learns food preferences and allergy constraints over time.
+Meet My Menu reads restaurant menus aloud and holds a voice conversation with the user about the food, so they can decide what to order without help from another person. It captures menus by camera or URL, parses them with AI, and lets the user ask questions ("what's in the carbonara?", "anything without shellfish?") by voice. It learns food preferences and allergy constraints over time.
 
-Success: a blind user sits down at an unfamiliar restaurant, opens MenuVoice, and orders confidently without having to ask anyone to read the menu for them.
+Success: a blind user sits down at an unfamiliar restaurant, opens Meet My Menu, and orders confidently without having to ask anyone to read the menu for them.
 
 ## Brand Personality
 

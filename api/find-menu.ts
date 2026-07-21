@@ -110,7 +110,7 @@ async function searchForMenuUrls(query: string, timeoutMs: number): Promise<any>
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    console.error('[MenuVoice] find-menu search error:', res.status, text.slice(0, 500));
+    console.error('[Meet My Menu] find-menu search error:', res.status, text.slice(0, 500));
     throw new FriendlyError('The restaurant search is having trouble right now. Please try again in a moment.', 502);
   }
   const data = await res.json();
@@ -139,7 +139,7 @@ async function pickBestSource(urls: string[], remaining: () => number): Promise<
       }
       if (score >= STRONG_MENU_SIGNAL) break;
     } catch (e) {
-      console.error('[MenuVoice] find-menu candidate fetch failed:', url, e);
+      console.error('[Meet My Menu] find-menu candidate fetch failed:', url, e);
     }
   }
   return best;
@@ -222,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: reason, restaurantName, address });
   } catch (e: any) {
     if (e instanceof FriendlyError) return res.status(e.status).json({ error: e.message });
-    console.error('[MenuVoice] find-menu error:', e);
+    console.error('[Meet My Menu] find-menu error:', e);
     return res.status(502).json({ error: 'The restaurant search failed. Please try again in a moment.' });
   }
 }

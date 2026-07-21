@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { bodyForOpenAiTranscription } from '../api/transcribe.ts';
 
 test('OpenAI fallback rewrites only the multipart model field', () => {
-  const boundary = 'menuvoice-boundary';
+  const boundary = 'meet-my-menu-boundary';
   const audioBytes = Buffer.from([0, 255, 12, 10, ...Buffer.from('audio ink-whisper payload'), 0]);
   const body = Buffer.concat([
     Buffer.from(`--${boundary}\r\n`),

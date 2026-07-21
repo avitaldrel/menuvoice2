@@ -27,14 +27,14 @@ interface CreditCacheEntry {
   value: CartesiaCreditStatus;
 }
 
-function cacheHost(): typeof globalThis & { __menuvoiceCartesiaCreditCache?: Map<number, CreditCacheEntry> } {
-  return globalThis as typeof globalThis & { __menuvoiceCartesiaCreditCache?: Map<number, CreditCacheEntry> };
+function cacheHost(): typeof globalThis & { __meetMyMenuCartesiaCreditCache?: Map<number, CreditCacheEntry> } {
+  return globalThis as typeof globalThis & { __meetMyMenuCartesiaCreditCache?: Map<number, CreditCacheEntry> };
 }
 
 function cache(): Map<number, CreditCacheEntry> {
   const host = cacheHost();
-  host.__menuvoiceCartesiaCreditCache ??= new Map();
-  return host.__menuvoiceCartesiaCreditCache;
+  host.__meetMyMenuCartesiaCreditCache ??= new Map();
+  return host.__meetMyMenuCartesiaCreditCache;
 }
 
 function daysInUtcMonth(year: number, month: number): number {

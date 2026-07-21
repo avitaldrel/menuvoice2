@@ -1,8 +1,8 @@
-// Black-box smoke test of MenuVoice production menu pipeline.
+// Black-box smoke test of Meet My Menu production menu pipeline.
 // Usage: node scripts/smoke-restaurants.mjs
 // Plain Node 18+, no dependencies. Requests run SEQUENTIALLY, 60s timeout each.
 
-const BASE = 'https://menuvoice-sigma.vercel.app';
+const BASE = process.env.SMOKE_BASE_URL || 'https://meetmymenu.com';
 const TIMEOUT_MS = 60_000;
 
 const FIND_QUERIES = [

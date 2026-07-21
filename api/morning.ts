@@ -1,7 +1,7 @@
 // GET /api/morning?key=...   ->  on-demand "morning report" digest
 //
 // Answers three questions, reading the same `events` table as /api/report:
-//   1. Did anyone use MenuVoice in the window?  (yes / no)
+//   1. Did anyone use Meet My Menu in the window?  (yes / no)
 //   2. Who is NEW  — first-ever event landed inside the window.
 //   3. Who is a returning ("original") user — used it before, came back,
 //      with lifetime session count and what they did.
@@ -24,10 +24,10 @@ import { buildMorningReport, renderText, renderEmailHtml, renderCartesiaText, re
 function emailSubject(d: { anyoneUsed: boolean; newUsers: unknown[]; returningUsers: unknown[]; website?: { visits: number }; cartesia: { allExhausted: boolean } }): string {
   const date = new Date().toISOString().slice(0, 10);
   return d.cartesia.allExhausted
-    ? `[MenuVoice] Morning report ${date} — Cartesia keys exhausted`
+    ? `[Meet My Menu] Morning report ${date} — Cartesia keys exhausted`
     : d.anyoneUsed
-    ? `[MenuVoice] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website?.visits ?? 0} site visits`
-    : `[MenuVoice] Morning report ${date} — no users in window`;
+    ? `[Meet My Menu] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website?.visits ?? 0} site visits`
+    : `[Meet My Menu] Morning report ${date} — no users in window`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -92,8 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ---- HTML dashboard view ----
     const verdict = d.anyoneUsed
-      ? `<p class="verdict yes">Yes — MenuVoice was used by <strong>${esc(t.users)}</strong> ${Number(t.users) === 1 ? 'person' : 'people'} (${esc(t.sessions)} session${Number(t.sessions) === 1 ? '' : 's'}).</p>`
-      : `<p class="verdict no">No one used MenuVoice in this window.</p>`;
+      ? `<p class="verdict yes">Yes — Meet My Menu was used by <strong>${esc(t.users)}</strong> ${Number(t.users) === 1 ? 'person' : 'people'} (${esc(t.sessions)} session${Number(t.sessions) === 1 ? '' : 's'}).</p>`
+      : `<p class="verdict no">No one used Meet My Menu in this window.</p>`;
 
     const card = (label: string, value: unknown, cls = '') =>
       `<div class="card ${cls}"><div class="num">${esc(value ?? 0)}</div><div class="lbl">${esc(label)}</div></div>`;
@@ -146,7 +146,7 @@ ${f.biggestLeak ? `<p class="meta">Biggest drop-off: <strong>${esc(f.biggestLeak
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MenuVoice morning report (${esc(d.windowLabel)})</title>
+<title>Meet My Menu morning report (${esc(d.windowLabel)})</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 1.5rem; max-width: 1000px; }
@@ -172,7 +172,7 @@ ${f.biggestLeak ? `<p class="meta">Biggest drop-off: <strong>${esc(f.biggestLeak
 </style>
 </head>
 <body>
-<h1>MenuVoice morning report</h1>
+<h1>Meet My Menu morning report</h1>
 <p class="meta">Window: <strong>${esc(d.windowLabel)}</strong> &middot; generated ${esc(d.generated)}
  ${t.dataFrom ? `&middot; data ${esc(t.dataFrom)} &rarr; ${esc(t.dataTo)}` : ''}</p>
 <p class="nav">View:

@@ -1,13 +1,14 @@
-# MenuVoice (mobile web prototype)
+# Meet My Menu (mobile web prototype)
 
-**MenuVoice is a voice-first menu navigation app for blind and low-vision
+Production domain: [meetmymenu.com](https://meetmymenu.com)
+
+**Meet My Menu is a voice-first menu navigation app for blind and low-vision
 diners.** Capture a menu, then talk to it: ask what's on it, what's cheap, or
 what fits your diet — with proactive allergen warnings from your saved profile
 and strict turn-taking so the app never cuts you off.
 
-You can [open the MenuVoice app](https://menu.avitaldrel.com/) or
-[learn more about MenuVoice](https://menuvoice.avitaldrel.com/) on its public
-website. To learn more about the founder of MenuVoice, Avital Drel, and see more
+You can [open Meet My Menu](https://meetmymenu.com/). To learn more about its
+founder, Avital Drel, and see more
 accessibility and product work, visit
 [AvitalDrel.com](https://avitaldrel.com/).
 
@@ -128,6 +129,6 @@ the top of `src/screens/ConversationScreen.tsx`.
 
 ## About the founder
 
-MenuVoice was created by Avital Drel. Visit
+Meet My Menu was created by Avital Drel. Visit
 [AvitalDrel.com](https://avitaldrel.com/) to explore more accessibility and
 product work.

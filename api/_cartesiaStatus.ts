@@ -94,24 +94,24 @@ function parseState(raw: unknown): CartesiaRotationState {
   };
 }
 
-function memoryHost(): typeof globalThis & { __menuvoiceCartesiaRotation?: CartesiaRotationState } {
-  return globalThis as typeof globalThis & { __menuvoiceCartesiaRotation?: CartesiaRotationState };
+function memoryHost(): typeof globalThis & { __meetMyMenuCartesiaRotation?: CartesiaRotationState } {
+  return globalThis as typeof globalThis & { __meetMyMenuCartesiaRotation?: CartesiaRotationState };
 }
 
 async function readState(): Promise<{ state: CartesiaRotationState; redis: Redis | null }> {
   const redis = redisFromEnv();
   if (redis) {
     try { return { state: parseState(await redis.get(STATE_KEY)), redis }; }
-    catch (error) { console.warn('[MenuVoice] Cartesia rotation state read failed:', error); }
+    catch (error) { console.warn('[Meet My Menu] Cartesia rotation state read failed:', error); }
   }
-  return { state: parseState(memoryHost().__menuvoiceCartesiaRotation), redis: null };
+  return { state: parseState(memoryHost().__meetMyMenuCartesiaRotation), redis: null };
 }
 
 async function writeState(state: CartesiaRotationState, redis: Redis | null): Promise<void> {
-  memoryHost().__menuvoiceCartesiaRotation = state;
+  memoryHost().__meetMyMenuCartesiaRotation = state;
   if (!redis) return;
   try { await redis.set(STATE_KEY, state); }
-  catch (error) { console.warn('[MenuVoice] Cartesia rotation state write failed:', error); }
+  catch (error) { console.warn('[Meet My Menu] Cartesia rotation state write failed:', error); }
 }
 
 export async function recordCartesiaSuccess(
@@ -196,7 +196,7 @@ export function summarizeCartesiaState(
       periodStart: s.creditTrackingStartedAt ?? null,
       periodEnd: null,
       checkedAt: s.lastSuccessAt ?? null,
-      message: 'Estimated from successful MenuVoice TTS requests. Cartesia may vary slightly.',
+      message: 'Estimated from successful Meet My Menu TTS requests. Cartesia may vary slightly.',
     };
     keys.push({
       slot,

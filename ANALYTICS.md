@@ -1,4 +1,4 @@
-# MenuVoice Analytics — Database Setup & Query Guide
+# Meet My Menu Analytics — Database Setup & Query Guide
 
 ## What gets recorded
 
@@ -115,7 +115,7 @@ table dumps, and `/api/dashboard` for the always-on visual view.
 
 ### Morning report (`/api/morning`)
 
-A focused daily digest answering: **did anyone use MenuVoice, who is new, who came back.**
+A focused daily digest answering: **did anyone use Meet My Menu, who is new, who came back.**
 
 ```
 https://<deployment>/api/morning?key=<REPORT_KEY>
@@ -140,9 +140,9 @@ shown as an estimate because Cartesia's credit-usage API does not expose plan re
 
 The protected dashboard and morning email show the account email, active key, credits used,
 and credits left for every numbered key. Each free key defaults to a 20,000-credit allowance.
-Without an admin key, MenuVoice tracks an estimate by subtracting successful TTS requests at
+Without an admin key, Meet My Menu tracks an estimate by subtracting successful TTS requests at
 approximately one credit per input character. Tracking starts when this version is deployed,
-does not include use outside MenuVoice, and may vary slightly from Cartesia's final count.
+does not include use outside Meet My Menu, and may vary slightly from Cartesia's final count.
 
 Configure matching numbered variables for each slot:
 
@@ -153,16 +153,17 @@ Configure matching numbered variables for each slot:
 
 Repeat through the highest configured key slot. Standard `sk_car_...` keys cannot read the
 usage endpoint. If admin keys are supplied, the dashboard labels those balances as Cartesia
-usage API data and caches them for five minutes. Otherwise it labels them as MenuVoice tracked
+usage API data and caches them for five minutes. Otherwise it labels them as Meet My Menu tracked
 estimates. No API or admin key value is returned to the browser or email.
 
 #### Automated daily email (`/api/cron-morning`)
 
 A Vercel Cron (configured in `vercel.json`, runs `0 11 * * *` = 11:00 UTC =
 **7:00 AM Eastern during EDT**; it is 6 AM ET during winter/EST) calls
-`/api/cron-morning`, builds the digest, and emails it. The Gmail account
-**2firemaster27@gmail.com** has a **"MenuVoice Reports"** label + a filter
-(subject contains `[MenuVoice] Morning report`) so every report is auto-labeled.
+`/api/cron-morning`, builds the digest, and emails it. Update the reporting
+mailbox filter to match subjects containing
+`[Meet My Menu] Morning report`. The existing **"MenuVoice Reports"** label can
+be renamed manually without affecting delivery.
 
 Required env vars in Vercel (Project → Settings → Env Vars), then redeploy:
 - `REPORT_KEY` — already set (guards the manual trigger).
