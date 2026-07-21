@@ -16,7 +16,7 @@ process.env.SESSION_SECRET = 'test-session-secret-not-for-production-use-only';
 process.env.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
 
 const { verifyGoogleIdToken, createSessionToken, verifySessionToken, bearerToken } =
-  await import('../api/_auth.ts');
+  await import('../server/auth.ts');
 
 const { publicKey, privateKey } = await generateKeyPair('RS256');
 

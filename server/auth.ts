@@ -1,25 +1,5 @@
-// Server-side identity verification (bug #20).
-//
-// /api/sync used to trust a bare `email` field supplied by the request, with
-// no proof the caller was ever that person. This module is the fix: identity
-// for cloud sync now comes ONLY from a cryptographically verified source.
-//
-// Two steps:
-//   1. Login: the client sends the Google ID token it just received from
-//      Sign-In. verifyGoogleIdToken() checks its signature against Google's
-//      own public keys, its audience (must be THIS app's client ID), and that
-//      Google itself verified the email — never trust a client-decoded JWT.
-//   2. Session: Google ID tokens expire in ~1 hour, too short to keep sync
-//      working across a normal usage period. On a successful verify, the
-//      server mints its OWN signed session token (createSessionToken) that
-//      the client stores and sends on every later /api/sync call. Verifying
-//      our own HS256 token needs no network call, unlike re-checking Google's
-//      JWKS on every request.
-//
-// Both verification functions fail CLOSED: any error (network, malformed
-// token, wrong audience, expired) returns null, never "let it through". This
-// is the opposite of api/_rateLimit.ts's fail-open stance, and deliberately
-// so — a broken rate limiter costs money; a broken auth check costs privacy.
+// Server-side identity verification for cloud sync. Kept outside api/ so it
+// is shared implementation, not a separate Vercel Function.
 
 import { jwtVerify, SignJWT, createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import type { CryptoKey, KeyObject, JWK } from 'jose';
@@ -31,12 +11,6 @@ export interface VerifiedIdentity {
   email: string;
 }
 
-/**
- * Verify a Google ID token: signature (against Google's live JWKS), issuer,
- * audience (must match GOOGLE_CLIENT_ID), and that Google itself marked the
- * email verified. `getKey` is only ever overridden in tests, to verify
- * against a locally-issued token instead of a real Google one.
- */
 export async function verifyGoogleIdToken(
   idToken: string,
   getKey: JWTVerifyGetKey | CryptoKey | KeyObject | JWK | Uint8Array = GOOGLE_JWKS,
@@ -65,7 +39,6 @@ function sessionSecretKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-/** Mint a Meet My Menu AI session token for an already-verified email. */
 export async function createSessionToken(email: string): Promise<string> {
   return new SignJWT({ email: email.trim().toLowerCase() })
     .setProtectedHeader({ alg: 'HS256' })
@@ -75,7 +48,6 @@ export async function createSessionToken(email: string): Promise<string> {
     .sign(sessionSecretKey());
 }
 
-/** Verify a Meet My Menu AI session token minted by createSessionToken. */
 export async function verifySessionToken(token: string): Promise<VerifiedIdentity | null> {
   if (!token) return null;
   try {
@@ -87,7 +59,6 @@ export async function verifySessionToken(token: string): Promise<VerifiedIdentit
   }
 }
 
-/** Pull the token out of an `Authorization: Bearer <token>` header value. */
 export function bearerToken(header: string | string[] | undefined): string | null {
   const value = Array.isArray(header) ? header[0] : header;
   if (!value) return null;

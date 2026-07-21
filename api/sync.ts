@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
 import { createClient } from '@vercel/postgres';
-import { verifySessionToken, bearerToken } from './_auth.js';
+import { verifyGoogleIdToken, createSessionToken, verifySessionToken, bearerToken } from '../server/auth.js';
 
 // GET  /api/sync   — fetch stored data for the authenticated caller
 // POST /api/sync   — save data { profile, restaurants } for the authenticated caller
 //
 // Authorization: Bearer <sessionToken> is REQUIRED on both. The session token
-// (minted by /api/auth-session after verifying a real Google sign-in) is the
+// (minted by /api/sync?action=session after verifying a real Google sign-in) is the
 // only source of identity here — a client can no longer read or overwrite
 // another account's data by naming its email, because the email now comes
 // from the verified token, never from the request body or query string.
@@ -130,6 +130,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // Keep session creation in this existing function so the Hobby deployment
+  // stays within Vercel's function limit. It remains a distinct API action.
+  if (req.method === 'POST' && req.query.action === 'session') {
+    const { idToken } = (req.body ?? {}) as { idToken?: string };
+    if (!idToken || typeof idToken !== 'string') {
+      return res.status(400).json({ error: 'idToken required' });
+    }
+    const identity = await verifyGoogleIdToken(idToken);
+    if (!identity) {
+      return res.status(401).json({ error: 'Could not verify that sign-in. Please try signing in again.' });
+    }
+    try {
+      const sessionToken = await createSessionToken(identity.email);
+      return res.status(200).json({ sessionToken, email: identity.email });
+    } catch (error) {
+      console.error('[Meet My Menu AI] session token creation failed:', error);
+      return res.status(500).json({ error: 'Sign-in is not fully configured on the server.' });
+    }
+  }
 
   const token = bearerToken(req.headers.authorization);
   const identity = token ? await verifySessionToken(token) : null;

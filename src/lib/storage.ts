@@ -78,7 +78,7 @@ function normalizeSavedRestaurants(restaurants: unknown): SavedRestaurant[] {
 }
 
 // ── Cloud sync ────────────────────────────────────────────────────────────────
-// Bug #20: /api/sync now requires a verified session token — see api/_auth.ts.
+// Bug #20: /api/sync now requires a verified session token — see server/auth.ts.
 // Email-only login has no such credential and stays local-only by design;
 // Google sign-in exchanges its ID token for one via establishSyncSession().
 
@@ -113,7 +113,7 @@ function writeSyncSession(session: SyncSession | null): void {
  */
 export async function establishSyncSession(idToken: string): Promise<string | null> {
   try {
-    const res = await fetch('/api/auth-session', {
+    const res = await fetch('/api/sync?action=session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idToken }),

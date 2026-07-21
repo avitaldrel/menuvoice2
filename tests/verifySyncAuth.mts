@@ -32,7 +32,7 @@ if (!process.env.POSTGRES_URL) {
   test('sync auth acceptance test (SKIPPED: no POSTGRES_URL in .env.local)', () => {});
 } else {
   const { default: handler } = await import(pathToFileURL(join(ROOT, 'api', 'sync.ts')).href);
-  const { createSessionToken } = await import(pathToFileURL(join(ROOT, 'api', '_auth.ts')).href);
+  const { createSessionToken } = await import(pathToFileURL(join(ROOT, 'server', 'auth.ts')).href);
 
   const ATTACKER = 'attacker-harness@menuvoice-test.invalid';
   const VICTIM = 'victim-harness@menuvoice-test.invalid';
