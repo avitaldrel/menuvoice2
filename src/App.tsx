@@ -149,6 +149,13 @@ function Root() {
       screen = <HomeScreen navigate={navigate} goBack={goBack} />;
   }
 
+  // Pause Voice stops MenuVoice speech and the microphone — the only screen
+  // where either is running is Conversation, so the control only makes sense
+  // there. It used to float on every screen; showing it on Login, Onboarding,
+  // Home, Capture, Find, Saved, Settings, and Tutorial offered a control with
+  // nothing to do on any of them.
+  const showPauseVoice = current.name === 'conversation';
+
   const page = (
     <>
       <div
@@ -159,30 +166,32 @@ function Root() {
       >
         {status}
       </div>
-      <button
-        className="btn btn-secondary voice-toggle"
-        onClick={() => (paused ? resume() : pause())}
-        aria-pressed={paused}
-        aria-label={
-          paused
-            ? 'Resume Voice. Turn the microphone and MenuVoice speech back on.'
-            : 'Pause Voice. Stop MenuVoice speech and turn off microphone listening.'
-        }
-      >
-        <span className="voice-toggle__glyph" aria-hidden="true">
-          {paused ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5.5v13l11-6.5-11-6.5z" />
-            </svg>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6.5" y="5" width="3.6" height="14" rx="1.2" />
-              <rect x="13.9" y="5" width="3.6" height="14" rx="1.2" />
-            </svg>
-          )}
-        </span>
-        {paused ? 'Resume Voice' : 'Pause Voice'}
-      </button>
+      {showPauseVoice && (
+        <button
+          className="btn btn-secondary voice-toggle"
+          onClick={() => (paused ? resume() : pause())}
+          aria-pressed={paused}
+          aria-label={
+            paused
+              ? 'Resume Voice. Turn the microphone and MenuVoice speech back on.'
+              : 'Pause Voice. Stop MenuVoice speech and turn off microphone listening.'
+          }
+        >
+          <span className="voice-toggle__glyph" aria-hidden="true">
+            {paused ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5.5v13l11-6.5-11-6.5z" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6.5" y="5" width="3.6" height="14" rx="1.2" />
+                <rect x="13.9" y="5" width="3.6" height="14" rx="1.2" />
+              </svg>
+            )}
+          </span>
+          {paused ? 'Resume Voice' : 'Pause Voice'}
+        </button>
+      )}
       {screen}
     </>
   );
