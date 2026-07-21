@@ -569,3 +569,104 @@ export async function parseMenuSource(src: MenuSource): Promise<ParsedMenu> {
 export function menuItemCount(menu: ParsedMenu): number {
   return menu.categories.reduce((s, c) => s + (c.items?.length ?? 0), 0);
 }
+
+// ── Deterministic completeness ──────────────────────────────────────────────
+// The extraction model sets `incomplete` when it notices a fragment, but often
+// it does not: a three-item scrap parses cleanly and looks whole to the model.
+// Presenting that as the restaurant's entire menu is exactly the failure this
+// product exists to prevent, so these checks run IN ADDITION to the model's
+// judgment. They can only ever move a menu toward "incomplete", never away.
+
+/** Below this many items we will not claim to have the whole menu. */
+const MIN_CONFIDENT_ITEMS = 8;
+/** A one-section menu needs more items before it reads as a whole menu. */
+const MIN_SINGLE_SECTION_ITEMS = 12;
+/** Listing sites often show a sample, so they need more items to look whole. */
+const MIN_THIRD_PARTY_ITEMS = 12;
+
+// Section words that rarely appear inside a dish name, so seeing one in the
+// source text with no matching category is real evidence a section was missed.
+const EXPECTED_SECTIONS = ['appetizer', 'entree', 'entrée', 'dessert', 'beverage'];
+
+/** Cues that the page or scan stopped part-way through the menu. */
+const TRUNCATION_CUES =
+  /\b(continued|continues on|page \d+ of \d+|see (?:reverse|other side|next page)|cont'd)\b/i;
+
+export interface CompletenessAssessment {
+  incomplete: boolean;
+  reason?: string;
+}
+
+/** A section the text names that never became a category, else null. */
+function missingSection(menu: ParsedMenu, text: string): string | null {
+  if (!text) return null;
+  const hay = text.toLowerCase();
+  const categoryNames = menu.categories.map((c) => c.name.toLowerCase()).join(' ');
+  for (const section of EXPECTED_SECTIONS) {
+    if (!hay.includes(section)) continue;
+    if (categoryNames.includes(section)) continue;
+    return section === 'entrée' ? 'entree' : section;
+  }
+  return null;
+}
+
+/**
+ * Decide whether a parsed menu can honestly be called complete.
+ * `sourceText` is the page text the menu came from (when available) and
+ * `sourceType` its classification; both only ever add caution.
+ */
+export function assessMenuCompleteness(
+  menu: ParsedMenu,
+  opts: { sourceText?: string; sourceType?: MenuSourceType } = {},
+): CompletenessAssessment {
+  const items = menuItemCount(menu);
+  const categories = menu.categories.length;
+
+  // The model saying "partial" always stands.
+  if (menu.incomplete) {
+    return { incomplete: true, reason: menu.incompleteReason ?? 'some of it could not be read' };
+  }
+  if (items === 0) {
+    return { incomplete: true, reason: 'I could not find any dishes on it' };
+  }
+  if (items < MIN_CONFIDENT_ITEMS) {
+    return {
+      incomplete: true,
+      reason: `I only found ${items} ${items === 1 ? 'dish' : 'dishes'}, which is usually part of a menu rather than all of it`,
+    };
+  }
+  if (categories <= 1 && items < MIN_SINGLE_SECTION_ITEMS) {
+    return { incomplete: true, reason: 'I only found one section of it' };
+  }
+  if (opts.sourceType === 'third_party' && items < MIN_THIRD_PARTY_ITEMS) {
+    return { incomplete: true, reason: 'it came from a listing site, which often shows only some of the dishes' };
+  }
+
+  const text = opts.sourceText ?? '';
+  if (text && TRUNCATION_CUES.test(text)) {
+    return { incomplete: true, reason: 'the page looks like it continues somewhere else' };
+  }
+  const missing = missingSection(menu, text);
+  if (missing) {
+    return { incomplete: true, reason: `the ${missing} section is mentioned but I could not read it` };
+  }
+
+  return { incomplete: false };
+}
+
+/**
+ * Apply the assessment to a menu so the menu object itself carries the honest
+ * verdict, and hand back the provenance fields both read routes need.
+ */
+export function applyCompleteness(
+  menu: ParsedMenu,
+  opts: { sourceText?: string; sourceType?: MenuSourceType } = {},
+): { completeness: 'complete' | 'partial'; warnings?: string[] } {
+  const verdict = assessMenuCompleteness(menu, opts);
+  menu.incomplete = verdict.incomplete;
+  menu.incompleteReason = verdict.incomplete ? verdict.reason : undefined;
+  return {
+    completeness: verdict.incomplete ? 'partial' : 'complete',
+    warnings: verdict.reason ? [verdict.reason] : undefined,
+  };
+}

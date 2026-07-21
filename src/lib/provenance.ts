@@ -79,9 +79,11 @@ function locationPhrase(p: MenuProvenance): string {
 function completenessPhrase(p: MenuProvenance): string {
   if (p.completeness === 'partial') {
     const reason = p.warnings && p.warnings.length ? p.warnings[0] : '';
+    // Lead with the plain fact. A partial menu must never be left sounding like
+    // the whole thing, so this states it outright before explaining why.
     return reason
-      ? `It may be incomplete because ${reason}`
-      : 'It may be incomplete, so some items could be missing';
+      ? `I found only part of this menu, because ${reason}`
+      : 'I found only part of this menu, so some dishes could be missing';
   }
   if (p.completeness === 'complete') return 'It appears to be complete';
   return 'I am not certain whether this is the whole menu';
@@ -128,7 +130,7 @@ export function provenanceOpeningNote(p: MenuProvenance | undefined, now: number
         : 'though I could not confirm it is specific to your branch';
   const fresh = freshnessOf(p.checkedAt, now);
   const freshNote = fresh === 'recent' ? 'checked recently' : fresh === 'aging' ? 'checked a while ago' : fresh === 'outdated' ? 'and may be out of date' : '';
-  const completeNote = p.completeness === 'partial' ? 'It may be incomplete.' : '';
+  const completeNote = p.completeness === 'partial' ? 'I found only part of it.' : '';
   const sentence = `Just so you know, this menu is ${officiality} ${scope}${freshNote ? `, ${freshNote}` : ''}.`;
   return ` ${sentence}${completeNote ? ` ${completeNote}` : ''}`;
 }

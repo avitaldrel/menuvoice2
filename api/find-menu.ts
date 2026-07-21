@@ -25,6 +25,7 @@ import {
   extractJson,
   classifySource,
   classifyLocationScope,
+  applyCompleteness,
   FriendlyError,
   type MenuSource,
 } from './_menuCore.js';
@@ -192,6 +193,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const cls = classifySource(best.url, best.kind === 'pdf');
         const pageText = best.kind === 'html' ? best.text : '';
         const locationScope = classifyLocationScope(pageText, best.url, address ?? query);
+        // Deterministic completeness on top of the model's own judgment, so a
+        // short fragment is never announced as the restaurant's whole menu.
+        const completeness = applyCompleteness(menu, {
+          sourceText: pageText,
+          sourceType: cls.sourceType,
+        });
         const provenance = {
           sourceType: cls.sourceType,
           official: cls.official,
@@ -200,8 +207,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           confirmedLocation: address ?? undefined,
           sourceUrl: best.url,
           checkedAt: new Date().toISOString(),
-          completeness: menu.incomplete ? 'partial' : 'complete',
-          warnings: menu.incompleteReason ? [menu.incompleteReason] : undefined,
+          ...completeness,
         };
         return res.status(200).json({
           menu,
