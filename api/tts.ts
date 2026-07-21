@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { withCartesiaKey } from './_cartesia.js';
 
 const CARTESIA_VERSION = '2026-03-01';
-// Cartesia has temporarily disabled speed control on Sonic 3.5. Meet My Menu
+// Cartesia has temporarily disabled speed control on Sonic 3.5. Meet My Menu AI
 // exposes a speaking-speed setting, so default to Sonic 3 where the
 // generation_config.speed value is honored. An explicit environment override
 // remains available for deployments that prioritize a different model.

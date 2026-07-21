@@ -72,7 +72,7 @@ export default function OnboardingScreen() {
 
   return (
     <Screen>
-      <Title>Meet My Menu</Title>
+      <Title>Meet My Menu AI</Title>
 
       {step === 'name' && (
         <TypeStep
@@ -103,8 +103,8 @@ export default function OnboardingScreen() {
 
       {step === 'shortcut' && shortcutUrl && (
         <div className="col">
-          <h2 className="heading" ref={stepHeadingRef} tabIndex={-1}>Open Meet My Menu with Siri</h2>
-          <Body>Create a Shortcut so saying “Siri, launch Meet My Menu” opens this app.</Body>
+          <h2 className="heading" ref={stepHeadingRef} tabIndex={-1}>Open Meet My Menu AI with Siri</h2>
+          <Body>Create a Shortcut so saying “Siri, launch Meet My Menu AI” opens this app.</Body>
           <a
             className="btn btn-primary"
             href={shortcutUrl}
@@ -118,7 +118,7 @@ export default function OnboardingScreen() {
           </a>
           <SecondaryButton
             label="Skip for now"
-            hint="Continue to Meet My Menu. You can create the Shortcut later in Settings"
+            hint="Continue to Meet My Menu AI. You can create the Shortcut later in Settings"
             onClick={() => void finish('skipped')}
           />
         </div>

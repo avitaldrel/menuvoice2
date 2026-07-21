@@ -49,7 +49,7 @@ async function shouldSendCartesiaAlert(): Promise<boolean> {
       const first = await redis.set(key, String(Date.now()), { nx: true, ex: ttl });
       return first === 'OK';
     } catch (error) {
-      console.warn('[Meet My Menu] Cartesia alert throttle unavailable:', error);
+      console.warn('[Meet My Menu AI] Cartesia alert throttle unavailable:', error);
     }
   }
 
@@ -75,7 +75,7 @@ export async function maybeNotifyCartesiaCreditIssue(opts: {
     const generated = new Date().toISOString();
     const detail = String(opts.detail ?? '').slice(0, 1200);
     const text = [
-      'Meet My Menu detected a Cartesia credit or quota failure.',
+      'Meet My Menu AI detected a Cartesia credit or quota failure.',
       '',
       `Service: ${opts.service}`,
       `HTTP status: ${opts.status}`,
@@ -88,7 +88,7 @@ export async function maybeNotifyCartesiaCreditIssue(opts: {
     ].join('\n');
 
     const html = `<!doctype html><html><body>
-      <p>Meet My Menu detected a Cartesia credit or quota failure.</p>
+      <p>Meet My Menu AI detected a Cartesia credit or quota failure.</p>
       <table cellpadding="6" cellspacing="0" style="border-collapse:collapse">
         <tr><td><strong>Service</strong></td><td>${opts.service}</td></tr>
         <tr><td><strong>HTTP status</strong></td><td>${opts.status}</td></tr>
@@ -101,12 +101,12 @@ export async function maybeNotifyCartesiaCreditIssue(opts: {
 
     const via = await sendEmail({
       to: alertRecipient(),
-      subject: 'Meet My Menu Cartesia credits may be exhausted',
+      subject: 'Meet My Menu AI Cartesia credits may be exhausted',
       text,
       html,
     });
-    console.warn(`[Meet My Menu] Cartesia credit alert sent via ${via}.`);
+    console.warn(`[Meet My Menu AI] Cartesia credit alert sent via ${via}.`);
   } catch (error) {
-    console.warn('[Meet My Menu] Cartesia credit alert failed:', error);
+    console.warn('[Meet My Menu AI] Cartesia credit alert failed:', error);
   }
 }

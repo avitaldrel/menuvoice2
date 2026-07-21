@@ -39,7 +39,7 @@ function Root() {
   const navigate: Navigate = useCallback((route) => {
     const current = historyEntryRef.current;
 
-    // Returning home has always reset Meet My Menu's internal stack. Traverse to
+    // Returning home has always reset Meet My Menu AI's internal stack. Traverse to
     // the root browser entry too, so a later VoiceOver scrub cannot reopen the
     // completed conversation or capture flow.
     if (route.name === 'home') {
@@ -95,7 +95,7 @@ function Root() {
   if (!loaded) {
     return (
       <div className="screen" style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <p className="body" role="status">Loading Meet My Menu...</p>
+        <p className="body" role="status">Loading Meet My Menu AI...</p>
       </div>
     );
   }
@@ -165,8 +165,8 @@ function Root() {
         aria-pressed={paused}
         aria-label={
           paused
-            ? 'Resume Voice. Turn the microphone and Meet My Menu speech back on.'
-            : 'Pause Voice. Stop Meet My Menu speech and turn off microphone listening.'
+            ? 'Resume Voice. Turn the microphone and Meet My Menu AI speech back on.'
+            : 'Pause Voice. Stop Meet My Menu AI speech and turn off microphone listening.'
         }
       >
         <span className="voice-toggle__glyph" aria-hidden="true">
@@ -245,7 +245,7 @@ function BackNavigationDialog({
       onCancel={(event) => {
         // A VoiceOver two-finger scrub dismisses a modal dialog through this
         // native path on iOS. Keep the dialog mounted until browser history has
-        // moved so the previous Meet My Menu screen is restored atomically.
+        // moved so the previous Meet My Menu AI screen is restored atomically.
         event.preventDefault();
         dismiss('dialog_cancel');
       }}
@@ -291,10 +291,10 @@ function pageStatusFor(name: Route['name']): string {
     case 'getMenu': return 'Read a menu. Choose Scan a Menu or Find a Menu.';
     case 'capture': return 'Capture menu';
     case 'find': return 'Find menu screen. Enter a restaurant name and city, or paste a menu link.';
-    case 'conversation': return 'Conversation screen. Meet My Menu can speak with you or let you browse the menu.';
+    case 'conversation': return 'Conversation screen. Meet My Menu AI can speak with you or let you browse the menu.';
     case 'saved': return 'Saved restaurants screen. Open or delete saved menus.';
     case 'settings': return 'Settings screen. Update profile, allergies, voice, and app preferences.';
-    case 'tutorial': return 'Tutorial screen. Learn how to use Meet My Menu step by step.';
+    case 'tutorial': return 'Tutorial screen. Learn how to use Meet My Menu AI step by step.';
   }
 }
 

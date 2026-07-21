@@ -1,5 +1,5 @@
 /**
- * WCAG 2.1 AA accessibility audit for Meet My Menu PWA.
+ * WCAG 2.1 AA accessibility audit for Meet My Menu AI PWA.
  * Renders the primary screens with mocked localStorage, runs axe-core, saves results.
  */
 
@@ -120,7 +120,7 @@ async function auditScreen(browser, screen) {
 }
 
 async function main() {
-  console.log('Starting Meet My Menu WCAG 2.1 AA audit…\n');
+  console.log('Starting Meet My Menu AI WCAG 2.1 AA audit…\n');
 
   const launchOptions = {
     headless: true,

@@ -53,7 +53,7 @@ export default function HomeScreen({ navigate }: ScreenProps) {
   return (
     <Screen>
       <div className="home-hero">
-        <h1 className="title">Meet My Menu</h1>
+        <h1 className="title">Meet My Menu AI</h1>
       </div>
 
       <div className="col home-actions stagger">
@@ -96,7 +96,7 @@ export default function HomeScreen({ navigate }: ScreenProps) {
       <div className="col stagger">
         <Tile
           title="How it works"
-          sub="A quick tutorial for using Meet My Menu"
+          sub="A quick tutorial for using Meet My Menu AI"
           onClick={go({ name: 'tutorial' })}
           icon={
             <svg width="26" height="26" viewBox="0 0 24 24" {...stroke}>

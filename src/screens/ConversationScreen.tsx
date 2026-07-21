@@ -218,7 +218,7 @@ export default function ConversationScreen({
   const { menu, restaurantName, provenance } = route;
 
   // Voice (conversation) mode is simply the inverse of the global pause state:
-  // not paused = Conversation Mode (mic on, Meet My Menu speaks);
+  // not paused = Conversation Mode (mic on, Meet My Menu AI speaks);
   // paused     = Browse Menu (silent, screen reader only). This keeps the
   // floating Pause Voice button and the mode toggle in perfect sync.
   const speakMode = !paused;
@@ -310,7 +310,7 @@ export default function ConversationScreen({
       earconThinkingStop();
       setPhase((current) => (current === 'recording' || current === 'speaking' ? 'idle' : current));
     } else if (was && started.current) {
-      // Resumed: pick up where we left off — re-speak the last thing Meet My Menu
+      // Resumed: pick up where we left off — re-speak the last thing Meet My Menu AI
       // said, then reopen the mic so the saved conversation continues.
       (async () => {
         const resumeText = latestAssistant;
@@ -592,9 +592,9 @@ export default function ConversationScreen({
     unlockAudio();
     if (speakMode) {
       // Entering Browse Menu — pause the whole voice experience. pause() stops
-      // any Meet My Menu audio and the mic immediately; the conversation/session
+      // any Meet My Menu AI audio and the mic immediately; the conversation/session
       // state stays intact in the background. We intentionally do NOT speak a
-      // hint here so Meet My Menu never talks over VoiceOver while browsing — the
+      // hint here so Meet My Menu AI never talks over VoiceOver while browsing — the
       // pause status is announced through the screen reader's live region.
       track('conversation', 'mode_toggle', { metadata: { mode: 'browse' } });
       pause(
@@ -615,7 +615,7 @@ export default function ConversationScreen({
       // Returning to Conversation Mode — resume() reopens the mic via the
       // paused effect and restores voice interaction with the saved session.
       track('conversation', 'mode_toggle', { metadata: { mode: 'voice' } });
-      resume('Conversation Mode. The microphone is on. Talk with Meet My Menu.');
+      resume('Conversation Mode. The microphone is on. Talk with Meet My Menu AI.');
       setTimeout(() => actionButtonRef.current?.focus(), 50);
     }
   };
@@ -631,9 +631,9 @@ export default function ConversationScreen({
       : 'var(--text-muted)';
   const conversationSummary =
     latestUser && displayText
-      ? `Latest exchange. You said: ${latestUser}. Meet My Menu said: ${displayText}`
+      ? `Latest exchange. You said: ${latestUser}. Meet My Menu AI said: ${displayText}`
       : displayText
-        ? `Meet My Menu said: ${displayText}`
+        ? `Meet My Menu AI said: ${displayText}`
         : latestUser
           ? `You said: ${latestUser}`
           : 'No conversation yet.';
@@ -644,14 +644,14 @@ export default function ConversationScreen({
       case 'speaking':
         return {
           label: 'Interrupt and talk',
-          hint: 'Stop Meet My Menu and start speaking',
+          hint: 'Stop Meet My Menu AI and start speaking',
           unavailable: false,
           onClick: interruptAndListen,
         };
       case 'idle':
         return {
           label: 'Tap to talk',
-          hint: 'Start speaking to Meet My Menu',
+          hint: 'Start speaking to Meet My Menu AI',
           unavailable: false,
           onClick: () => startMic(),
         };
@@ -685,7 +685,7 @@ export default function ConversationScreen({
       <section
         className="conversation-layout"
         onClick={onConversationSurfaceClick}
-        aria-label={phase === 'speaking' ? 'Meet My Menu is speaking. Tap empty space to interrupt.' : undefined}
+        aria-label={phase === 'speaking' ? 'Meet My Menu AI is speaking. Tap empty space to interrupt.' : undefined}
       >
       <h1 className="heading" style={{ marginTop: 4 }}>{restaurantName}</h1>
 
@@ -722,7 +722,7 @@ export default function ConversationScreen({
         </div>
       )}
 
-      {/* Voice made visible — bars pulse amber while Meet My Menu speaks, green
+      {/* Voice made visible — bars pulse amber while Meet My Menu AI speaks, green
           while listening. Decorative only; the spoken state is announced below. */}
       <div className={`voice-viz${vizActive ? ' voice-viz--active' : ''}`} style={{ color: vizColor }} aria-hidden="true">
         <span className="voice-viz__bar" />
@@ -766,7 +766,7 @@ export default function ConversationScreen({
         {/* Assistant reply — off: app already speaks it; VoiceOver can navigate here on demand */}
         {displayText && (
           <div aria-live="off" className="turn turn-assistant">
-            <div className="turn-speaker">Meet My Menu</div>
+            <div className="turn-speaker">Meet My Menu AI</div>
             <div className="turn-text">{displayText}</div>
           </div>
         )}
@@ -809,8 +809,8 @@ export default function ConversationScreen({
         aria-pressed={speakMode}
         aria-label={
           speakMode
-            ? 'Conversation Mode is on. The microphone is active and Meet My Menu talks with you. Activate to switch to Browse Menu, which pauses voice and stays silent.'
-            : 'Browse Menu is on. Voice is paused and silent so your screen reader can read the menu. Activate Resume Voice Conversation to talk with Meet My Menu again.'
+            ? 'Conversation Mode is on. The microphone is active and Meet My Menu AI talks with you. Activate to switch to Browse Menu, which pauses voice and stays silent.'
+            : 'Browse Menu is on. Voice is paused and silent so your screen reader can read the menu. Activate Resume Voice Conversation to talk with Meet My Menu AI again.'
         }
         className="btn btn-secondary"
         style={{
@@ -826,17 +826,17 @@ export default function ConversationScreen({
           {speakMode ? 'Conversation Mode' : 'Resume Voice Conversation'}
         </span>
         <span aria-hidden="true" style={{ fontSize: '0.8em', fontWeight: 400 }}>
-          {speakMode ? 'Talk with Meet My Menu. Tap for Browse Menu.' : 'Browsing silently. Tap to talk again.'}
+          {speakMode ? 'Talk with Meet My Menu AI. Tap for Browse Menu.' : 'Browsing silently. Tap to talk again.'}
         </span>
       </button>
 
       {/* Short guidance so screen-reader users know their options here: this is
-          the ONE screen where Meet My Menu speaks, VoiceOver is optional in it,
+          the ONE screen where Meet My Menu AI speaks, VoiceOver is optional in it,
           and the Pause Voice button is the global off switch. */}
       <p role="note" className="body" style={{ fontSize: 15, color: 'var(--text-secondary)', margin: 0 }}>
         In Conversation Mode you can turn your screen reader off and talk naturally, if you
         prefer. You do not have to. If voices talk over each other, tap Pause Voice at the top
-        to silence Meet My Menu. Tap it again to resume.
+        to silence Meet My Menu AI. Tap it again to resume.
       </p>
 
       <SecondaryButton
@@ -855,7 +855,7 @@ export default function ConversationScreen({
 
 function indicatorFor(phase: Phase): { label: string } {
   switch (phase) {
-    case 'speaking':     return { label: 'Meet My Menu is speaking...' };
+    case 'speaking':     return { label: 'Meet My Menu AI is speaking...' };
     case 'idle':         return { label: 'Your turn. Tap to talk' };
     case 'recording':    return { label: 'Listening. Tap Done talking when finished' };
     case 'transcribing': return { label: 'Hearing you...' };

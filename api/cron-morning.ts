@@ -65,10 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const date = new Date().toISOString().slice(0, 10);
     // Stable, unique tag so a Gmail filter can label every report reliably.
     const subject = d.cartesia.allExhausted
-      ? `[Meet My Menu] Morning report ${date} — Cartesia keys exhausted`
+      ? `[Meet My Menu AI] Morning report ${date} — Cartesia keys exhausted`
       : d.anyoneUsed
-      ? `[Meet My Menu] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website.sessions} unique site visitors`
-      : `[Meet My Menu] Morning report ${date} — no users in window`;
+      ? `[Meet My Menu AI] Morning report ${date} — ${d.newUsers.length} new, ${d.returningUsers.length} returning, ${d.website.sessions} unique site visitors`
+      : `[Meet My Menu AI] Morning report ${date} — no users in window`;
 
     const links = {
       dashboard: analyticsUrl('/api/dashboard'),
