@@ -8,7 +8,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { Screen, Title, Heading, Body, PrimaryButton } from '../components';
 import { useProfile } from '../state/ProfileContext';
-import { restoreFromCloud, isDifferentUser, clearLocalUserData } from '../lib/storage';
+import { restoreFromCloud, isDifferentUser, clearLocalUserData, establishSyncSession } from '../lib/storage';
 import { track } from '../lib/telemetry';
 
 interface GoogleJwt {
@@ -50,7 +50,14 @@ export default function LoginScreen() {
     try {
       const decoded = jwtDecode<GoogleJwt>(credentialResponse.credential);
       announce(`Welcome, ${decoded.name ?? decoded.email}. Signing you in.`);
-      await loginWithEmail(decoded.email, decoded.name, 'google');
+      // Exchange for a verified sync session BEFORE loading cloud data, so
+      // this first load can actually use it. The server-verified email is the
+      // authoritative identity for sync; if the exchange fails (offline, or
+      // the server isn't configured for it yet) sign-in still proceeds
+      // locally with the client-decoded email — cloud sync just stays
+      // unavailable until a later successful Google sign-in.
+      const verifiedEmail = await establishSyncSession(credentialResponse.credential);
+      await loginWithEmail(verifiedEmail ?? decoded.email, decoded.name, 'google');
     } catch {
       announce('Google sign-in failed. Please enter your email instead.');
       track('auth', 'login', { outcome: 'failure', metadata: { method: 'google' } });

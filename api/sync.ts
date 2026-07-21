@@ -1,9 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
 import { createClient } from '@vercel/postgres';
+import { verifySessionToken, bearerToken } from './_auth.js';
 
-// GET  /api/sync?email=x   — fetch stored data for this email
-// POST /api/sync            — save data { email, profile, restaurants }
+// GET  /api/sync   — fetch stored data for the authenticated caller
+// POST /api/sync   — save data { profile, restaurants } for the authenticated caller
+//
+// Authorization: Bearer <sessionToken> is REQUIRED on both. The session token
+// (minted by /api/auth-session after verifying a real Google sign-in) is the
+// only source of identity here — a client can no longer read or overwrite
+// another account's data by naming its email, because the email now comes
+// from the verified token, never from the request body or query string.
 
 function emailKey(email: string) {
   return `user:${email.trim().toLowerCase()}`;
@@ -119,12 +126,17 @@ async function writeSnapshot(email: string, profile: unknown, restaurants: unkno
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  const token = bearerToken(req.headers.authorization);
+  const identity = token ? await verifySessionToken(token) : null;
+  if (!identity) {
+    return res.status(401).json({ error: 'Sign in again to sync your saved restaurants.' });
+  }
+  const email = identity.email;
+
   if (req.method === 'GET') {
-    const email = req.query.email as string;
-    if (!email) return res.status(400).json({ error: 'email required' });
     let data: unknown = null;
     try {
       data = await kv.get(emailKey(email));
@@ -141,8 +153,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const { email, profile, restaurants } = req.body ?? {};
-    if (!email) return res.status(400).json({ error: 'email required' });
+    // email deliberately NOT read from req.body — identity comes only from
+    // the verified session token above, never from anything the client sends.
+    const { profile, restaurants } = req.body ?? {};
     const state = { profile, restaurants, updatedAt: Date.now() };
     let saved = false;
     try {

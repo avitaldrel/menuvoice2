@@ -7,12 +7,13 @@ import { track } from './telemetry';
 
 const PROFILE_KEY = 'menuvoice.profile.v1';
 const SAVED_KEY = 'menuvoice.savedRestaurants.v1';
+const SYNC_SESSION_KEY = 'menuvoice.syncSession.v1';
 const MAX_DINING_HISTORY = 100;
 
 // localStorage keys holding one signed-in user's private data. Cleared on
 // sign-out and when a different user signs in, so a shared browser never leaks
-// one person's saved restaurants or profile to the next.
-const USER_SCOPED_KEYS = [PROFILE_KEY, SAVED_KEY];
+// one person's saved restaurants, profile, or sync credential to the next.
+const USER_SCOPED_KEYS = [PROFILE_KEY, SAVED_KEY, SYNC_SESSION_KEY];
 
 /** Wipe the current user's private data from this device. */
 export function clearLocalUserData(): void {
@@ -77,18 +78,80 @@ function normalizeSavedRestaurants(restaurants: unknown): SavedRestaurant[] {
 }
 
 // ── Cloud sync ────────────────────────────────────────────────────────────────
+// Bug #20: /api/sync now requires a verified session token — see api/_auth.ts.
+// Email-only login has no such credential and stays local-only by design;
+// Google sign-in exchanges its ID token for one via establishSyncSession().
+
+interface SyncSession { token: string; email: string; }
+
+function readSyncSession(): SyncSession | null {
+  try {
+    const raw = localStorage.getItem(SYNC_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.token === 'string' && typeof parsed.email === 'string' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSyncSession(session: SyncSession | null): void {
+  try {
+    if (session) localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SYNC_SESSION_KEY);
+  } catch {
+    // ignore storage access errors
+  }
+}
+
+/**
+ * Exchange a fresh Google ID token for a MenuVoice sync session. Call once
+ * right after Google Sign-In succeeds. Returns the server-verified email on
+ * success (the authoritative identity for sync going forward), or null if the
+ * exchange failed — callers should still let sign-in proceed locally in that
+ * case; cloud sync just stays unavailable until the next successful exchange.
+ */
+export async function establishSyncSession(idToken: string): Promise<string | null> {
+  try {
+    const res = await fetch('/api/auth-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.sessionToken || typeof data.email !== 'string') return null;
+    const email = data.email.trim().toLowerCase();
+    writeSyncSession({ token: data.sessionToken, email });
+    return email;
+  } catch {
+    return null;
+  }
+}
+
+/** The Bearer header for `forEmail`'s sync session, or null when there is
+ * none — no session at all (email-only login), or a stale session left over
+ * from a different account. Callers must silently skip cloud sync when null. */
+function syncAuthHeader(forEmail: string): Record<string, string> | null {
+  const session = readSyncSession();
+  if (!session || session.email !== forEmail.trim().toLowerCase()) return null;
+  return { Authorization: `Bearer ${session.token}` };
+}
 
 async function pushToCloud(profile: UserProfile, restaurants: SavedRestaurant[]) {
   if (!profile.email) return;
+  const authHeader = syncAuthHeader(profile.email);
+  if (!authHeader) return; // no verified session for this account — stay local-only
   try {
-    const body = JSON.stringify({ email: profile.email, profile, restaurants });
-    await fetch('/api/sync', {
+    const body = JSON.stringify({ profile, restaurants });
+    const res = await fetch('/api/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader },
       body,
     });
+    if (res.status === 401) writeSyncSession(null); // stale/expired — stop resending it
     track('sync', 'push', {
-      outcome: 'success',
+      outcome: res.ok ? 'success' : 'failure',
       metadata: { bytes: body.length, restaurant_count: restaurants.length },
     });
   } catch {
@@ -98,8 +161,11 @@ async function pushToCloud(profile: UserProfile, restaurants: SavedRestaurant[])
 }
 
 export async function loadFromCloud(email: string): Promise<{ profile: UserProfile; restaurants: SavedRestaurant[] } | null> {
+  const authHeader = syncAuthHeader(email);
+  if (!authHeader) return null; // no verified session for this account — nothing to pull
   try {
-    const res = await fetch(`/api/sync?email=${encodeURIComponent(email)}`);
+    const res = await fetch('/api/sync', { headers: authHeader });
+    if (res.status === 401) writeSyncSession(null);
     if (!res.ok) return null;
     const data = await res.json();
     if (!data) return null;
