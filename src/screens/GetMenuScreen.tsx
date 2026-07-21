@@ -49,14 +49,16 @@ export default function GetMenuScreen({ navigate, goBack }: ScreenProps) {
     <Screen label="Choose how to read a menu">
       <Title>Read a Menu</Title>
       <Body>
-        At the restaurant, scan the paper menu. Otherwise, find the menu online.
+        Scanning your own copy is usually the most accurate, since a menu found online can be
+        outdated, incomplete, or for the wrong location. If you don't have the menu in hand,
+        search for it online instead.
       </Body>
 
       <div className="col home-actions">
         <ChoiceTile
           primary
           title="Scan a Menu"
-          sub="Use your camera to read a paper menu"
+          sub="Recommended when you have the menu"
           onClick={() => navigate({ name: 'capture' })}
           icon={
             <svg width="26" height="26" viewBox="0 0 24 24" {...stroke}>
@@ -67,7 +69,7 @@ export default function GetMenuScreen({ navigate, goBack }: ScreenProps) {
         />
         <ChoiceTile
           title="Find a Menu"
-          sub="Search by restaurant name or paste a link"
+          sub="Search by name, or paste a link"
           onClick={() => navigate({ name: 'find' })}
           icon={
             <svg width="26" height="26" viewBox="0 0 24 24" {...stroke}>
