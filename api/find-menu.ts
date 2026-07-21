@@ -29,6 +29,7 @@ import {
   FriendlyError,
   type MenuSource,
 } from './_menuCore.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 const SEARCH_MODEL = process.env.SEARCH_MODEL ?? 'gpt-5.4-mini';
 
@@ -148,6 +149,7 @@ async function pickBestSource(urls: string[], remaining: () => number): Promise<
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!(await enforceRateLimit(req, res, 'find-menu'))) return;
 
   const { query } = (req.body ?? {}) as { query?: string };
   if (!query || typeof query !== 'string' || !query.trim()) {

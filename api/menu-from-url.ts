@@ -5,9 +5,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchMenuSource, parseMenuSource, menuItemCount, classifySource, applyCompleteness, FriendlyError } from './_menuCore.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!(await enforceRateLimit(req, res, 'menu-from-url'))) return;
 
   const { url } = (req.body ?? {}) as { url?: string };
   if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });

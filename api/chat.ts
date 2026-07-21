@@ -3,6 +3,8 @@
 // get a buffered JSON response (they need response_format: json_object).
 export const config = { runtime: 'edge' };
 
+import { enforceRateLimitEdge } from './_rateLimit.js';
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
 
@@ -13,6 +15,9 @@ export default async function handler(req: Request): Promise<Response> {
   try { body = await req.json(); } catch {
     return new Response('Bad Request', { status: 400 });
   }
+
+  const limited = await enforceRateLimitEdge(req, 'chat', body);
+  if (limited) return limited;
 
   const wantsStream = body?.stream === true;
 

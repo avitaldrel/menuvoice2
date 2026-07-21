@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { withCartesiaKey } from './_cartesia.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 const CARTESIA_VERSION = '2026-03-01';
 // Cartesia has temporarily disabled speed control on Sonic 3.5. MenuVoice
@@ -10,6 +11,7 @@ export const CARTESIA_TTS_MODEL_DEFAULT = 'sonic-3';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!(await enforceRateLimit(req, res, 'tts'))) return;
   if (process.env.CARTESIA_TTS_ENABLED === 'true') {
     const audio = await synthesizeWithCartesia(req.body).catch((error) => {
       console.warn('Cartesia TTS failed, falling back to OpenAI:', error);
