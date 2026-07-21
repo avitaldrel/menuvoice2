@@ -2,6 +2,7 @@
 
 - Website: [meetmymenu.com](https://meetmymenu.com)
 - App: [app.meetmymenu.com](https://app.meetmymenu.com)
+- GitHub: [avitaldrel/MeetMyMenu-AI](https://github.com/avitaldrel/MeetMyMenu-AI)
 
 **Meet My Menu AI is a voice-first menu navigation app for blind and low-vision
 diners.** Capture a menu, then talk to it: ask what's on it, what's cheap, or
