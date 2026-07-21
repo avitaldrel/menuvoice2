@@ -1,0 +1,72 @@
+// Bug #9: MenuVoice's own text-to-speech must run ONLY on the Conversation
+// screen. Every other screen speaks through headings, focus movement, and
+// aria-live regions for VoiceOver instead.
+//
+// A manual audit confirmed every real speak()/createStreamingSpeech() call
+// site lives in ConversationScreen.tsx (the other window.speechSynthesis.speak
+// calls, in audioUnlock.ts and speech.ts's own unlockAudio(), are silent
+// volume:0 priming utterances used to satisfy the mobile autoplay gate, not
+// audible content). This test is the automated guard against regression: if a
+// future change imports real speech into another screen, it fails here
+// instead of needing another manual trace.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const SCREENS_DIR = join(import.meta.dirname, '..', 'src', 'screens');
+const ALLOWED_SCREEN = 'ConversationScreen.tsx';
+
+// Functions that produce audible spoken content. Everything else exported by
+// lib/speech (stopSpeaking, isSpeaking, setSpeechRate, unlockAudio) is safe
+// off Conversation: they silence, query, configure, or prime — none of them
+// make MenuVoice talk.
+const SPEECH_PRODUCING_EXPORTS = ['speak', 'createStreamingSpeech'];
+
+const IMPORT_FROM_SPEECH_MODULE =
+  /import\s*\{([^}]*)\}\s*from\s*['"][^'"]*\/lib\/speech(?:\.[jt]sx?)?['"]/g;
+
+function importedSpeechNames(source: string): string[] {
+  const found: string[] = [];
+  for (const match of source.matchAll(IMPORT_FROM_SPEECH_MODULE)) {
+    for (const raw of match[1].split(',')) {
+      const name = raw.split(/\s+as\s+/)[0].trim();
+      if (name) found.push(name);
+    }
+  }
+  return found;
+}
+
+function screenFiles(): string[] {
+  return readdirSync(SCREENS_DIR).filter((f) => f.endsWith('.tsx'));
+}
+
+test('every screen file exists where this guard expects it', () => {
+  const files = screenFiles();
+  assert.ok(files.includes(ALLOWED_SCREEN), 'ConversationScreen.tsx should exist');
+  assert.ok(files.length >= 9, 'sanity check: the screens directory should not be empty');
+});
+
+test('no screen other than Conversation imports a speech-producing function', () => {
+  const violations: string[] = [];
+  for (const file of screenFiles()) {
+    if (file === ALLOWED_SCREEN) continue;
+    const source = readFileSync(join(SCREENS_DIR, file), 'utf8');
+    const banned = importedSpeechNames(source).filter((n) => SPEECH_PRODUCING_EXPORTS.includes(n));
+    if (banned.length) violations.push(`${file}: imports ${banned.join(', ')}`);
+  }
+  assert.deepEqual(violations, [], 'app-generated speech must be confined to ConversationScreen');
+});
+
+test('the guard actually detects a violation (regex sanity check)', () => {
+  const planted = `import { speak, stopSpeaking } from '../lib/speech';\nspeak('hello');`;
+  const names = importedSpeechNames(planted).filter((n) => SPEECH_PRODUCING_EXPORTS.includes(n));
+  assert.deepEqual(names, ['speak'], 'the detector must catch a real violation, not just pass trivially');
+});
+
+test('Conversation screen does use the speech-producing functions', () => {
+  const source = readFileSync(join(SCREENS_DIR, ALLOWED_SCREEN), 'utf8');
+  const names = importedSpeechNames(source);
+  assert.ok(names.includes('speak'), 'sanity check: Conversation should import speak');
+  assert.ok(names.includes('createStreamingSpeech'), 'sanity check: Conversation should import createStreamingSpeech');
+});
