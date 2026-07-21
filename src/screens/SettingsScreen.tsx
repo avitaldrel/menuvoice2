@@ -21,6 +21,7 @@ const TEXT_SIZES: { value: TextScale; label: string }[] = [
   { value: 'normal', label: 'Normal' },
   { value: 'large', label: 'Large' },
   { value: 'xlarge', label: 'Extra large' },
+  { value: 'xxlarge', label: 'Maximum' },
 ];
 const SPEECH_RATES: { value: number; label: string }[] = [
   { value: 0.8, label: 'Slow' },

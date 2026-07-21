@@ -34,7 +34,7 @@ export interface DiningHistoryEntry {
 //   light         – near-black text on white (maximum edge contrast)
 //   high-contrast – white text and orange accents on pure black
 export type AppTheme = 'dark' | 'light' | 'high-contrast';
-export type TextScale = 'normal' | 'large' | 'xlarge';
+export type TextScale = 'normal' | 'large' | 'xlarge' | 'xxlarge';
 
 export interface MenuItem {
   name: string;

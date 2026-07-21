@@ -72,9 +72,12 @@
 }
 
 /* ── Text size (Accessibility → Text size) ───────────
-   Multiplies typographic sizes app-wide. Set on <html> from the profile. */
-:root[data-text-scale='large']  { --text-scale: 1.18; }
-:root[data-text-scale='xlarge'] { --text-scale: 1.40; }
+   Multiplies typographic sizes app-wide. Set on <html> from the profile.
+   Four practical steps: 100% / 125% / 150% / 200%, so a low-vision user has
+   real headroom beyond a single "large" setting without needing OS zoom. */
+:root[data-text-scale='large']   { --text-scale: 1.25; }
+:root[data-text-scale='xlarge']  { --text-scale: 1.5; }
+:root[data-text-scale='xxlarge'] { --text-scale: 2; }
 
 /* ── Light theme — near-black on white, maximum edge contrast ─────────
    For low-vision users who need crisp dark-on-light rather than dark mode. */
