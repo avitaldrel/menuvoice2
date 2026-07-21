@@ -3,7 +3,6 @@ export interface UserProfile {
   name: string;
   allergies: string[];
   dislikes: string[];
-  spiceTolerance: 'none' | 'mild' | 'medium' | 'hot';
   cuisinesLiked: string[];
   pastOrders: string[]; // dishes the guest decided on before — feeds recommendations
   diningHistory: DiningHistoryEntry[];
@@ -33,7 +32,7 @@ export interface DiningHistoryEntry {
 // Color schemes tuned for different low-vision needs:
 //   dark          – light text on near-black (glare/photophobia friendly)
 //   light         – near-black text on white (maximum edge contrast)
-//   high-contrast – bright yellow on pure black (classic low-vision high contrast)
+//   high-contrast – white text and orange accents on pure black
 export type AppTheme = 'dark' | 'light' | 'high-contrast';
 export type TextScale = 'normal' | 'large' | 'xlarge';
 
@@ -120,7 +119,6 @@ export const EMPTY_PROFILE: UserProfile = {
   name: '',
   allergies: [],
   dislikes: [],
-  spiceTolerance: 'medium',
   cuisinesLiked: [],
   pastOrders: [],
   diningHistory: [],

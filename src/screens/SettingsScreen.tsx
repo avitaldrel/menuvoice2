@@ -1,23 +1,16 @@
 // Settings: hide prices, edit allergies/preferences.
 // This screen never speaks — VoiceOver reads all controls and the status
-// region. Inline mics (name, dislike) still use MediaRecorder for field input.
+// region.
 
 import { useRef, useState } from 'react';
 import { Screen, Title, Body, Heading, PrimaryButton, SecondaryButton, AllergenReviewPanel, type AllergenQuestion } from '../components';
 import { ScreenProps } from '../nav';
 import { useProfile } from '../state/ProfileContext';
 import { splitList, reviewAllergenInput, removeFromList } from '../util';
-import { startRecording, stopRecording, requestMicPermission, getActiveStream } from '../lib/recorder';
-import { transcribeAudio } from '../lib/openai';
 import { setSpeechRate } from '../lib/speech';
-import { watchForSilence } from '../lib/vad';
 import { track } from '../lib/telemetry';
 import { configuredAppleShortcutUrl, isAppleMobileDevice } from '../lib/appleShortcut';
 import type { AppTheme, TextScale } from '../types';
-
-const SPICE_LEVELS = ['none', 'mild', 'medium', 'hot'] as const;
-type SpiceLevel = typeof SPICE_LEVELS[number];
-type RecState = 'idle' | 'recording' | 'working';
 
 const THEME_OPTIONS: { value: AppTheme; label: string; hint: string }[] = [
   { value: 'dark', label: 'Dark', hint: 'Light text on a near-black background. Easiest on the eyes in low light.' },
@@ -78,10 +71,8 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
   const [cuisines, setCuisines] = useState(profile.cuisinesLiked.join(', '));
   const [saved, setSaved] = useState(false);
   const [nameVal, setNameVal] = useState(profile.name);
-  const [nameRec, setNameRec] = useState<RecState>('idle');
   const [dislikes, setDislikes] = useState<string[]>(profile.dislikes);
   const [newDislike, setNewDislike] = useState('');
-  const [dislikeRec, setDislikeRec] = useState<RecState>('idle');
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   const [srStatus, setSrStatus] = useState('');
@@ -158,84 +149,6 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
     announce(`Name updated to ${trimmed}.`);
   };
 
-  const speakName = async () => {
-    if (nameRec !== 'idle') return;
-    announce('Your browser is asking for microphone permission. Choose Allow so MenuVoice can hear you.');
-    const ok = await requestMicPermission();
-    if (!ok) { announce('Microphone access was not allowed. You can allow it in browser settings, or type instead.'); return; }
-    try {
-      await startRecording();
-      setNameRec('recording');
-      announce('Listening for your name.');
-    } catch {
-      announce('Could not start microphone. Try typing instead.');
-      return;
-    }
-    const s = getActiveStream();
-    if (s) await new Promise<void>((resolve) => { watchForSilence(s, 3000, 30000, resolve); });
-    setNameRec('working');
-    announce('Transcribing, one moment.');
-    let blob: Blob | null = null;
-    try { blob = await stopRecording(); } catch {}
-    if (!blob) { setNameRec('idle'); return; }
-    try {
-      const text = await transcribeAudio(blob);
-      if (text) {
-        const cleaned = text.replace(/^(my name is|call me|i'?m|i am|it'?s?)\s+/i, '').replace(/[.!?]+$/, '').trim();
-        const name = cleaned || text.replace(/[.!?]+$/, '').trim();
-        if (name) {
-          setNameVal(name);
-          await update({ name });
-          announce(`Name updated to ${name}.`);
-        }
-      }
-    } catch {
-      announce('I could not transcribe that. Try typing instead.');
-    }
-    setNameRec('idle');
-  };
-
-  const speakDislike = async () => {
-    if (dislikeRec !== 'idle') return;
-    announce('Your browser is asking for microphone permission. Choose Allow so MenuVoice can hear you.');
-    const ok = await requestMicPermission();
-    if (!ok) { announce('Microphone access was not allowed. You can allow it in browser settings, or type instead.'); return; }
-    try {
-      await startRecording();
-      setDislikeRec('recording');
-      announce('Listening for a food you dislike.');
-    } catch {
-      announce('Could not start microphone. Try typing instead.');
-      return;
-    }
-    const s = getActiveStream();
-    if (s) await new Promise<void>((resolve) => { watchForSilence(s, 3000, 30000, resolve); });
-    setDislikeRec('working');
-    announce('Transcribing, one moment.');
-    let blob: Blob | null = null;
-    try { blob = await stopRecording(); } catch {}
-    if (!blob) { setDislikeRec('idle'); return; }
-    try {
-      const text = await transcribeAudio(blob);
-      if (text) {
-        const raw = text.replace(/^(i don'?t like|add dislike|dislike|i hate|hate)\s+/i, '').replace(/[.!?]+$/, '').trim();
-        const item = raw || text.replace(/[.!?]+$/, '').trim();
-        if (item) {
-          const next = [...dislikes.filter((d) => d.toLowerCase() !== item.toLowerCase()), item];
-          setDislikes(next);
-          setNewDislike('');
-          await update({ dislikes: next });
-          announce(`Added ${item} to your dislikes.`);
-        }
-      }
-    } catch {
-      announce('I could not transcribe that. Try typing instead.');
-    }
-    setDislikeRec('idle');
-  };
-
-  const anyMicBusy = nameRec !== 'idle' || dislikeRec !== 'idle';
-
   const currentTheme: AppTheme = profile.theme ?? 'dark';
   const currentScale: TextScale = profile.textScale ?? 'large';
   const currentRate = profile.speechRate ?? 1;
@@ -296,67 +209,16 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
       </div>
 
       <Heading>Your name</Heading>
-      <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
-        <input
-          className="input"
-          type="text"
-          value={nameVal}
-          onChange={(e) => setNameVal(e.target.value)}
-          onBlur={() => saveName(nameVal)}
-          onKeyDown={(e) => { if (e.key === 'Enter') saveName(nameVal); }}
-          placeholder="First name"
-          aria-label="Your name"
-          style={{ flex: 1, margin: 0 }}
-        />
-        <button
-          onClick={speakName}
-          disabled={anyMicBusy}
-          aria-label={nameRec === 'recording' ? 'Listening for your name' : 'Speak your name'}
-          style={{
-            minHeight: 64,
-            minWidth: 64,
-            borderRadius: 'var(--r-md)',
-            border: `2px solid ${nameRec === 'recording' ? 'var(--success)' : 'var(--border)'}`,
-            background: nameRec === 'recording' ? 'var(--success)' : 'var(--surface-high)',
-            color: 'var(--text-primary)',
-            fontSize: 22,
-            cursor: 'pointer',
-          }}
-        >
-          {nameRec !== 'idle' ? '...' : 'Mic'}
-        </button>
-      </div>
-
-      <Heading>Spice tolerance</Heading>
-      <div className="row" role="radiogroup" aria-label="Spice tolerance" style={{ flexWrap: 'wrap', gap: 8 }}>
-        {SPICE_LEVELS.map((level) => {
-          const active = profile.spiceTolerance === level;
-          return (
-            <button
-              key={level}
-              role="radio"
-              aria-checked={active}
-              onClick={() => update({ spiceTolerance: level as SpiceLevel })}
-              aria-label={`Spice ${level}${active ? ', selected' : ''}`}
-              style={{
-                flex: 1,
-                minHeight: 64,
-                padding: '0 12px',
-                borderRadius: 'var(--r-md)',
-                border: `2px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                background: active ? 'var(--surface-high)' : 'var(--surface)',
-                color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                fontSize: 16,
-                fontWeight: 600,
-                cursor: 'pointer',
-                textTransform: 'capitalize',
-              }}
-            >
-              {level}
-            </button>
-          );
-        })}
-      </div>
+      <input
+        className="input"
+        type="text"
+        value={nameVal}
+        onChange={(e) => setNameVal(e.target.value)}
+        onBlur={() => saveName(nameVal)}
+        onKeyDown={(e) => { if (e.key === 'Enter') saveName(nameVal); }}
+        placeholder="First name"
+        aria-label="Your name"
+      />
 
       <Heading>Foods you dislike</Heading>
       {dislikes.length > 0 && (
@@ -380,44 +242,24 @@ export default function SettingsScreen({ goBack, navigate }: ScreenProps) {
           ))}
         </div>
       )}
-      <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
-        <input
-          className="input"
-          type="text"
-          value={newDislike}
-          onChange={(e) => setNewDislike(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && newDislike.trim()) {
-              const trimmed = newDislike.trim();
-              const next = [...dislikes.filter((d) => d.toLowerCase() !== trimmed.toLowerCase()), trimmed];
-              setDislikes(next);
-              setNewDislike('');
-              update({ dislikes: next });
-              announce(`Added ${trimmed} to your dislikes.`);
-            }
-          }}
-          placeholder="Add a dislike (e.g. mushrooms)"
-          aria-label="Add a dislike. Tap mic to speak it"
-          style={{ flex: 1, margin: 0 }}
-        />
-        <button
-          onClick={speakDislike}
-          disabled={anyMicBusy}
-          aria-label={dislikeRec === 'recording' ? 'Listening for a dislike' : 'Speak a food to add to dislikes'}
-          style={{
-            minHeight: 64,
-            minWidth: 64,
-            borderRadius: 'var(--r-md)',
-            border: `2px solid ${dislikeRec === 'recording' ? 'var(--success)' : 'var(--border)'}`,
-            background: dislikeRec === 'recording' ? 'var(--success)' : 'var(--surface-high)',
-            color: 'var(--text-primary)',
-            fontSize: 22,
-            cursor: 'pointer',
-          }}
-        >
-          {dislikeRec !== 'idle' ? '...' : 'Mic'}
-        </button>
-      </div>
+      <input
+        className="input"
+        type="text"
+        value={newDislike}
+        onChange={(e) => setNewDislike(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && newDislike.trim()) {
+            const trimmed = newDislike.trim();
+            const next = [...dislikes.filter((d) => d.toLowerCase() !== trimmed.toLowerCase()), trimmed];
+            setDislikes(next);
+            setNewDislike('');
+            update({ dislikes: next });
+            announce(`Added ${trimmed} to your dislikes.`);
+          }
+        }}
+        placeholder="Add a dislike (e.g. mushrooms)"
+        aria-label="Add a dislike. Press Enter to add it"
+      />
 
       {showAppleShortcut && (
         <section className="card" aria-labelledby="apple-shortcut-heading">

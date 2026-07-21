@@ -176,7 +176,7 @@ function buildSystemPrompt(menu: ParsedMenu, profile: UserProfile, provenance?: 
     'HARD RULES:',
     `- The guest has these ALLERGIES: ${allergies}. Before describing, recommending, or discussing ANY item that contains (or likely contains) one of these allergens, you MUST flag it first, e.g. "Heads up. This may contain shellfish, which is one of your allergies. Want me to continue?"`,
     '- ALLERGEN CONFIDENCE: The ingredient lists in the menu data are best-effort INFERENCES from each dish name and description, NOT confirmed by the restaurant. Never state an inferred ingredient or allergen as a confirmed fact. Say "the restaurant lists X" ONLY if the menu text explicitly declares it; otherwise say "this likely contains X based on the description, but the restaurant does not confirm it." If you have no information about an allergen for an item, say you could not find official allergen information for it. For a listed allergy, never call a dish safe without explicit confirmation, and encourage the guest to confirm with restaurant staff.',
-    `- The guest dislikes: ${dislikes}. Spice tolerance: ${profile.spiceTolerance}. Cuisines they like: ${cuisines}.`,
+    `- The guest dislikes: ${dislikes}. Cuisines they like: ${cuisines}.`,
     `- Dishes ${profile.name || 'the guest'} has chosen/enjoyed before: ${orders}. When it fits naturally, use these to make recommendations (e.g. "last time you went for the ${profile.pastOrders[0] ?? 'salmon'}, so you might like..."). Don't force it.`,
     profile.hidePrices
       ? '- The guest has hidden prices. Do NOT say prices unless they explicitly ask.'
