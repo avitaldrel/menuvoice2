@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MenuVoice v3 · Read me the menu</title>
+<title>Meet My Menu · Restaurant menus, read aloud</title>
+<meta name="description" content="Meet My Menu is a voice-first app that reads restaurant menus aloud and answers questions about dishes by voice." />
+<link rel="icon" type="image/png" href="/meetmymenu-logo.png" />
+<link rel="apple-touch-icon" href="/meetmymenu-logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -13,15 +16,16 @@
 
 <header class="site-head" id="head">
   <nav class="nav">
-    <a class="brand" href="#top" aria-label="MenuVoice home">
+    <a class="brand" href="#top" aria-label="Meet My Menu home">
       <span class="mark" aria-hidden="true"><i></i></span>
-      <span><b>Menu</b><span class="v">Voice</span></span>
+      <span><b>Meet My</b><span class="v"> Menu</span></span>
     </a>
     <div class="nav-links">
       <a href="#demo-section">How it works</a>
-      <a href="#why">The problem</a>
-      <a href="#partners">Partners</a>
-      <a class="btn btn-primary" href="#waitlist">Request a demo</a>
+      <a href="about.html">About</a>
+      <a href="partners.html">Partners</a>
+      <a href="blog.html">Blog</a>
+      <a class="btn btn-primary" href="https://app.meetthemenu.com/">Open the app</a>
     </div>
   </nav>
 </header>
@@ -30,37 +34,36 @@
 
   <!-- ═══════════════════════ HERO ═══════════════════════ -->
   <section class="hero section-pad" aria-labelledby="hero-h">
-    <canvas class="hero-canvas" id="hero-canvas" aria-hidden="true"></canvas>
     <div class="wrap">
       <div class="hero-grid">
 
         <div class="hero-copy">
-          <p class="eyebrow reveal">Voice-first menu access</p>
-          <h1 class="display reveal" data-d="1" id="hero-h">Read me<br/>the <em>menu.</em></h1>
-          <p class="lede reveal" data-d="2">Point your phone at a menu. MenuVoice reads it aloud, checks ingredients and allergens, and lets you ask follow-up questions by voice.</p>
+          <p class="eyebrow reveal">Voice-first menu reader</p>
+          <h1 class="display reveal" data-d="1" id="hero-h">Restaurant menus,<br/><em>read aloud.</em></h1>
+          <p class="lede reveal" data-d="2">Scan a paper menu or find one online. Meet My Menu reads the dishes aloud and answers your questions by voice.</p>
           <div class="hero-cta reveal" data-d="3">
-            <a class="btn btn-primary btn-lg" href="#waitlist">Request a demo <span class="arrow">→</span></a>
+            <a class="btn btn-primary btn-lg" href="https://app.meetthemenu.com/">Open Meet My Menu <span class="arrow">→</span></a>
             <a class="btn btn-ghost btn-lg" href="#demo-section">See how it works <span class="arrow">→</span></a>
           </div>
           <p class="hero-note reveal" data-d="3">
             <span class="hbars" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></span>
-            <span><strong>Built for independent ordering</strong></span>
+            <span><strong>Built for blind and low-vision diners</strong></span>
           </p>
         </div>
 
         <div class="hero-phone-wrap reveal" data-d="2">
           <div class="glow-ring" aria-hidden="true"></div>
-          <div class="phone" role="img" aria-label="MenuVoice chat: allergen check on carbonara">
+          <div class="phone" role="img" aria-label="Meet My Menu chat: allergen check on carbonara">
             <div class="phone-notch" aria-hidden="true"></div>
             <div class="phone-screen">
               <div class="status-bar"><span>7:24</span><span class="dots" aria-hidden="true"><i class="sig"></i><i class="wifi"></i><i class="batt"></i></span></div>
               <div class="app">
                 <p class="app-heading">Trattoria Nove</p>
-                <div class="phase"><span class="pdot"></span>MenuVoice is speaking…</div>
+                <div class="phase"><span class="pdot"></span>Meet My Menu is speaking…</div>
                 <div class="transcript">
-                  <div class="turn a"><div class="who">MenuVoice</div><div class="txt">Four sections: antipasti, pasta, secondi, dolci. Want me to start with pastas?</div></div>
+                  <div class="turn a"><div class="who">Meet My Menu</div><div class="txt">Four sections: antipasti, pasta, secondi, dolci. Want me to start with pastas?</div></div>
                   <div class="turn u"><div class="who">You</div><div class="txt">Carbonara. Safe with a shellfish allergy?</div></div>
-                  <div class="turn a flag"><div class="who">MenuVoice</div><div class="txt"><b>No shellfish in the carbonara.</b> Guanciale, egg, pecorino, pepper.</div></div>
+                  <div class="turn a flag"><div class="who">Meet My Menu</div><div class="txt"><b>The menu does not list shellfish.</b> Please confirm with restaurant staff.</div></div>
                 </div>
                 <div class="speak-bar" aria-hidden="true"><i style="width:58%"></i></div>
                 <div class="app-toggle">⦿ Conversational: ON</div>
@@ -76,24 +79,58 @@
   <hr class="rule" />
 
   <!-- ═══════════════════════ WHY ═══════════════════════ -->
-  <section class="section-pad" id="why" aria-labelledby="why-h">
+  <!-- ═══════════════════════ SCROLL DEMO ═══════════════════════ -->
+  <section class="interactive-demo-section" id="demo-section" aria-labelledby="interactive-demo-h">
     <div class="wrap">
-      <p class="eyebrow reveal">The problem</p>
-      <blockquote class="manifesto-quote reveal" data-d="1" id="why-h">
-        A menu assumes you can read it. If you cannot, dinner often starts by asking someone else to read, filter, and choose with you.
-      </blockquote>
-      <dl class="openrow reveal" data-d="2">
-        <div class="col"><dt>Independence</dt><dd>Choose without handing the menu to someone else.</dd></div>
-        <div class="col"><dt>Privacy</dt><dd>Ask about allergies, budget, and preferences quietly.</dd></div>
-        <div class="col"><dt>Speed</dt><dd>Get the important details without waiting for help.</dd></div>
-      </dl>
+      <div class="interactive-demo-head">
+        <p class="eyebrow reveal">Try the conversation</p>
+        <h2 class="display reveal" data-d="1" id="interactive-demo-h">Ask the menu a <em>real question.</em></h2>
+        <p class="lede reveal" data-d="2">Choose a question below. Meet My Menu answers from a sample restaurant menu, keeps the conversation together, and can read the latest answer aloud.</p>
+      </div>
+
+      <div class="live-demo reveal" data-d="3">
+        <div class="demo-questions">
+          <p class="demo-kicker">Sample menu · The Greenhouse</p>
+          <h3>What would you like to know?</h3>
+          <p>Try all three. Each answer is added to the same conversation.</p>
+          <div class="demo-question-list" aria-label="Sample questions">
+            <button class="demo-question" type="button" data-demo-question="ingredients">
+              <span>What’s in the risotto?</span><span class="arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="demo-question" type="button" data-demo-question="shellfish">
+              <span>Anything without shellfish?</span><span class="arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="demo-question" type="button" data-demo-question="history">
+              <span>What did I order last time?</span><span class="arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+          <p class="demo-sample-note">Illustrative answers from a sample menu and sample order history.</p>
+        </div>
+
+        <div class="demo-conversation">
+          <div class="demo-chat-head">
+            <div class="demo-chat-title"><span class="demo-live-dot" aria-hidden="true"></span>Meet My Menu</div>
+            <div class="demo-status" id="interactive-demo-status" role="status">Ready for a question</div>
+          </div>
+          <p class="sr-only" id="interactive-demo-announcement" aria-live="polite"></p>
+          <div class="demo-log" id="interactive-demo-log" role="log" aria-live="off">
+            <div class="demo-empty" id="interactive-demo-empty">
+              <strong>Your conversation will appear here.</strong>
+              Choose any sample question to begin.
+            </div>
+          </div>
+          <div class="demo-chat-actions">
+            <button class="btn btn-secondary" id="interactive-demo-speak" type="button" hidden>Hear the latest answer</button>
+            <button class="demo-reset" id="interactive-demo-reset" type="button">Reset conversation</button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <hr class="rule" />
 
-  <!-- ═══════════════════════ SCROLL DEMO ═══════════════════════ -->
-  <section class="demo-section" id="demo-section" aria-label="How MenuVoice works">
+  <section class="demo-section" id="legacy-demo-section" aria-label="Previous animated Meet My Menu demo" hidden>
     <div class="demo-sticky" id="demo-sticky">
 
       <!-- LEFT: minimal labels that stay once shown -->
@@ -120,7 +157,7 @@
 
       <!-- CENTER: phone -->
       <div class="demo-phone-col">
-        <div class="phone demo-phone" id="demo-phone" role="img" aria-label="Animated MenuVoice demo">
+        <div class="phone demo-phone" id="demo-phone" role="img" aria-label="Animated Meet My Menu demo">
           <div class="phone-notch" aria-hidden="true"></div>
           <div class="phone-screen">
             <div class="status-bar"><span>7:22</span><span class="dots" aria-hidden="true"><i class="sig"></i><i class="wifi"></i><i class="batt"></i></span></div>
@@ -160,8 +197,8 @@
 
               <!-- Conversation -->
               <div class="pscreen" id="ps-convo" style="display:none">
-                <div class="phase" id="cv-phase"><span class="pdot"></span><span id="cv-phase-txt">MenuVoice is speaking…</span></div>
-                <div class="cv-conv" id="cv-conv" aria-label="Example MenuVoice conversation"></div>
+                <div class="phase" id="cv-phase"><span class="pdot"></span><span id="cv-phase-txt">Meet My Menu is speaking…</span></div>
+                <div class="cv-conv" id="cv-conv" aria-label="Example Meet My Menu conversation"></div>
                 <div class="speak-bar" aria-hidden="true"><i id="cv-bar-fill" style="width:0%"></i></div>
               </div>
 
@@ -189,35 +226,72 @@
   <hr class="rule" />
 
   <!-- ═══════════════════════ PARTNERS ═══════════════════════ -->
+  <!-- ═══════════════════════ CTA ═══════════════════════ -->
+  <section class="section-pad research-voices" id="voices" aria-labelledby="voices-h">
+    <div class="wrap">
+      <div class="voices-head">
+        <p class="eyebrow reveal">From our research</p>
+        <h2 class="display reveal" data-d="1" id="voices-h">What people <em>told us.</em></h2>
+        <p class="lede reveal" data-d="2">Reactions from customer-discovery interviews and demonstrations of the working product.</p>
+      </div>
+      <div class="quote-grid reveal" data-d="3">
+        <article class="quote-card">
+          <blockquote>“The interface looks great. I like that it’s simple. There’s not, like, a million options.”</blockquote>
+          <footer>
+            <span class="quote-name">Anthony</span>
+            <span class="quote-context">After navigating the working product</span>
+          </footer>
+        </article>
+        <article class="quote-card">
+          <blockquote>“That’s fantastic. It really does. It’s come a long way.”</blockquote>
+          <footer>
+            <span class="quote-name">Jonathan</span>
+            <span class="quote-context">After seeing the current product</span>
+          </footer>
+        </article>
+        <article class="quote-card">
+          <blockquote>“It would give me freedom. If I don’t have to bother somebody else and can just pull out the app, why not?”</blockquote>
+          <footer>
+            <span class="quote-name">Carmen</span>
+            <span class="quote-context">Blind diner, reacting to the product concept</span>
+          </footer>
+        </article>
+      </div>
+      <p class="approval-note">Draft selections for speaker approval before public release.</p>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
   <section class="section-pad" id="partners" aria-labelledby="part-h">
     <div class="wrap">
-      <p class="eyebrow reveal">For partners</p>
+      <p class="eyebrow reveal">Get involved</p>
       <h2 class="display reveal" data-d="1" id="part-h">Two ways to <em>be part of it.</em></h2>
-      <p class="lede reveal" data-d="2">Help test MenuVoice with diners, or make your menu easier to read by voice.</p>
+      <p class="lede reveal" data-d="2">Use the app now, or help make it better for the next diner.</p>
       <div class="aud reveal" data-d="2">
         <div class="aud-col">
-          <span class="tag">Funders &amp; accessibility orgs</span>
-          <h3>Help us reach every table.</h3>
-          <p>Support a real pilot with blind and low-vision diners.</p>
+          <span class="tag">Diners and testers</span>
+          <h3>Help shape the experience.</h3>
+          <p>Try Meet My Menu with a real restaurant menu and tell us what works or gets in the way.</p>
           <ul class="pts">
-            <li>Working prototype</li>
-            <li>Voice-first restaurant flow</li>
-            <li>Clear pilot scope</li>
+            <li>Test paper and online menus</li>
+            <li>Share VoiceOver and voice-guidance feedback</li>
+            <li>Influence what we improve next</li>
           </ul>
           <div class="spacer"></div>
-          <a class="btn btn-primary" href="#waitlist">Request a demo <span class="arrow">→</span></a>
+          <a class="btn btn-primary" href="#signup">Join the pilot <span class="arrow">→</span></a>
         </div>
         <div class="aud-col">
-          <span class="tag">Restaurants &amp; venues</span>
-          <h3>Put your menu on the map.</h3>
-          <p>Register interest so your menu can be verified for voice access.</p>
+          <span class="tag">Restaurants and organizations</span>
+          <h3>Make more menus accessible.</h3>
+          <p>Test a real menu, improve the information diners receive, or support community testing.</p>
           <ul class="pts">
-            <li>Current dishes and prices</li>
-            <li>Ingredient and allergen notes</li>
-            <li>A better first experience for blind guests</li>
+            <li>Check your menu in the app</li>
+            <li>Improve ingredient and allergen details</li>
+            <li>Support testing with blind diners</li>
           </ul>
           <div class="spacer"></div>
-          <a class="btn btn-secondary" href="#waitlist">Register interest <span class="arrow">→</span></a>
+          <a class="btn btn-secondary" href="#signup">Partner with us <span class="arrow">→</span></a>
         </div>
       </div>
     </div>
@@ -225,20 +299,57 @@
 
   <hr class="rule" />
 
-  <!-- ═══════════════════════ CTA ═══════════════════════ -->
-  <section class="section-pad" id="waitlist" aria-labelledby="cta-h">
+  <section class="section-pad faq-section" id="faq" aria-labelledby="faq-h">
+    <div class="wrap faq-wrap">
+      <div>
+        <p class="eyebrow reveal">Good to know</p>
+        <h2 class="display reveal" data-d="1" id="faq-h">A few honest <em>answers.</em></h2>
+      </div>
+      <div class="faq-list reveal" data-d="2">
+        <details>
+          <summary>Can Meet My Menu confirm that a dish is safe for an allergy?</summary>
+          <p>Meet My Menu brings possible allergen concerns to your attention. It highlights the ingredients and allergen information it finds so you know what to ask about and can confirm it with restaurant staff.</p>
+        </details>
+        <details>
+          <summary>Where does the menu information come from?</summary>
+          <p>You can scan a paper menu, search for a restaurant, or paste a menu link. Meet My Menu tells you when information may be incomplete or inferred.</p>
+        </details>
+        <details>
+          <summary>Do I need to download anything?</summary>
+          <p>No. Meet My Menu opens in your phone's web browser. Use the “Open the app” link whenever you want to start.</p>
+        </details>
+        <details>
+          <summary>How can I help?</summary>
+          <p>Join as a diner or tester, or sign up as a restaurant, accessibility organization, or funder below.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="section-pad" id="signup" aria-labelledby="cta-h">
     <div class="wrap">
       <div class="cta reveal">
         <div class="cta-wave" aria-hidden="true"><canvas id="cta-canvas"></canvas></div>
-        <h2 class="display" id="cta-h">Let's get it to the table.</h2>
-        <p class="lede">Request a demo, join the pilot list, or tell us your restaurant wants in.</p>
+        <h2 class="display" id="cta-h">Stay involved.</h2>
+        <p class="lede">Choose how you would like to help, and we will contact you about testing or partnership opportunities.</p>
         <form class="cta-form" id="waitlist-form" novalidate>
-          <label for="email" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Email</label>
-          <input type="email" id="email" name="email" placeholder="you@email.com" autocomplete="email" required />
-          <button type="submit" class="btn btn-primary btn-lg">Request a demo</button>
+          <label class="sr-only" for="contact-type">I am a</label>
+          <select id="contact-type" name="contact_type" aria-describedby="cta-msg cta-privacy" required>
+            <option value="">I am a...</option>
+            <option value="diner">Diner or Meet My Menu user</option>
+            <option value="restaurant">Restaurant or venue</option>
+            <option value="accessibility_org">Accessibility organization or funder</option>
+            <option value="other">Something else</option>
+          </select>
+          <label class="sr-only" for="email">Email address</label>
+          <input type="email" id="email" name="email" placeholder="you@email.com" autocomplete="email" inputmode="email" maxlength="254" aria-describedby="cta-msg cta-privacy" required />
+          <button type="submit" class="btn btn-primary btn-lg">Sign up</button>
         </form>
         <p class="cta-msg" id="cta-msg" role="status" aria-live="polite"></p>
-        <p class="cta-mini">No spam. We'll only write about the pilot.</p>
+        <p class="cta-mini" id="cta-privacy">For pilot updates and testing opportunities only.</p>
+        <a class="btn btn-ghost" href="https://app.meetthemenu.com/">Or open the app now <span class="arrow">→</span></a>
       </div>
     </div>
   </section>
@@ -248,18 +359,22 @@
 <footer class="site-foot">
   <div class="wrap">
     <div class="foot-grid">
-      <a class="brand" href="#top" aria-label="MenuVoice home">
+      <a class="brand" href="#top" aria-label="Meet My Menu home">
         <span class="mark" aria-hidden="true"><i></i></span>
-        <span><b>Menu</b><span class="v">Voice</span></span>
+        <span><b>Meet My</b><span class="v"> Menu</span></span>
       </a>
       <div class="links">
-        <a href="#why">The problem</a>
         <a href="#demo-section">How it works</a>
-        <a href="#partners">Partners</a>
-        <a href="#waitlist">Request a demo</a>
+        <a href="about.html">About</a>
+        <a href="accessibility.html">Accessibility</a>
+        <a href="partners.html">Partners</a>
+        <a href="blog.html">Blog</a>
+        <a href="#faq">FAQ</a>
+        <a href="#signup">Sign up</a>
+        <a href="https://app.meetthemenu.com/">Open the app</a>
       </div>
     </div>
-    <p class="foot-note">MenuVoice is an independent, voice-first prototype for blind and low-vision diners. Order on your own terms.</p>
+    <p class="foot-note">A voice-first menu reader for blind and low-vision diners.</p>
   </div>
 </footer>
 
