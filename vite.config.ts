@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'meetmymenu-logo.png'],
       manifest: {
         name: 'Meet My Menu AI',
         short_name: 'MeetMyMenuAI',
@@ -17,7 +17,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         icons: [
-          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: 'meetmymenu-logo.png', sizes: '1520x1520', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {
