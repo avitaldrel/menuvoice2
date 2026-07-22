@@ -126,11 +126,12 @@ test('Cartesia status reports complete exhaustion and first estimated return', (
   assert.equal(report.trimEnd().endsWith('Status history is temporary until Redis/KV is configured.'), true);
 });
 
-test('morning report sends only for a unique visitor or an explicit manual override', () => {
-  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 0 } }), false);
-  assert.equal(shouldSendMorningReport({ totals: { users: 1 }, website: { sessions: 0 } }), true);
-  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 1 } }), true);
-  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 0 } }, true), true);
+test('morning report ignores passive website views but sends for meaningful activity', () => {
+  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 0, signups: 0 } }), false);
+  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 1, signups: 0 } }), false);
+  assert.equal(shouldSendMorningReport({ totals: { users: 1 }, website: { sessions: 0, signups: 0 } }), true);
+  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 1, signups: 1 } }), true);
+  assert.equal(shouldSendMorningReport({ totals: { users: 0 }, website: { sessions: 0, signups: 0 } }, true), true);
 });
 
 test('analytics dashboard shell includes the accessible Cartesia status section', async () => {
