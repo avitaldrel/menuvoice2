@@ -4,10 +4,12 @@
 // Replaces the old client round trip of /api/scrape -> /api/chat.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { fetchMenuSource, parseMenuSource, menuItemCount, classifySource, FriendlyError } from './_menuCore.js';
+import { fetchMenuSource, parseMenuSource, menuItemCount, classifySource, applyCompleteness, FriendlyError } from './_menuCore.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!(await enforceRateLimit(req, res, 'menu-from-url'))) return;
 
   const { url } = (req.body ?? {}) as { url?: string };
   if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
@@ -36,6 +38,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // official branch site, so officiality is reported from the host and the
     // location scope stays "unknown" (we did not resolve a branch).
     const cls = classifySource(source.url, source.kind === 'pdf');
+    // Deterministic completeness on top of the model's own judgment: a pasted
+    // link that yields a handful of dishes is a fragment, not the whole menu.
+    const completeness = applyCompleteness(menu, {
+      sourceText: source.kind === 'html' ? source.text : '',
+      sourceType: source.kind === 'image' ? 'unknown' : cls.sourceType,
+    });
     const provenance = {
       sourceType: source.kind === 'image' ? 'unknown' : cls.sourceType,
       official: source.kind === 'image' ? false : cls.official,
@@ -43,8 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       locationScope: 'unknown' as const,
       sourceUrl: source.url,
       checkedAt: new Date().toISOString(),
-      completeness: menu.incomplete ? 'partial' : 'complete',
-      warnings: menu.incompleteReason ? [menu.incompleteReason] : undefined,
+      ...completeness,
     };
     return res.status(200).json({ menu, sourceUrl: source.url, provenance });
   } catch (e: any) {

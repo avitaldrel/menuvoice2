@@ -72,9 +72,12 @@
 }
 
 /* ── Text size (Accessibility → Text size) ───────────
-   Multiplies typographic sizes app-wide. Set on <html> from the profile. */
-:root[data-text-scale='large']  { --text-scale: 1.18; }
-:root[data-text-scale='xlarge'] { --text-scale: 1.40; }
+   Multiplies typographic sizes app-wide. Set on <html> from the profile.
+   Four practical steps: 100% / 125% / 150% / 200%, so a low-vision user has
+   real headroom beyond a single "large" setting without needing OS zoom. */
+:root[data-text-scale='large']   { --text-scale: 1.25; }
+:root[data-text-scale='xlarge']  { --text-scale: 1.5; }
+:root[data-text-scale='xxlarge'] { --text-scale: 2; }
 
 /* ── Light theme — near-black on white, maximum edge contrast ─────────
    For low-vision users who need crisp dark-on-light rather than dark mode. */
@@ -114,37 +117,39 @@
   color-scheme: light;
 }
 
-/* ── High-contrast theme — bright on pure black, thick borders ────────
-   Classic low-vision high contrast: white/yellow on black, no soft grays. */
+/* ── High-contrast theme — white text, orange accents on pure black ───
+   Keeps Meet My Menu AI's black-and-orange identity instead of neon yellow:
+   white for reading, orange for actions, links, selection, and focus. */
 :root[data-theme='high-contrast'] {
   --bg:           #000000;
-  --surface:      #000000;
+  --surface:      #0d0d0d;
   --surface-high: #101012;
   --surface-user: #14100a;
   --overlay:      rgba(0, 0, 0, 0.92);
 
   --text-primary:   #ffffff;   /* 21:1 */
-  --text-secondary: #f4f4f4;   /* ~19:1 */
+  --text-secondary: #eeeeee;   /* ~18:1 */
   --text-muted:     #d2d2d2;   /* ~14:1 */
 
-  --accent:      #ffe24d;      /* bright yellow, ~16:1 on black */
-  --accent-warm: #fff07a;
-  --accent-text: #000000;
+  --accent:      #ffb454;      /* Meet My Menu AI orange, ~11:1 on black */
+  --accent-warm: #ffc47a;
+  --accent-text: #000000;      /* bold black text on orange buttons */
 
-  --focus:  #ffffff;
+  --focus:  #ffd08a;           /* strong focus, brighter than the accent */
   --danger: #ff9a9a;           /* light red reads on black */
   --success:#82ffa6;
 
   --border:      #8a8a8a;      /* bright enough to see every edge */
-  --border-warm: #ffe24d;
+  --border-warm: #ffb454;
 
   --shadow-sm:   none;
   --shadow-md:   none;
   --shadow-lg:   none;
   --edge-light:  none;
 
-  --accent-grad: linear-gradient(177deg, #fff07a 0%, #ffe24d 55%, #f4d021 100%);
-  --glow-accent: 0 0 0 2px rgba(255, 226, 77, 0.35);
+  /* Flat orange fill and a crisp ring: no gradient, no neon glow. */
+  --accent-grad: linear-gradient(177deg, #ffb454 0%, #ffb454 100%);
+  --glow-accent: 0 0 0 2px rgba(255, 180, 84, 0.45);
 
   --danger-ink: #ff9a9a;
   --danger-on:  #000000;

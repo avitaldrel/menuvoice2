@@ -49,7 +49,8 @@ test('provenanceSummary covers source, location, freshness, completeness', () =>
   assert.match(s, /their website/);
   assert.match(s, /Paramus, New Jersey/);
   assert.match(s, /checked today/);
-  assert.match(s, /incomplete because the drinks section is missing/);
+  // A partial menu must say so outright before explaining why (bug #1).
+  assert.match(s, /found only part of this menu, because the drinks section is missing/);
 });
 
 test('third-party menu is never called official', () => {
@@ -70,7 +71,7 @@ test('third-party menu is never called official', () => {
 test('opening note is shorter and flags incompleteness', () => {
   const note = provenanceOpeningNote(officialSpecific, NOW);
   assert.match(note, /official source/);
-  assert.match(note, /incomplete/i);
+  assert.match(note, /only part of it/i);
 });
 
 test('missing provenance degrades gracefully', () => {

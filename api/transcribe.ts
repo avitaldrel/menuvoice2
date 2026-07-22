@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { cartesiaApiKeys, withCartesiaKey } from './_cartesia.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 // Vercel's default body parser can't handle multipart. We stream the raw body
 // straight through to OpenAI, preserving the Content-Type (with boundary).
@@ -13,6 +14,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return cartesiaToken(res);
   }
   if (req.method !== 'POST') return res.status(405).end();
+  // Body parsing is off for multipart, so identity comes from the session
+  // header or the client IP rather than a parsed body.
+  if (!(await enforceRateLimit(req, res, 'transcribe'))) return;
   const contentType = req.headers['content-type'] ?? '';
   const chunks: Uint8Array[] = [];
   for await (const chunk of req) {

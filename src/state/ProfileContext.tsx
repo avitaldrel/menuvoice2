@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { UserProfile, EMPTY_PROFILE } from '../types';
-import { loadProfile, saveProfile } from '../lib/storage';
+import { loadProfile, saveProfile, clearLocalUserData } from '../lib/storage';
 import { track } from '../lib/telemetry';
 import { setSpeechRate } from '../lib/speech';
 
@@ -12,7 +12,7 @@ function applyAppearance(profile: UserProfile) {
   // Freeze transitions across the swap so a theme change is instant and never
   // flashes a mid-transition low-contrast color. Restored on the next frame.
   root.classList.add('theme-swap');
-  root.dataset.theme = profile.theme ?? 'light';
+  root.dataset.theme = profile.theme ?? 'dark';
   root.dataset.textScale = profile.textScale ?? 'large';
   setSpeechRate(typeof profile.speechRate === 'number' ? profile.speechRate : 1);
   window.requestAnimationFrame(() => {
@@ -61,6 +61,10 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reset = useCallback(async () => {
+    // Clear this user's saved restaurants and profile from the device so the
+    // next person to use this browser cannot see them. saveProfile below then
+    // writes a fresh empty profile.
+    clearLocalUserData();
     applyAppearance(EMPTY_PROFILE);
     setProfile({ ...EMPTY_PROFILE });
     await saveProfile({ ...EMPTY_PROFILE });

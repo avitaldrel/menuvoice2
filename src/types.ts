@@ -3,7 +3,6 @@ export interface UserProfile {
   name: string;
   allergies: string[];
   dislikes: string[];
-  spiceTolerance: 'none' | 'mild' | 'medium' | 'hot';
   cuisinesLiked: string[];
   pastOrders: string[]; // dishes the guest decided on before — feeds recommendations
   diningHistory: DiningHistoryEntry[];
@@ -12,7 +11,7 @@ export interface UserProfile {
   onboarded: boolean;
   imageLogging: boolean;
   // Accessibility preferences.
-  theme?: AppTheme; // color scheme (default 'light': black-on-white for low vision)
+  theme?: AppTheme; // color scheme (default 'dark': warm amber on near-black)
   textScale?: TextScale; // global text size (default 'large')
   speechRate?: number; // Conversation Mode speaking speed multiplier (default 1)
   tutorialSeen?: boolean; // first-run tutorial shown once, then never auto-shown
@@ -33,9 +32,9 @@ export interface DiningHistoryEntry {
 // Color schemes tuned for different low-vision needs:
 //   dark          – light text on near-black (glare/photophobia friendly)
 //   light         – near-black text on white (maximum edge contrast)
-//   high-contrast – bright yellow on pure black (classic low-vision high contrast)
+//   high-contrast – white text and orange accents on pure black
 export type AppTheme = 'dark' | 'light' | 'high-contrast';
-export type TextScale = 'normal' | 'large' | 'xlarge';
+export type TextScale = 'normal' | 'large' | 'xlarge' | 'xxlarge';
 
 export interface MenuItem {
   name: string;
@@ -120,7 +119,6 @@ export const EMPTY_PROFILE: UserProfile = {
   name: '',
   allergies: [],
   dislikes: [],
-  spiceTolerance: 'medium',
   cuisinesLiked: [],
   pastOrders: [],
   diningHistory: [],
@@ -128,9 +126,9 @@ export const EMPTY_PROFILE: UserProfile = {
   ttsVoice: 'shimmer',
   onboarded: false,
   imageLogging: false,
-  // Research-backed low-vision defaults: black text on white, large type.
-  // Dark and High-contrast schemes stay one tap away in Settings.
-  theme: 'light',
+  // Default to the warm dark theme; Light and High-contrast stay one tap away
+  // in Settings, and any theme a user has already saved is preserved on load.
+  theme: 'dark',
   textScale: 'large',
   speechRate: 1,
 };

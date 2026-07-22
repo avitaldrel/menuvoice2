@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Screen, Title, Body, PrimaryButton, SecondaryButton, AllergenReviewPanel, type AllergenQuestion } from '../components';
 import { useProfile } from '../state/ProfileContext';
-import { cleanName, parseList, reviewAllergenInput } from '../util';
+import { cleanName, parseList, reviewAllergenInput, removeFromList } from '../util';
 import { configuredAppleShortcutUrl, isAppleMobileDevice } from '../lib/appleShortcut';
 import { track } from '../lib/telemetry';
 
@@ -22,9 +22,26 @@ export default function OnboardingScreen() {
   const shortcutUrl = configuredAppleShortcutUrl();
   const shouldOfferShortcut = !!shortcutUrl && isAppleMobileDevice();
   const [questions, setQuestions] = useState<AllergenQuestion[]>([]);
+  const [retypeNotice, setRetypeNotice] = useState('');
   const acceptedRef = useRef<string[]>([]);
 
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const allergyInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The user removed a word we did not recognize. Drop it, keep everything else
+   * they typed, and put them back in the allergy field so they can correct it
+   * instead of silently moving on without that allergy.
+   */
+  const removeAndRetype = (removed: string) => {
+    setAllergiesText((current) => removeFromList(current, removed));
+    setQuestions([]);
+    setStep('allergies');
+    setRetypeNotice(`Removed ${removed}. Type it again, spelled differently, or leave it out.`);
+    // Land focus in the field itself, not the heading, so a correction can be
+    // typed straight away.
+    window.setTimeout(() => allergyInputRef.current?.focus(), 0);
+  };
   useEffect(() => {
     // Move focus to the new step heading so VoiceOver users land on the question
     // instead of stranding on <body> after the previous button unmounts.
@@ -88,17 +105,23 @@ export default function OnboardingScreen() {
       )}
 
       {step === 'allergies' && (
-        <TypeStep
-          question="Any food allergies?"
-          help="Type them, or type none."
-          placeholder="e.g. shellfish, peanuts"
-          value={allergiesText}
-          onChange={setAllergiesText}
-          onNext={finishAllergyStep}
-          nextLabel={shouldOfferShortcut ? 'Next' : 'Finish'}
-          onBack={() => setStep('name')}
-          headingRef={stepHeadingRef}
-        />
+        <>
+          <TypeStep
+            question="Any food allergies?"
+            help="Type them, or type none."
+            placeholder="e.g. shellfish, peanuts"
+            value={allergiesText}
+            onChange={setAllergiesText}
+            onNext={finishAllergyStep}
+            nextLabel={shouldOfferShortcut ? 'Next' : 'Finish'}
+            onBack={() => setStep('name')}
+            headingRef={stepHeadingRef}
+            inputRef={allergyInputRef}
+          />
+          <p role="status" aria-live="polite" className="body" style={{ minHeight: 24, margin: 0 }}>
+            {retypeNotice}
+          </p>
+        </>
       )}
 
       {step === 'shortcut' && shortcutUrl && (
@@ -133,6 +156,7 @@ export default function OnboardingScreen() {
           <AllergenReviewPanel
             questions={questions}
             onDone={(kept) => continueAfterAllergyReview([...acceptedRef.current, ...kept])}
+            onRetype={removeAndRetype}
           />
           <SecondaryButton label="Back" onClick={() => setStep('allergies')} />
         </div>
@@ -151,6 +175,7 @@ function TypeStep({
   nextLabel,
   onBack,
   headingRef,
+  inputRef,
 }: {
   question: string;
   help: string;
@@ -161,6 +186,7 @@ function TypeStep({
   nextLabel: string;
   onBack?: () => void;
   headingRef?: RefObject<HTMLHeadingElement>;
+  inputRef?: RefObject<HTMLInputElement>;
 }) {
   return (
     <div className="col">
@@ -170,6 +196,7 @@ function TypeStep({
       <input
         className="input"
         type="text"
+        ref={inputRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

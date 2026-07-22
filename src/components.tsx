@@ -96,9 +96,14 @@ export interface AllergenQuestion {
 export function AllergenReviewPanel({
   questions,
   onDone,
+  onRetype,
 }: {
   questions: AllergenQuestion[];
   onDone: (kept: string[]) => void;
+  // Removing a word we don't recognize is not a decision to move on: the user
+  // most likely mistyped it. When provided, removal hands the word back so the
+  // caller can return to the allergy field for a correction.
+  onRetype?: (removed: string) => void;
 }) {
   const [questionIndex, setQuestionIndex] = useState(0);
   const keptRef = useRef<string[]>([]);
@@ -157,14 +162,26 @@ export function AllergenReviewPanel({
           <button
             className="btn btn-secondary"
             style={{ flex: 1, minHeight: 56 }}
-            onClick={() => decide(question.suggested ? question.typed : null)}
+            onClick={() => {
+              if (!question.suggested && onRetype) {
+                onRetype(question.typed);
+                return;
+              }
+              decide(question.suggested ? question.typed : null);
+            }}
             aria-label={
               question.suggested
                 ? `No, keep ${question.typed} exactly as I entered it`
-                : `Remove ${question.typed} from my allergy list`
+                : onRetype
+                  ? `Remove ${question.typed} and go back to type it again`
+                  : `Remove ${question.typed} from my allergy list`
             }
           >
-            {question.suggested ? `Keep "${question.typed}"` : 'Remove it'}
+            {question.suggested
+              ? `Keep "${question.typed}"`
+              : onRetype
+                ? 'Remove and retype'
+                : 'Remove it'}
           </button>
         </div>
       </div>

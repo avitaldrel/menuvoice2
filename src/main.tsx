@@ -9,16 +9,15 @@ import { initTelemetry } from './lib/telemetry';
 initTelemetry();
 
 // Apply appearance BEFORE first paint so there is no wrong-theme flash.
-// Defaults are the research-backed low-vision choices: black-on-white ('light')
-// and large text; a saved profile overrides them. ProfileContext re-applies
-// (and keeps applying) once the profile actually loads.
+// Defaults are the warm dark theme and large text; a saved profile overrides
+// them. ProfileContext re-applies (and keeps applying) once the profile loads.
 try {
   const raw = localStorage.getItem('menuvoice.profile.v1');
   const saved = raw ? JSON.parse(raw) : null;
-  document.documentElement.dataset.theme = saved?.theme ?? 'light';
+  document.documentElement.dataset.theme = saved?.theme ?? 'dark';
   document.documentElement.dataset.textScale = saved?.textScale ?? 'large';
 } catch {
-  document.documentElement.dataset.theme = 'light';
+  document.documentElement.dataset.theme = 'dark';
   document.documentElement.dataset.textScale = 'large';
 }
 

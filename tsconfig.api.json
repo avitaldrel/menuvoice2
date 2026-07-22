@@ -6,5 +6,5 @@
     "moduleResolution": "NodeNext",
     "types": ["node"]
   },
-  "include": ["api/**/*.ts"]
+  "include": ["api/**/*.ts", "server/**/*.ts"]
 }

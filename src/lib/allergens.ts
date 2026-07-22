@@ -21,6 +21,12 @@ interface AllergenGroup {
   profileTerms: string[];
   // Ingredient / dish-text keywords that indicate this allergen is present.
   keywords: string[];
+  // When true, only surface this group if the guest personally listed it: it
+  // still drives the safety warning (blockedBy) for those who need it, but is
+  // never added to the general "other allergens" disclosure. Used for very
+  // common ingredients (garlic, onion) whose unsolicited disclosure to every
+  // user would be noise rather than signal.
+  personalOnly?: boolean;
 }
 
 const ALLERGEN_GROUPS: AllergenGroup[] = [
@@ -152,6 +158,51 @@ const ALLERGEN_GROUPS: AllergenGroup[] = [
     profileTerms: ['coconut'],
     keywords: ['coconut'],
   },
+  {
+    key: 'corn',
+    label: 'corn',
+    profileTerms: ['corn', 'maize'],
+    personalOnly: true,
+    keywords: [
+      'corn', 'maize', 'cornmeal', 'corn meal', 'cornstarch', 'corn starch',
+      'cornflour', 'corn flour', 'corn syrup', 'polenta', 'grits', 'hominy',
+      'masa', 'popcorn', 'cornbread', 'corn tortilla', 'tortilla chips',
+      'nachos', 'elote', 'succotash',
+    ],
+  },
+  {
+    key: 'garlic',
+    label: 'garlic',
+    profileTerms: ['garlic'],
+    personalOnly: true,
+    keywords: [
+      'garlic', 'garlicky', 'aioli', 'aïoli', 'aglio', 'toum', 'garlic bread',
+      'garlic butter', 'roasted garlic',
+    ],
+  },
+  {
+    key: 'onion',
+    label: 'onion',
+    // Onion-allergic guests commonly react to the wider allium family, so the
+    // keywords include shallot, leek, scallion, and chive; err toward warning.
+    profileTerms: ['onion', 'onions', 'allium'],
+    personalOnly: true,
+    keywords: [
+      'onion', 'onions', 'scallion', 'scallions', 'shallot', 'shallots',
+      'leek', 'leeks', 'chive', 'chives', 'spring onion', 'green onion',
+      'red onion', 'caramelized onion', 'caramelised onion', 'onion powder',
+    ],
+  },
+  {
+    key: 'cinnamon',
+    label: 'cinnamon',
+    profileTerms: ['cinnamon', 'cassia'],
+    personalOnly: true,
+    keywords: [
+      'cinnamon', 'cassia', 'snickerdoodle', 'churro', 'churros',
+      'horchata', 'pumpkin spice', 'speculoos', 'cinnamon roll', 'chai',
+    ],
+  },
 ];
 
 function hasWord(haystack: string, needle: string): boolean {
@@ -239,7 +290,7 @@ export function analyzeItemAllergens(item: MenuItem, profileAllergies: string[])
   for (const { group, confidence } of present) {
     const finding: AllergenFinding = { label: group.label, confidence };
     if (groupInProfile(group, profileAllergies)) blockedBy.push(finding);
-    else otherAllergens.push(finding);
+    else if (!group.personalOnly) otherAllergens.push(finding);
   }
   return { blocked: blockedBy.length > 0, blockedBy, otherAllergens };
 }
