@@ -15,13 +15,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { buildMorningReport, renderText, renderEmailHtml, sendEmail, resolveRecipients, analyticsUrl } from './_morningData.js';
 
 export function shouldSendMorningReport(
-  data: { totals: { users: number }; website: { sessions: number } },
+  data: { totals: { users: number }; website: { sessions: number; signups?: number } },
   force = false,
 ): boolean {
-  // A report-worthy visitor is either an identified app user or one distinct
-  // website browser/session. Raw page views and provider alerts do not send a
-  // scheduled morning email on their own.
-  return force || data.totals.users > 0 || data.website.sessions > 0;
+  // Passive website visits stay in analytics, but do not send email. Only an
+  // identified app user, a waitlist/demo signup, or a manual override does.
+  return force || data.totals.users > 0 || (data.website.signups ?? 0) > 0;
 }
 
 function authorized(req: VercelRequest): boolean {
@@ -55,11 +54,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const d = await buildMorningReport(hours);
 
-    // Send only when the window contains an identified app user or a distinct
-    // website session. Append ?force=1 to override for a manual test send.
+    // Passive website views are still reported in analytics, but do not trigger
+    // email. Append ?force=1 to override for a manual test send.
     const force = req.query.force === '1' || req.query.force === 'true';
     if (!shouldSendMorningReport(d, force)) {
-      return res.status(200).json({ ok: true, sent: false, reason: 'no unique visitor in window — nothing new to report' });
+      return res.status(200).json({ ok: true, sent: false, reason: 'no app users or website signups in window — nothing new to email' });
     }
 
     const date = new Date().toISOString().slice(0, 10);
