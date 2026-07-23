@@ -3,39 +3,18 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Meet My Menu AI · The app that reads restaurant menus aloud</title>
-<meta name="description" content="Meet My Menu AI reads restaurant menus aloud for blind and low-vision diners. Scan with your camera, hear every dish, check allergens, and ask questions by voice." />
+<title>Meet My Menu · Restaurant menus, read aloud</title>
+<meta name="description" content="Meet My Menu is a voice-first app that reads restaurant menus aloud and answers questions about dishes by voice." />
 <link rel="icon" type="image/png" href="/meetmymenu-logo.png" />
 <link rel="apple-touch-icon" href="/meetmymenu-logo.png" />
-<link rel="canonical" href="https://meetmymenu.com/" />
-<meta property="og:type" content="website" />
-<meta property="og:url" content="https://meetmymenu.com/" />
-<meta property="og:site_name" content="Meet My Menu AI" />
-<meta property="og:title" content="Meet My Menu AI · The app that reads restaurant menus aloud" />
-<meta property="og:description" content="Scan a restaurant menu with your camera. Meet My Menu AI reads every dish aloud, checks allergens, and answers questions by voice. Built for blind and low-vision diners." />
-<meta name="twitter:card" content="summary" />
-<meta name="twitter:title" content="Meet My Menu AI · The app that reads restaurant menus aloud" />
-<meta name="twitter:description" content="Scan a restaurant menu with your camera. Meet My Menu AI reads every dish aloud, checks allergens, and answers questions by voice." />
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Meet My Menu AI",
-  "alternateName": ["MeetMyMenu AI", "Meet My Menu", "MenuVoice"],
-  "url": "https://meetmymenu.com/",
-  "applicationCategory": "UtilitiesApplication",
-  "operatingSystem": "Web browser",
-  "description": "Meet My Menu AI reads restaurant menus aloud for blind and low-vision diners. It captures a menu by camera or link, speaks every dish, flags allergens against the diner's own allergy list, and answers questions about the food by voice."
-}
-</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 /* ============================================================
-   Meet My Menu AI — Cinematic, scroll-driven demo
+   Meet My Menu — Cinematic, scroll-driven demo
    New vs v2:
-   · Canvas oscilloscope waveform in hero + CTA
+   · Canvas oscilloscope waveform in the closing CTA
    · Scroll-driven phone sequence (scan → read → convo)
    · Phase labels are minimal and STAY on screen once shown
    · Voice-pulse bars → typewriter for conversation
@@ -77,7 +56,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
@@ -175,12 +154,6 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
   transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
 }
 .btn:active { transform: translateY(1px); }
-/* Match the email input's focus treatment so keyboard focus is equally
-   visible on every interactive element, not just the form field. */
-.btn:focus-visible, .nav-links a:focus-visible, .foot-grid .links a:focus-visible, .brand:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 3px;
-}
 .btn-primary  { background: var(--accent); color: var(--accent-text); box-shadow: 0 10px 30px -12px var(--accent-glow); }
 .btn-primary:hover  { background: var(--accent-warm); }
 .btn-secondary { background: transparent; color: var(--text-primary); border-color: var(--border); }
@@ -201,7 +174,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 }
 .site-head[data-stuck="1"] { border-bottom-color: var(--border-soft); }
 .nav { max-width: var(--maxw); margin: 0 auto; padding: 14px var(--gutter); display: flex; align-items: center; gap: 28px; }
-.brand { display: inline-flex; align-items: center; gap: 11px; min-height: 44px; text-decoration: none; color: var(--text-primary); font-family: var(--font-display); font-size: 23px; font-weight: 600; letter-spacing: -0.02em; }
+.brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: var(--text-primary); font-family: var(--font-display); font-size: 23px; font-weight: 600; letter-spacing: -0.02em; }
 .brand .mark { position: relative; width: 30px; height: 30px; border-radius: 9px; background: var(--surface-high); border: 1px solid var(--border); display: grid; place-items: center; flex-shrink: 0; }
 .brand .mark i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); box-shadow: -7px 0 0 -1px var(--accent), 7px 0 0 -1px var(--accent); }
 .brand .v { color: var(--accent); }
@@ -213,10 +186,6 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 
 /* ── Hero ── */
 .hero { position: relative; padding-top: clamp(40px, 6vw, 80px); padding-bottom: clamp(36px, 5vw, 64px); overflow: hidden; }
-.hero-canvas {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  pointer-events: none; opacity: 0.45; z-index: 0;
-}
 .hero .wrap { position: relative; z-index: 1; }
 .hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: clamp(30px, 6vw, 76px); align-items: center; }
 .hero-copy { position: relative; }
@@ -361,7 +330,7 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 }
 .cv-conv::-webkit-scrollbar { display:none; }
 
-/* Voice-pulse bars — play before each Meet My Menu AI message */
+/* Voice-pulse bars — play before each Meet My Menu message */
 .vp {
   align-self: flex-start;
   display: flex; align-items: center; gap: 4px;
@@ -484,6 +453,41 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
   .ptlabel { max-width: 180px; text-align: center; }
   .demo-prog { display: none; }
 }
+/* Interactive menu conversation */
+.interactive-demo-section { padding-block:clamp(72px,10vw,128px); }
+.interactive-demo-head { max-width:760px; }
+.interactive-demo-head .display { margin-top:18px; }
+.interactive-demo-head .lede { margin-top:20px; }
+.live-demo { margin-top:clamp(36px,5vw,58px);display:grid;grid-template-columns:minmax(250px,.72fr) minmax(0,1.28fr);background:var(--surface);border:1px solid var(--border);border-radius:24px;overflow:hidden;box-shadow:0 36px 90px -48px rgba(0,0,0,.9); }
+.demo-questions { padding:clamp(24px,4vw,42px);border-right:1px solid var(--border);background:var(--bg-soft); }
+.demo-kicker { margin:0 0 8px;font:500 11px/1.4 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent); }
+.demo-questions h3 { margin:0;font:500 clamp(27px,3vw,36px)/1.1 var(--font-display); }
+.demo-questions > p:not(.demo-kicker) { margin:14px 0 24px;color:var(--text-secondary);font-size:15px;line-height:1.55; }
+.demo-question-list { display:flex;flex-direction:column;gap:10px; }
+.demo-question { width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--border);border-radius:13px;background:var(--surface);color:var(--text-primary);font:700 15px/1.35 var(--font-body);text-align:left;cursor:pointer;transition:border-color 140ms ease,background 140ms ease,transform 140ms ease; }
+.demo-question:hover { border-color:var(--accent);background:var(--surface-high);transform:translateY(-1px); }
+.demo-question:disabled { cursor:wait;opacity:.55;transform:none; }
+.demo-question .arrow { color:var(--accent);font-size:18px; }
+.demo-sample-note { margin:18px 0 0;color:var(--text-muted);font:500 11px/1.5 var(--font-mono); }
+.demo-conversation { min-height:470px;display:flex;flex-direction:column; }
+.demo-chat-head { display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 20px;border-bottom:1px solid var(--border); }
+.demo-chat-title { display:flex;align-items:center;gap:9px;font-weight:700; }
+.demo-live-dot { width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px var(--accent-dim); }
+.demo-status { color:var(--text-muted);font:500 11px/1.4 var(--font-mono); }
+.demo-log { flex:1;display:flex;flex-direction:column;gap:13px;padding:clamp(20px,3vw,30px);overflow:auto;max-height:520px; }
+.demo-empty { margin:auto;max-width:430px;text-align:center;color:var(--text-secondary); }
+.demo-empty strong { display:block;margin-bottom:8px;color:var(--text-primary);font:500 27px/1.15 var(--font-display); }
+.demo-turn { max-width:82%;padding:12px 15px;border-radius:15px;animation:turn-in 220ms ease both; }
+.demo-turn-user { align-self:flex-end;background:var(--surface-user);border-bottom-right-radius:5px; }
+.demo-turn-assistant { align-self:flex-start;background:var(--surface-high);border:1px solid var(--border);border-bottom-left-radius:5px; }
+.demo-turn-label { display:block;margin-bottom:4px;color:var(--text-muted);font:500 9px/1.3 var(--font-mono);letter-spacing:.1em;text-transform:uppercase; }
+.demo-turn p { margin:0;font-size:15px;line-height:1.5;color:var(--text-primary); }
+.demo-chat-actions { display:flex;align-items:center;gap:10px;min-height:68px;padding:12px 20px;border-top:1px solid var(--border); }
+.demo-chat-actions .btn { --h:44px;font-size:14px;padding-inline:17px; }
+.demo-reset { margin-left:auto;border:0;background:transparent;color:var(--text-secondary);font:700 14px var(--font-body);cursor:pointer;padding:10px; }
+.demo-reset:hover { color:var(--accent); }
+@media (max-width:800px) { .live-demo{grid-template-columns:1fr}.demo-questions{border-right:0;border-bottom:1px solid var(--border)}.demo-conversation{min-height:430px} }
+@media (prefers-reduced-motion:reduce) { .demo-turn{animation:none}.demo-question{transition:none} }
 
 /* ── Why / manifesto ── */
 .manifesto-quote { font-family:var(--font-display);font-size:clamp(28px,4.2vw,52px);font-weight:500;line-height:1.18;letter-spacing:-0.02em;margin:26px 0 0;text-wrap:balance; }
@@ -506,6 +510,31 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 @media (max-width:480px) { .metrics{grid-template-columns:1fr} .metrics .m{border-left:0;padding-left:0} }
 
 /* ── Partners ── */
+/* Interview voices */
+.voices-head { max-width:760px; }
+.voices-head .display { margin-top:18px; }
+.voices-head .lede { margin-top:20px; }
+.quote-grid { margin-top:clamp(36px,5vw,60px);display:grid;grid-template-columns:repeat(3,1fr);gap:18px; }
+.quote-card { display:flex;flex-direction:column;padding:clamp(22px,3vw,34px);background:var(--surface);border:1px solid var(--border);border-radius:18px; }
+.quote-card blockquote { margin:0;font-family:var(--font-display);font-size:clamp(22px,2.5vw,30px);line-height:1.22;color:var(--text-primary); }
+.quote-card footer { margin-top:auto;padding-top:24px;background:none;border:0; }
+.quote-name { display:block;font-weight:700;color:var(--accent); }
+.quote-context { display:block;margin-top:4px;color:var(--text-muted);font-size:13px;line-height:1.45; }
+.approval-note { margin:20px 0 0;color:var(--text-muted);font:500 11px/1.5 var(--font-mono);letter-spacing:.06em; }
+@media (max-width:820px) { .quote-grid{grid-template-columns:1fr} }
+
+/* FAQ */
+.faq-wrap { display:grid;grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr);gap:clamp(40px,8vw,100px);align-items:start; }
+.faq-wrap .display { margin-top:18px; }
+.faq-list { border-top:1px solid var(--hair); }
+.faq-list details { border-bottom:1px solid var(--hair);padding:0; }
+.faq-list summary { cursor:pointer;list-style:none;padding:22px 38px 22px 0;font-size:18px;font-weight:700;line-height:1.35;position:relative; }
+.faq-list summary::-webkit-details-marker { display:none; }
+.faq-list summary::after { content:'+';position:absolute;right:4px;top:20px;color:var(--accent);font:400 26px/1 var(--font-display); }
+.faq-list details[open] summary::after { content:'−'; }
+.faq-list details p { margin:-4px 42px 22px 0;color:var(--text-secondary);font-size:15.5px;line-height:1.6; }
+@media (max-width:760px) { .faq-wrap{grid-template-columns:1fr;gap:32px} }
+
 .aud { margin-top:clamp(44px,5vw,64px);display:grid;grid-template-columns:1fr 1fr;gap:0; }
 .aud-col { padding:clamp(20px,3vw,44px);border-left:1px solid var(--hair);display:flex;flex-direction:column; }
 .aud-col:first-child { padding-left:0;border-left:0; }
@@ -524,10 +553,11 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 .cta-wave canvas { width:100%;height:100%;opacity:0.5; }
 .cta h2 { margin:0 auto;max-width:18ch; }
 .cta .lede { margin:20px auto 0;text-align:center;max-width:50ch; }
-.cta-form { margin:36px auto 0;display:flex;gap:10px;max-width:480px;flex-wrap:wrap;justify-content:center; }
-.cta-form input { flex:1;min-width:220px;min-height:60px;background:var(--bg-soft);border:1.5px solid var(--border);border-radius:14px;color:var(--text-primary);font-family:var(--font-body);font-size:16px;padding:0 20px;transition:border-color 140ms ease; }
+.cta-form { margin:36px auto 0;display:flex;gap:10px;max-width:760px;flex-wrap:wrap;justify-content:center; }
+.cta-form input, .cta-form select { flex:1;min-width:220px;min-height:60px;background:var(--bg-soft);border:1.5px solid var(--border);border-radius:14px;color:var(--text-primary);font-family:var(--font-body);font-size:16px;padding:0 20px;transition:border-color 140ms ease; }
+.cta-form select { cursor:pointer;color:var(--text-secondary); }
 .cta-form input::placeholder { color:var(--text-muted); }
-.cta-form input:focus { outline:none;border-color:var(--accent); }
+.cta-form input:focus-visible, .cta-form select:focus-visible { outline:3px solid var(--accent);outline-offset:3px;border-color:var(--accent); }
 .cta-form .btn { min-width:168px; }
 .cta-mini { margin-top:18px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted); }
 .cta-msg { margin-top:18px;font-size:15px;color:var(--success);min-height:22px;font-weight:600; }
@@ -535,9 +565,9 @@ h2.display { font-size: clamp(32px, 4.8vw, 60px); }
 /* ── Footer ── */
 .site-foot { border-top:1px solid var(--border-soft);padding-block:48px; }
 .foot-grid { display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap; }
-.foot-grid .links { display:flex;gap:2px;flex-wrap:wrap; }
-.foot-grid .links a { color:var(--text-muted);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;min-height:44px;padding:0 11px;border-radius:9px; }
-.foot-grid .links a:hover { color:var(--text-secondary);background:var(--surface); }
+.foot-grid .links { display:flex;gap:22px;flex-wrap:wrap; }
+.foot-grid .links a { color:var(--text-muted);text-decoration:none;font-size:14px; }
+.foot-grid .links a:hover { color:var(--text-secondary); }
 .foot-note { margin-top:22px;font-size:13px;color:var(--text-muted);max-width:60ch;line-height:1.5; }
 
 /* ── Reveal ── */
@@ -621,67 +651,101 @@ html[data-a11y-font="readable"] {
 .a11y-launcher {
   position: fixed;
   z-index: 210;
-  right: 0;
-  top: 42%;
-  min-height: 52px;
-  padding: 12px 13px;
+  left: 0;
+  top: 44%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  transform: translateY(-50%);
   border: 2px solid #fff;
-  border-right: 0;
-  border-radius: 12px 0 0 12px;
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
   background: #111;
   color: #fff;
-  font: 700 15px/1.2 Arial, Helvetica, sans-serif;
+  font: 800 13px/1 Arial, Helvetica, sans-serif;
   box-shadow: 0 8px 28px rgba(0,0,0,0.38);
   cursor: pointer;
 }
-.a11y-launcher:hover { background: #292929; }
+.a11y-launcher:hover { background: #8a4300; }
 .a11y-launcher:focus-visible { outline: 3px solid #ffdf00; outline-offset: 3px; }
+.a11y-launcher-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .a11y-panel {
   position: fixed;
   z-index: 220;
-  top: 18px;
-  right: 18px;
-  width: min(340px, calc(100vw - 36px));
-  max-height: calc(100vh - 36px);
+  top: 44%;
+  left: 12px;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 24px));
   overflow-y: auto;
-  padding: 20px;
-  border: 2px solid #111;
-  border-radius: 16px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid #d7d7d7;
+  border-radius: 18px;
   background: #fff;
   color: #111;
   box-shadow: 0 18px 60px rgba(0,0,0,0.5);
   font-family: Arial, Helvetica, sans-serif;
   color-scheme: light;
+  overscroll-behavior: contain;
 }
 .a11y-panel[hidden] { display: none; }
-.a11y-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.a11y-panel h2 { margin: 0; color: #111; font: 800 23px/1.2 Arial, Helvetica, sans-serif; }
-.a11y-panel-note { margin: 7px 0 16px; color: #333; font: 400 14px/1.45 Arial, Helvetica, sans-serif; }
-.a11y-close {
-  min-width: 44px;
-  min-height: 44px;
-  border: 2px solid #222;
-  border-radius: 9px;
+.a11y-panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 16px 13px;
+  border-bottom: 1px solid #dedede;
   background: #fff;
+}
+.a11y-panel h2 { margin: 0; color: #111; font: 800 22px/1.2 Arial, Helvetica, sans-serif; }
+.a11y-panel-note { margin: 5px 0 0; color: #333; font: 400 15px/1.4 Arial, Helvetica, sans-serif; }
+.a11y-close {
+  flex: 0 0 auto;
+  min-width: 48px;
+  min-height: 48px;
+  border: 2px solid #222;
+  border-radius: 50%;
+  background: #f2f2f2;
   color: #111;
   font: 800 20px/1 Arial, Helvetica, sans-serif;
   cursor: pointer;
 }
-.a11y-close:hover { background: #eee; }
+.a11y-close:hover { background: #ddd; }
 .a11y-close:focus-visible,
 .a11y-control:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
-.a11y-controls { display: grid; gap: 9px; }
+.a11y-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  padding: 14px 16px 4px;
+}
 .a11y-control {
   width: 100%;
-  min-height: 48px;
-  padding: 11px 13px;
+  min-height: 52px;
+  padding: 10px 11px;
   border: 2px solid #222;
-  border-radius: 9px;
+  border-radius: 12px;
   background: #fff;
   color: #111;
-  text-align: left;
-  font: 700 16px/1.25 Arial, Helvetica, sans-serif;
+  text-align: center;
+  font: 700 15px/1.25 Arial, Helvetica, sans-serif;
   cursor: pointer;
 }
 .a11y-control:hover { background: #eee; }
@@ -689,15 +753,31 @@ html[data-a11y-font="readable"] {
   border-color: #005fcc;
   background: #dcecff;
   color: #002f65;
+  box-shadow: inset 4px 0 0 #005fcc;
 }
+.a11y-control-wide { grid-column: 1 / -1; }
 .a11y-control:disabled { opacity: 0.5; cursor: not-allowed; }
 .a11y-text-status,
-.a11y-status { margin: 12px 0 0; color: #333; font: 700 14px/1.4 Arial, Helvetica, sans-serif; }
-.a11y-status { min-height: 20px; }
+.a11y-status { margin: 10px 16px 0; color: #333; font: 700 14px/1.4 Arial, Helvetica, sans-serif; }
+.a11y-status { min-height: 20px; margin-bottom: 14px; }
 
 @media (max-width: 520px) {
-  .a11y-launcher { top: auto; bottom: 18px; }
-  .a11y-panel { inset: auto 0 0; width: 100%; max-height: 88vh; border-radius: 18px 18px 0 0; }
+  .a11y-launcher {
+    top: auto;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    transform: none;
+  }
+  .a11y-panel {
+    inset: auto 12px max(12px, env(safe-area-inset-bottom));
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
+    transform: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .a11y-controls { grid-template-columns: 1fr; }
+  .a11y-control-wide { grid-column: auto; }
 }
 
 /* Draft badge */
@@ -707,19 +787,20 @@ html[data-a11y-font="readable"] {
 </head>
 <body>
 
-<button class="a11y-launcher" id="a11y-launcher" type="button" aria-controls="a11y-panel" aria-expanded="false">
-  Accessibility
+<button class="a11y-launcher" id="a11y-launcher" type="button" aria-controls="a11y-panel" aria-expanded="false" aria-haspopup="dialog">
+  <span aria-hidden="true">Aa</span>
+  <span class="a11y-launcher-label">Accessibility tools</span>
 </button>
-<aside class="a11y-panel" id="a11y-panel" aria-labelledby="a11y-title" hidden>
+<aside class="a11y-panel" id="a11y-panel" role="dialog" aria-modal="true" aria-labelledby="a11y-title" aria-describedby="a11y-panel-note" hidden>
   <div class="a11y-panel-head">
     <div>
       <h2 id="a11y-title">Accessibility Tools</h2>
-      <p class="a11y-panel-note">Choose the settings that make this page easier to use.</p>
+      <p class="a11y-panel-note" id="a11y-panel-note">Adjust how this page looks and sounds.</p>
     </div>
     <button class="a11y-close" id="a11y-close" type="button" aria-label="Close accessibility tools">X</button>
   </div>
   <div class="a11y-controls">
-    <button class="a11y-control" type="button" id="a11y-read" aria-pressed="false">Read Page Aloud</button>
+    <button class="a11y-control a11y-control-wide" type="button" id="a11y-read" aria-pressed="false">Read Page Aloud</button>
     <button class="a11y-control" type="button" data-a11y-action="increase">Increase Text</button>
     <button class="a11y-control" type="button" data-a11y-action="decrease">Decrease Text</button>
     <button class="a11y-control" type="button" data-a11y-toggle="grayscale" aria-pressed="false">Grayscale</button>
@@ -728,7 +809,7 @@ html[data-a11y-font="readable"] {
     <button class="a11y-control" type="button" data-a11y-contrast="light" aria-pressed="false">Light Background</button>
     <button class="a11y-control" type="button" data-a11y-toggle="links" aria-pressed="false">Links Underline</button>
     <button class="a11y-control" type="button" data-a11y-toggle="font" aria-pressed="false">Readable Font</button>
-    <button class="a11y-control" type="button" data-a11y-action="reset">Reset</button>
+    <button class="a11y-control a11y-control-wide" type="button" data-a11y-action="reset">Reset All Settings</button>
   </div>
   <p class="a11y-text-status" id="a11y-text-status">Text size: 100%</p>
   <p class="a11y-status" id="a11y-status" role="status" aria-live="polite"></p>
@@ -736,15 +817,16 @@ html[data-a11y-font="readable"] {
 
 <header class="site-head" id="head">
   <nav class="nav">
-    <a class="brand" href="#top" aria-label="Meet My Menu AI home">
+    <a class="brand" href="#top" aria-label="Meet My Menu home">
       <span class="mark" aria-hidden="true"><i></i></span>
       <span><b>Meet My</b><span class="v"> Menu</span></span>
     </a>
     <div class="nav-links">
       <a href="#demo-section">How it works</a>
-      <a href="#why">The problem</a>
-      <a href="#partners">Partners</a>
-      <a class="btn btn-primary" href="#waitlist">Request a demo</a>
+      <a href="about.html">About</a>
+      <a href="partners.html">Partners</a>
+      <a href="blog.html">Blog</a>
+      <a class="btn btn-primary" href="https://app.meetthemenu.com/">Open the app</a>
     </div>
   </nav>
 </header>
@@ -753,16 +835,15 @@ html[data-a11y-font="readable"] {
 
   <!-- ═══════════════════════ HERO ═══════════════════════ -->
   <section class="hero section-pad" aria-labelledby="hero-h">
-    <canvas class="hero-canvas" id="hero-canvas" aria-hidden="true"></canvas>
     <div class="wrap">
       <div class="hero-grid">
 
         <div class="hero-copy">
-          <p class="eyebrow reveal">Voice-first menu access</p>
-          <h1 class="display reveal" data-d="1" id="hero-h">Read me <br/>the <em>menu.</em></h1>
-          <p class="lede reveal" data-d="2">Point your phone at any restaurant menu. Meet My Menu AI reads it aloud, checks ingredients against your allergies, and answers your questions by voice.</p>
+          <p class="eyebrow reveal">Voice-first menu reader</p>
+          <h1 class="display reveal" data-d="1" id="hero-h">Restaurant menus,<br/><em>read aloud.</em></h1>
+          <p class="lede reveal" data-d="2">Scan a paper menu or find one online. Meet My Menu reads the dishes aloud and answers your questions by voice.</p>
           <div class="hero-cta reveal" data-d="3">
-            <a class="btn btn-primary btn-lg" href="#waitlist">Request a demo <span class="arrow">→</span></a>
+            <a class="btn btn-primary btn-lg" href="https://app.meetthemenu.com/">Open Meet My Menu <span class="arrow">→</span></a>
             <a class="btn btn-ghost btn-lg" href="#demo-section">See how it works <span class="arrow">→</span></a>
           </div>
           <p class="hero-note reveal" data-d="3">
@@ -773,17 +854,17 @@ html[data-a11y-font="readable"] {
 
         <div class="hero-phone-wrap reveal" data-d="2">
           <div class="glow-ring" aria-hidden="true"></div>
-          <div class="phone" role="img" aria-label="Meet My Menu AI chat: allergen check on carbonara">
+          <div class="phone" role="img" aria-label="Meet My Menu chat: allergen check on carbonara">
             <div class="phone-notch" aria-hidden="true"></div>
             <div class="phone-screen">
               <div class="status-bar"><span>7:24</span><span class="dots" aria-hidden="true"><i class="sig"></i><i class="wifi"></i><i class="batt"></i></span></div>
               <div class="app">
                 <p class="app-heading">Trattoria Nove</p>
-                <div class="phase"><span class="pdot"></span>Meet My Menu AI is speaking…</div>
+                <div class="phase"><span class="pdot"></span>Meet My Menu is speaking…</div>
                 <div class="transcript">
-                  <div class="turn a"><div class="who">Meet My Menu AI</div><div class="txt">Four sections: antipasti, pasta, secondi, dolci. Want me to start with pastas?</div></div>
+                  <div class="turn a"><div class="who">Meet My Menu</div><div class="txt">Four sections: antipasti, pasta, secondi, dolci. Want me to start with pastas?</div></div>
                   <div class="turn u"><div class="who">You</div><div class="txt">Carbonara. Safe with a shellfish allergy?</div></div>
-                  <div class="turn a flag"><div class="who">Meet My Menu AI</div><div class="txt"><b>No shellfish in the carbonara.</b> Guanciale, egg, pecorino, pepper.</div></div>
+                  <div class="turn a flag"><div class="who">Meet My Menu</div><div class="txt"><b>The menu does not list shellfish.</b> Please confirm with restaurant staff.</div></div>
                 </div>
                 <div class="speak-bar" aria-hidden="true"><i style="width:58%"></i></div>
                 <div class="app-toggle">⦿ Conversational: ON</div>
@@ -799,25 +880,58 @@ html[data-a11y-font="readable"] {
   <hr class="rule" />
 
   <!-- ═══════════════════════ WHY ═══════════════════════ -->
-  <section class="section-pad" id="why" aria-labelledby="why-h">
+  <!-- ═══════════════════════ SCROLL DEMO ═══════════════════════ -->
+  <section class="interactive-demo-section" id="demo-section" aria-labelledby="interactive-demo-h">
     <div class="wrap">
-      <h2 class="eyebrow reveal" id="why-h">The problem</h2>
-      <blockquote class="manifesto-quote reveal" data-d="1">
-        A menu assumes you can read it. If you cannot, dinner often starts by asking someone else to read, filter, and choose with you.
-      </blockquote>
-      <dl class="openrow reveal" data-d="2">
-        <div class="col"><dt>Independence</dt><dd>Choose without handing the menu to someone else.</dd></div>
-        <div class="col"><dt>Privacy</dt><dd>Ask about allergies, budget, and preferences quietly.</dd></div>
-        <div class="col"><dt>Speed</dt><dd>Get the important details without waiting for help.</dd></div>
-      </dl>
+      <div class="interactive-demo-head">
+        <p class="eyebrow reveal">Try the conversation</p>
+        <h2 class="display reveal" data-d="1" id="interactive-demo-h">Ask the menu a <em>real question.</em></h2>
+        <p class="lede reveal" data-d="2">Choose a question below. Meet My Menu answers from a sample restaurant menu, keeps the conversation together, and can read the latest answer aloud.</p>
+      </div>
+
+      <div class="live-demo reveal" data-d="3">
+        <div class="demo-questions">
+          <p class="demo-kicker">Sample menu · The Greenhouse</p>
+          <h3>What would you like to know?</h3>
+          <p>Try all three. Each answer is added to the same conversation.</p>
+          <div class="demo-question-list" aria-label="Sample questions">
+            <button class="demo-question" type="button" data-demo-question="ingredients">
+              <span>What’s in the risotto?</span><span class="arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="demo-question" type="button" data-demo-question="shellfish">
+              <span>Anything without shellfish?</span><span class="arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="demo-question" type="button" data-demo-question="history">
+              <span>What did I order last time?</span><span class="arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+          <p class="demo-sample-note">Illustrative answers from a sample menu and sample order history.</p>
+        </div>
+
+        <div class="demo-conversation">
+          <div class="demo-chat-head">
+            <div class="demo-chat-title"><span class="demo-live-dot" aria-hidden="true"></span>Meet My Menu</div>
+            <div class="demo-status" id="interactive-demo-status" role="status">Ready for a question</div>
+          </div>
+          <p class="sr-only" id="interactive-demo-announcement" aria-live="polite"></p>
+          <div class="demo-log" id="interactive-demo-log" role="log" aria-live="off">
+            <div class="demo-empty" id="interactive-demo-empty">
+              <strong>Your conversation will appear here.</strong>
+              Choose any sample question to begin.
+            </div>
+          </div>
+          <div class="demo-chat-actions">
+            <button class="btn btn-secondary" id="interactive-demo-speak" type="button" hidden>Hear the latest answer</button>
+            <button class="demo-reset" id="interactive-demo-reset" type="button">Reset conversation</button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <hr class="rule" />
 
-  <!-- ═══════════════════════ SCROLL DEMO ═══════════════════════ -->
-  <section class="demo-section" id="demo-section" aria-labelledby="demo-h">
-    <h2 class="sr-only" id="demo-h">How it works</h2>
+  <section class="demo-section" id="legacy-demo-section" aria-label="Previous animated Meet My Menu demo" hidden>
     <div class="demo-sticky" id="demo-sticky">
 
       <!-- LEFT: minimal labels that stay once shown -->
@@ -844,7 +958,7 @@ html[data-a11y-font="readable"] {
 
       <!-- CENTER: phone -->
       <div class="demo-phone-col">
-        <div class="phone demo-phone" id="demo-phone" role="img" aria-label="Animated Meet My Menu AI demo">
+        <div class="phone demo-phone" id="demo-phone" role="img" aria-label="Animated Meet My Menu demo">
           <div class="phone-notch" aria-hidden="true"></div>
           <div class="phone-screen">
             <div class="status-bar"><span>7:22</span><span class="dots" aria-hidden="true"><i class="sig"></i><i class="wifi"></i><i class="batt"></i></span></div>
@@ -884,8 +998,8 @@ html[data-a11y-font="readable"] {
 
               <!-- Conversation -->
               <div class="pscreen" id="ps-convo" style="display:none">
-                <div class="phase" id="cv-phase"><span class="pdot"></span><span id="cv-phase-txt">Meet My Menu AI is speaking…</span></div>
-                <div class="cv-conv" id="cv-conv" aria-label="Example Meet My Menu AI conversation"></div>
+                <div class="phase" id="cv-phase"><span class="pdot"></span><span id="cv-phase-txt">Meet My Menu is speaking…</span></div>
+                <div class="cv-conv" id="cv-conv" aria-label="Example Meet My Menu conversation"></div>
                 <div class="speak-bar" aria-hidden="true"><i id="cv-bar-fill" style="width:0%"></i></div>
               </div>
 
@@ -913,35 +1027,72 @@ html[data-a11y-font="readable"] {
   <hr class="rule" />
 
   <!-- ═══════════════════════ PARTNERS ═══════════════════════ -->
+  <!-- ═══════════════════════ CTA ═══════════════════════ -->
+  <section class="section-pad research-voices" id="voices" aria-labelledby="voices-h">
+    <div class="wrap">
+      <div class="voices-head">
+        <p class="eyebrow reveal">From our research</p>
+        <h2 class="display reveal" data-d="1" id="voices-h">What people <em>told us.</em></h2>
+        <p class="lede reveal" data-d="2">Reactions from customer-discovery interviews and demonstrations of the working product.</p>
+      </div>
+      <div class="quote-grid reveal" data-d="3">
+        <article class="quote-card">
+          <blockquote>“The interface looks great. I like that it’s simple. There’s not, like, a million options.”</blockquote>
+          <footer>
+            <span class="quote-name">Anthony</span>
+            <span class="quote-context">After navigating the working product</span>
+          </footer>
+        </article>
+        <article class="quote-card">
+          <blockquote>“That’s fantastic. It really does. It’s come a long way.”</blockquote>
+          <footer>
+            <span class="quote-name">Jonathan</span>
+            <span class="quote-context">After seeing the current product</span>
+          </footer>
+        </article>
+        <article class="quote-card">
+          <blockquote>“It would give me freedom. If I don’t have to bother somebody else and can just pull out the app, why not?”</blockquote>
+          <footer>
+            <span class="quote-name">Carmen</span>
+            <span class="quote-context">Blind diner, reacting to the product concept</span>
+          </footer>
+        </article>
+      </div>
+      <p class="approval-note">Draft selections for speaker approval before public release.</p>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
   <section class="section-pad" id="partners" aria-labelledby="part-h">
     <div class="wrap">
-      <p class="eyebrow reveal">For partners</p>
+      <p class="eyebrow reveal">Get involved</p>
       <h2 class="display reveal" data-d="1" id="part-h">Two ways to <em>be part of it.</em></h2>
-      <p class="lede reveal" data-d="2">Help test Meet My Menu AI with diners, or make your menu easier to read by voice.</p>
+      <p class="lede reveal" data-d="2">Use the app now, or help make it better for the next diner.</p>
       <div class="aud reveal" data-d="2">
         <div class="aud-col">
-          <span class="tag">Funders &amp; accessibility orgs</span>
-          <h3>Help us reach every table.</h3>
-          <p>Support a real pilot with blind and low-vision diners.</p>
+          <span class="tag">Diners and testers</span>
+          <h3>Help shape the experience.</h3>
+          <p>Try Meet My Menu with a real restaurant menu and tell us what works or gets in the way.</p>
           <ul class="pts">
-            <li>Working prototype</li>
-            <li>Voice-first restaurant flow</li>
-            <li>Clear pilot scope</li>
+            <li>Test paper and online menus</li>
+            <li>Share VoiceOver and voice-guidance feedback</li>
+            <li>Influence what we improve next</li>
           </ul>
           <div class="spacer"></div>
-          <a class="btn btn-primary" href="#waitlist">Request a demo <span class="arrow">→</span></a>
+          <a class="btn btn-primary" href="#signup">Join the pilot <span class="arrow">→</span></a>
         </div>
         <div class="aud-col">
-          <span class="tag">Restaurants &amp; venues</span>
-          <h3>Put your menu on the map.</h3>
-          <p>Register interest so your menu can be verified for voice access.</p>
+          <span class="tag">Restaurants and organizations</span>
+          <h3>Make more menus accessible.</h3>
+          <p>Test a real menu, improve the information diners receive, or support community testing.</p>
           <ul class="pts">
-            <li>Current dishes and prices</li>
-            <li>Ingredient and allergen notes</li>
-            <li>A better first experience for blind guests</li>
+            <li>Check your menu in the app</li>
+            <li>Improve ingredient and allergen details</li>
+            <li>Support testing with blind diners</li>
           </ul>
           <div class="spacer"></div>
-          <a class="btn btn-secondary" href="#waitlist">Register interest <span class="arrow">→</span></a>
+          <a class="btn btn-secondary" href="#signup">Partner with us <span class="arrow">→</span></a>
         </div>
       </div>
     </div>
@@ -949,20 +1100,57 @@ html[data-a11y-font="readable"] {
 
   <hr class="rule" />
 
-  <!-- ═══════════════════════ CTA ═══════════════════════ -->
-  <section class="section-pad" id="waitlist" aria-labelledby="cta-h">
+  <section class="section-pad faq-section" id="faq" aria-labelledby="faq-h">
+    <div class="wrap faq-wrap">
+      <div>
+        <p class="eyebrow reveal">Good to know</p>
+        <h2 class="display reveal" data-d="1" id="faq-h">A few honest <em>answers.</em></h2>
+      </div>
+      <div class="faq-list reveal" data-d="2">
+        <details>
+          <summary>Can Meet My Menu confirm that a dish is safe for an allergy?</summary>
+          <p>Meet My Menu brings possible allergen concerns to your attention. It highlights the ingredients and allergen information it finds so you know what to ask about and can confirm it with restaurant staff.</p>
+        </details>
+        <details>
+          <summary>Where does the menu information come from?</summary>
+          <p>You can scan a paper menu, search for a restaurant, or paste a menu link. Meet My Menu tells you when information may be incomplete or inferred.</p>
+        </details>
+        <details>
+          <summary>Do I need to download anything?</summary>
+          <p>No. Meet My Menu opens in your phone's web browser. Use the “Open the app” link whenever you want to start.</p>
+        </details>
+        <details>
+          <summary>How can I help?</summary>
+          <p>Join as a diner or tester, or sign up as a restaurant, accessibility organization, or funder below.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="section-pad" id="signup" aria-labelledby="cta-h">
     <div class="wrap">
       <div class="cta reveal">
         <div class="cta-wave" aria-hidden="true"><canvas id="cta-canvas"></canvas></div>
-        <h2 class="display" id="cta-h">Let's get it to the table.</h2>
-        <p class="lede">Request a demo, join the pilot list, or tell us your restaurant wants in.</p>
+        <h2 class="display" id="cta-h">Stay involved.</h2>
+        <p class="lede">Choose how you would like to help, and we will contact you about testing or partnership opportunities.</p>
         <form class="cta-form" id="waitlist-form" novalidate>
-          <label for="email" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Email</label>
-          <input type="email" id="email" name="email" placeholder="you@email.com" autocomplete="email" required />
-          <button type="submit" class="btn btn-primary btn-lg">Request a demo</button>
+          <label class="sr-only" for="contact-type">I am a</label>
+          <select id="contact-type" name="contact_type" aria-describedby="cta-msg cta-privacy" required>
+            <option value="">I am a...</option>
+            <option value="diner">Diner or Meet My Menu user</option>
+            <option value="restaurant">Restaurant or venue</option>
+            <option value="accessibility_org">Accessibility organization or funder</option>
+            <option value="other">Something else</option>
+          </select>
+          <label class="sr-only" for="email">Email address</label>
+          <input type="email" id="email" name="email" placeholder="you@email.com" autocomplete="email" inputmode="email" maxlength="254" aria-describedby="cta-msg cta-privacy" required />
+          <button type="submit" class="btn btn-primary btn-lg">Sign up</button>
         </form>
         <p class="cta-msg" id="cta-msg" role="status" aria-live="polite"></p>
-        <p class="cta-mini">No spam. We'll only write about the pilot.</p>
+        <p class="cta-mini" id="cta-privacy">For pilot updates and testing opportunities only.</p>
+        <a class="btn btn-ghost" href="https://app.meetthemenu.com/">Or open the app now <span class="arrow">→</span></a>
       </div>
     </div>
   </section>
@@ -972,23 +1160,27 @@ html[data-a11y-font="readable"] {
 <footer class="site-foot">
   <div class="wrap">
     <div class="foot-grid">
-      <a class="brand" href="#top" aria-label="Meet My Menu AI home">
+      <a class="brand" href="#top" aria-label="Meet My Menu home">
         <span class="mark" aria-hidden="true"><i></i></span>
         <span><b>Meet My</b><span class="v"> Menu</span></span>
       </a>
       <div class="links">
-        <a href="#why">The problem</a>
         <a href="#demo-section">How it works</a>
-        <a href="#partners">Partners</a>
-        <a href="#waitlist">Request a demo</a>
+        <a href="about.html">About</a>
+        <a href="accessibility.html">Accessibility</a>
+        <a href="partners.html">Partners</a>
+        <a href="blog.html">Blog</a>
+        <a href="#faq">FAQ</a>
+        <a href="#signup">Sign up</a>
+        <a href="https://app.meetthemenu.com/">Open the app</a>
       </div>
     </div>
-    <p class="foot-note">Meet My Menu AI is an independent, voice-first prototype that reads restaurant menus aloud for blind and low-vision diners. Order on your own terms.</p>
+    <p class="foot-note">A voice-first menu reader for blind and low-vision diners.</p>
   </div>
 </footer>
 
 <script>
-/* Meet My Menu AI — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
+/* Meet My Menu — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
 (function () {
   'use strict';
 
@@ -1192,7 +1384,24 @@ html[data-a11y-font="readable"] {
     });
 
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !panel.hidden) closePanel();
+      if (panel.hidden) return;
+      if (event.key === 'Escape') {
+        closePanel();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      var focusable = Array.from(panel.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (!focusable.length) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     });
     window.addEventListener('beforeunload', function () {
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -1205,7 +1414,7 @@ html[data-a11y-font="readable"] {
   function initWave(canvas, opts) {
     if (!canvas || !canvas.getContext) return;
     var ctx = canvas.getContext('2d');
-    var t = 0, raf, visible = true;
+    var t = 0, raf;
     opts = opts || {};
     var layers = opts.layers || [
       { freq: 0.008, amp: 0.16, speed: 0.014, alpha: 0.52, w: 1.8 },
@@ -1253,20 +1462,7 @@ html[data-a11y-font="readable"] {
       });
 
       t++;
-      // Pause the loop while scrolled out of view; resumes via the observer.
-      if (visible) raf = requestAnimationFrame(draw);
-    }
-
-    // Animate by default; IO only pauses when it positively reports the canvas
-    // off screen, because some embedded contexts never fire IO callbacks.
-    if (!reduce && 'IntersectionObserver' in window) {
-      new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          var was = visible;
-          visible = e.isIntersecting;
-          if (visible && !was) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
-        });
-      }, { threshold: 0.05 }).observe(canvas);
+      raf = requestAnimationFrame(draw);
     }
 
     resize();
@@ -1330,20 +1526,7 @@ html[data-a11y-font="readable"] {
       }
 
       t++;
-      // Static bars need one paint, not a 60fps loop redrawing the same frame.
-      if (!reduce && visible) raf = requestAnimationFrame(draw);
-    }
-
-    // Only animate while on screen.
-    var raf, visible = true;
-    if (!reduce && 'IntersectionObserver' in window) {
-      new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          var was = visible;
-          visible = e.isIntersecting;
-          if (visible && !was) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
-        });
-      }, { threshold: 0.05 }).observe(canvas);
+      requestAnimationFrame(draw);
     }
 
     resize();
@@ -1352,13 +1535,156 @@ html[data-a11y-font="readable"] {
     window.__setVizPhase = function (p) { activePhase = p; };
   }
 
+  /* ═══ Interactive sample menu conversation ═════════════════════════ */
+  function initInteractiveDemo() {
+    var log = document.getElementById('interactive-demo-log');
+    var empty = document.getElementById('interactive-demo-empty');
+    var status = document.getElementById('interactive-demo-status');
+    var announcement = document.getElementById('interactive-demo-announcement');
+    var speakButton = document.getElementById('interactive-demo-speak');
+    var resetButton = document.getElementById('interactive-demo-reset');
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-demo-question]'));
+    if (!log || !status || !buttons.length) return;
+
+    var examples = {
+      ingredients: {
+        question: 'What’s in the risotto?',
+        answer: 'The wild mushroom risotto is made with arborio rice, porcini and cremini mushrooms, white wine, parmesan, and truffle oil. The menu lists dairy.'
+      },
+      shellfish: {
+        question: 'Anything without shellfish?',
+        answer: 'The menu does not list shellfish for the risotto, roast chicken, or garden salad. The seafood paella lists shellfish. Please confirm with restaurant staff before ordering.'
+      },
+      history: {
+        question: 'What did I order last time?',
+        answer: 'Your sample order history shows wild mushroom risotto and sparkling water. Would you like me to compare that with today’s menu?'
+      }
+    };
+
+    var busy = false;
+    var lastAnswer = '';
+    var streamTimer = null;
+
+    function setBusy(value) {
+      busy = value;
+      buttons.forEach(function (button) { button.disabled = value; });
+    }
+
+    function addTurn(role, text) {
+      var turn = document.createElement('div');
+      turn.className = 'demo-turn demo-turn-' + role;
+      var label = document.createElement('span');
+      label.className = 'demo-turn-label';
+      label.textContent = role === 'user' ? 'You asked' : 'Meet My Menu';
+      var copy = document.createElement('p');
+      copy.textContent = text || '';
+      turn.appendChild(label);
+      turn.appendChild(copy);
+      log.appendChild(turn);
+      log.scrollTop = log.scrollHeight;
+      return copy;
+    }
+
+    function finishAnswer(copy, answer) {
+      copy.textContent = answer;
+      copy.removeAttribute('aria-hidden');
+      lastAnswer = answer;
+      setBusy(false);
+      status.textContent = 'Answer ready';
+      if (announcement) announcement.textContent = 'Meet My Menu answered: ' + answer;
+      if (speakButton) speakButton.hidden = false;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function ask(key) {
+      if (busy || !examples[key]) return;
+      var item = examples[key];
+      if (empty) empty.hidden = true;
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (speakButton) speakButton.textContent = 'Hear the latest answer';
+      addTurn('user', item.question);
+      setBusy(true);
+      status.textContent = 'Meet My Menu is answering';
+      if (announcement) announcement.textContent = 'Question added. Meet My Menu is answering.';
+
+      setTimeout(function () {
+        var copy = addTurn('assistant', '');
+        copy.setAttribute('aria-hidden', 'true');
+        if (reduce) {
+          finishAnswer(copy, item.answer);
+          return;
+        }
+        var words = item.answer.split(' ');
+        var index = 0;
+        streamTimer = setInterval(function () {
+          index += 1;
+          copy.textContent = words.slice(0, index).join(' ');
+          log.scrollTop = log.scrollHeight;
+          if (index >= words.length) {
+            clearInterval(streamTimer);
+            streamTimer = null;
+            finishAnswer(copy, item.answer);
+          }
+        }, 38);
+      }, 380);
+    }
+
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function () { ask(button.dataset.demoQuestion); });
+    });
+
+    if (speakButton) {
+      speakButton.addEventListener('click', function () {
+        if (!lastAnswer || !('speechSynthesis' in window)) {
+          status.textContent = 'Speech is unavailable in this browser';
+          return;
+        }
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+          speakButton.textContent = 'Hear the latest answer';
+          status.textContent = 'Audio stopped';
+          return;
+        }
+        var utterance = new SpeechSynthesisUtterance(lastAnswer);
+        utterance.lang = document.documentElement.lang || 'en';
+        utterance.rate = 0.95;
+        utterance.onend = function () {
+          speakButton.textContent = 'Hear the latest answer';
+          status.textContent = 'Answer ready';
+        };
+        utterance.onerror = utterance.onend;
+        speakButton.textContent = 'Stop audio';
+        status.textContent = 'Reading the answer aloud';
+        window.speechSynthesis.speak(utterance);
+      });
+    }
+
+    if (resetButton) {
+      resetButton.addEventListener('click', function () {
+        if (streamTimer) clearInterval(streamTimer);
+        streamTimer = null;
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        Array.prototype.slice.call(log.querySelectorAll('.demo-turn')).forEach(function (turn) { turn.remove(); });
+        if (empty) empty.hidden = false;
+        lastAnswer = '';
+        setBusy(false);
+        status.textContent = 'Ready for a question';
+        if (announcement) announcement.textContent = 'Conversation reset.';
+        if (speakButton) {
+          speakButton.hidden = true;
+          speakButton.textContent = 'Hear the latest answer';
+        }
+      });
+    }
+  }
+
   /* ═══ Scroll-driven demo ════════════════════════════════════════════ */
   var MSGS = [
     { r: 'a', plain: 'Good evening. The Greenhouse has eighteen dishes tonight, in four sections. Want the highlights?', html: null },
     { r: 'u', plain: 'Something vegetarian, nothing pricey.', html: null },
     { r: 'a', plain: 'Three under twelve pounds: squash risotto, halloumi flatbread, or the lentil dahl.', html: null },
     { r: 'u', plain: 'Which would you order?', html: null },
-    { r: 'a', plain: 'The dahl. Hearty, vegetarian, and at ten pounds it leaves room for dessert.', html: 'The <b>dahl</b>. Hearty, vegetarian, and at ten pounds it leaves room for dessert.' },
+    { r: 'a', plain: 'The dahl \u2014 it\u2019s the kitchen\u2019s best-rated dish tonight.', html: 'The <b>dahl</b> \u2014 it\u2019s the kitchen\u2019s best-rated dish tonight.' },
     { r: 'u', plain: 'Perfect. The dahl, please.', html: null },
   ];
 
@@ -1469,14 +1795,14 @@ html[data-a11y-font="readable"] {
       cvConv.appendChild(turn);
 
       turn.innerHTML =
-        '<div class="who">' + (msg.r === 'a' ? 'Meet My Menu AI' : 'You') + '</div>' +
+        '<div class="who">' + (msg.r === 'a' ? 'Meet My Menu' : 'You') + '</div>' +
         '<div class="txt">' + (msg.html || msg.plain) + '</div>';
 
       // Update phase indicator
       if (!instant) {
         if (msg.r === 'a') {
           if (cvPhase) cvPhase.classList.remove('idle');
-          if (cvPhaseTxt) cvPhaseTxt.textContent = 'Meet My Menu AI is speaking\u2026';
+          if (cvPhaseTxt) cvPhaseTxt.textContent = 'Meet My Menu is speaking\u2026';
           if (cvBarFill) cvBarFill.style.width = (30 + Math.random() * 55) + '%';
         } else {
           if (cvPhase) cvPhase.classList.add('idle');
@@ -1569,14 +1895,22 @@ html[data-a11y-font="readable"] {
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var input = document.getElementById('email');
+      var typeInput = document.getElementById('contact-type');
       var val = (input.value || '').trim();
+      var contactType = typeInput ? typeInput.value : '';
+      if (!contactType) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = 'Please choose what best describes you.';
+        if (typeInput) typeInput.focus();
+        return;
+      }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
         msg.style.color = 'var(--danger)';
         msg.textContent = 'Please enter a valid email address.';
         input.focus(); return;
       }
       msg.style.color = 'var(--success)';
-      msg.textContent = 'Thanks \u2014 you\u2019re on the list. We\u2019ll be in touch personally.';
+      msg.textContent = 'Thanks. We\u2019ll be in touch about ways to take part.';
       form.reset();
     });
   }
@@ -1588,14 +1922,6 @@ html[data-a11y-font="readable"] {
     initForm();
     initAccessibilityTools();
 
-    initWave(document.getElementById('hero-canvas'), {
-      layers: [
-        { freq: 0.007, amp: 0.14, speed: 0.012, alpha: 0.48, w: 1.8 },
-        { freq: 0.012, amp: 0.08, speed: 0.020, alpha: 0.24, w: 1.2 },
-        { freq: 0.004, amp: 0.10, speed: 0.008, alpha: 0.14, w: 2.8 },
-      ]
-    });
-
     initWave(document.getElementById('cta-canvas'), {
       layers: [
         { freq: 0.011, amp: 0.30, speed: 0.018, alpha: 0.65, w: 2.2 },
@@ -1603,8 +1929,7 @@ html[data-a11y-font="readable"] {
       ]
     });
 
-    initVizCanvas();
-    initScrollDemo();
+    initInteractiveDemo();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

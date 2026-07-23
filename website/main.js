@@ -1,4 +1,4 @@
-/* Meet My Menu AI — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
+/* Meet My Menu — scroll-driven demo, canvas waveform, voice-pulse + typewriter */
 (function () {
   'use strict';
 
@@ -172,6 +172,149 @@
     window.__setVizPhase = function (p) { activePhase = p; };
   }
 
+  /* ═══ Interactive sample menu conversation ═════════════════════════ */
+  function initInteractiveDemo() {
+    var log = document.getElementById('interactive-demo-log');
+    var empty = document.getElementById('interactive-demo-empty');
+    var status = document.getElementById('interactive-demo-status');
+    var announcement = document.getElementById('interactive-demo-announcement');
+    var speakButton = document.getElementById('interactive-demo-speak');
+    var resetButton = document.getElementById('interactive-demo-reset');
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-demo-question]'));
+    if (!log || !status || !buttons.length) return;
+
+    var examples = {
+      ingredients: {
+        question: 'What’s in the risotto?',
+        answer: 'The wild mushroom risotto is made with arborio rice, porcini and cremini mushrooms, white wine, parmesan, and truffle oil. The menu lists dairy.'
+      },
+      shellfish: {
+        question: 'Anything without shellfish?',
+        answer: 'The menu does not list shellfish for the risotto, roast chicken, or garden salad. The seafood paella lists shellfish. Please confirm with restaurant staff before ordering.'
+      },
+      history: {
+        question: 'What did I order last time?',
+        answer: 'Your sample order history shows wild mushroom risotto and sparkling water. Would you like me to compare that with today’s menu?'
+      }
+    };
+
+    var busy = false;
+    var lastAnswer = '';
+    var streamTimer = null;
+
+    function setBusy(value) {
+      busy = value;
+      buttons.forEach(function (button) { button.disabled = value; });
+    }
+
+    function addTurn(role, text) {
+      var turn = document.createElement('div');
+      turn.className = 'demo-turn demo-turn-' + role;
+      var label = document.createElement('span');
+      label.className = 'demo-turn-label';
+      label.textContent = role === 'user' ? 'You asked' : 'Meet My Menu';
+      var copy = document.createElement('p');
+      copy.textContent = text || '';
+      turn.appendChild(label);
+      turn.appendChild(copy);
+      log.appendChild(turn);
+      log.scrollTop = log.scrollHeight;
+      return copy;
+    }
+
+    function finishAnswer(copy, answer) {
+      copy.textContent = answer;
+      copy.removeAttribute('aria-hidden');
+      lastAnswer = answer;
+      setBusy(false);
+      status.textContent = 'Answer ready';
+      if (announcement) announcement.textContent = 'Meet My Menu answered: ' + answer;
+      if (speakButton) speakButton.hidden = false;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function ask(key) {
+      if (busy || !examples[key]) return;
+      var item = examples[key];
+      if (empty) empty.hidden = true;
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (speakButton) speakButton.textContent = 'Hear the latest answer';
+      addTurn('user', item.question);
+      setBusy(true);
+      status.textContent = 'Meet My Menu is answering';
+      if (announcement) announcement.textContent = 'Question added. Meet My Menu is answering.';
+
+      setTimeout(function () {
+        var copy = addTurn('assistant', '');
+        copy.setAttribute('aria-hidden', 'true');
+        if (reduce) {
+          finishAnswer(copy, item.answer);
+          return;
+        }
+        var words = item.answer.split(' ');
+        var index = 0;
+        streamTimer = setInterval(function () {
+          index += 1;
+          copy.textContent = words.slice(0, index).join(' ');
+          log.scrollTop = log.scrollHeight;
+          if (index >= words.length) {
+            clearInterval(streamTimer);
+            streamTimer = null;
+            finishAnswer(copy, item.answer);
+          }
+        }, 38);
+      }, 380);
+    }
+
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function () { ask(button.dataset.demoQuestion); });
+    });
+
+    if (speakButton) {
+      speakButton.addEventListener('click', function () {
+        if (!lastAnswer || !('speechSynthesis' in window)) {
+          status.textContent = 'Speech is unavailable in this browser';
+          return;
+        }
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+          speakButton.textContent = 'Hear the latest answer';
+          status.textContent = 'Audio stopped';
+          return;
+        }
+        var utterance = new SpeechSynthesisUtterance(lastAnswer);
+        utterance.lang = document.documentElement.lang || 'en';
+        utterance.rate = 0.95;
+        utterance.onend = function () {
+          speakButton.textContent = 'Hear the latest answer';
+          status.textContent = 'Answer ready';
+        };
+        utterance.onerror = utterance.onend;
+        speakButton.textContent = 'Stop audio';
+        status.textContent = 'Reading the answer aloud';
+        window.speechSynthesis.speak(utterance);
+      });
+    }
+
+    if (resetButton) {
+      resetButton.addEventListener('click', function () {
+        if (streamTimer) clearInterval(streamTimer);
+        streamTimer = null;
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        Array.prototype.slice.call(log.querySelectorAll('.demo-turn')).forEach(function (turn) { turn.remove(); });
+        if (empty) empty.hidden = false;
+        lastAnswer = '';
+        setBusy(false);
+        status.textContent = 'Ready for a question';
+        if (announcement) announcement.textContent = 'Conversation reset.';
+        if (speakButton) {
+          speakButton.hidden = true;
+          speakButton.textContent = 'Hear the latest answer';
+        }
+      });
+    }
+  }
+
   /* ═══ Scroll-driven demo ════════════════════════════════════════════ */
   var MSGS = [
     { r: 'a', plain: 'Good evening. The Greenhouse has eighteen dishes tonight, in four sections. Want the highlights?', html: null },
@@ -289,14 +432,14 @@
       cvConv.appendChild(turn);
 
       turn.innerHTML =
-        '<div class="who">' + (msg.r === 'a' ? 'Meet My Menu AI' : 'You') + '</div>' +
+        '<div class="who">' + (msg.r === 'a' ? 'Meet My Menu' : 'You') + '</div>' +
         '<div class="txt">' + (msg.html || msg.plain) + '</div>';
 
       // Update phase indicator
       if (!instant) {
         if (msg.r === 'a') {
           if (cvPhase) cvPhase.classList.remove('idle');
-          if (cvPhaseTxt) cvPhaseTxt.textContent = 'Meet My Menu AI is speaking\u2026';
+          if (cvPhaseTxt) cvPhaseTxt.textContent = 'Meet My Menu is speaking\u2026';
           if (cvBarFill) cvBarFill.style.width = (30 + Math.random() * 55) + '%';
         } else {
           if (cvPhase) cvPhase.classList.add('idle');
@@ -403,7 +546,15 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var input = document.getElementById('email');
+      var typeInput = document.getElementById('contact-type');
       var val = (input.value || '').trim();
+      var contactType = typeInput ? typeInput.value : '';
+      if (!contactType) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = 'Please choose what best describes you.';
+        if (typeInput) typeInput.focus();
+        return;
+      }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
         msg.style.color = 'var(--danger)';
         msg.textContent = 'Please enter a valid email address.';
@@ -417,6 +568,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: val,
+          contact_type: contactType,
           session_id: siteSessionId(),
           path: window.location.pathname + window.location.search,
           referrer: document.referrer || ''
@@ -426,7 +578,7 @@
       .then(function (data) {
         if (data.ok) {
           msg.style.color = 'var(--success)';
-          msg.textContent = 'You\u2019re on the list. We\u2019ll be in touch personally.';
+          msg.textContent = 'Thanks. We\u2019ll be in touch about ways to take part.';
           form.reset();
         } else { throw new Error(data.error || 'error'); }
       })
@@ -435,7 +587,7 @@
         msg.textContent = 'Something went wrong. Please try again.';
       })
       .finally(function () {
-        if (btn) { btn.disabled = false; btn.textContent = 'Request a demo'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign up'; }
       });
     });
   }
@@ -451,14 +603,6 @@
     initSiteTracking();
     initForm();
 
-    initWave(document.getElementById('hero-canvas'), {
-      layers: [
-        { freq: 0.007, amp: 0.14, speed: 0.012, alpha: 0.48, w: 1.8 },
-        { freq: 0.012, amp: 0.08, speed: 0.020, alpha: 0.24, w: 1.2 },
-        { freq: 0.004, amp: 0.10, speed: 0.008, alpha: 0.14, w: 2.8 },
-      ]
-    });
-
     initWave(document.getElementById('cta-canvas'), {
       layers: [
         { freq: 0.011, amp: 0.30, speed: 0.018, alpha: 0.65, w: 2.2 },
@@ -466,8 +610,7 @@
       ]
     });
 
-    initVizCanvas();
-    initScrollDemo();
+    initInteractiveDemo();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
